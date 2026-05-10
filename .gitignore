@@ -145,7 +145,7 @@ vite.config.ts.timestamp-*
 .env
 dolt/
 .code-review-graph/
-.beads/
+# .beads/
 
 # Dolt database files (added by bd init)
 .dolt/
