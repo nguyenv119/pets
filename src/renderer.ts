@@ -22,10 +22,20 @@ const FOX_COLORS = ['red', 'white'] as const;
 
 type SpriteMap = Map<PetType, Map<string, Map<PetState, HTMLImageElement>>>;
 
+// Off-screen container keeps sprite images in the DOM so the browser's GIF
+// decoder advances their frames. Without this, images only in JS memory may
+// stay frozen on frame 1 in some browsers.
+const _spriteContainer = (() => {
+  const div = document.createElement('div');
+  div.style.cssText = 'position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden';
+  document.body.appendChild(div);
+  return div;
+})();
+
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.onload = () => resolve(img);
+    img.onload = () => { _spriteContainer.appendChild(img); resolve(img); };
     img.onerror = () => reject(new Error(`Failed to load sprite: ${src}`));
     img.src = src;
   });
@@ -73,7 +83,6 @@ export async function loadAllSprites(): Promise<SpriteMap> {
 /**
  * Draws a single pet on the canvas.
  * Handles horizontal flip for walkLeft direction.
- * Draws a hunger indicator dot above the pet.
  */
 export function drawPet(ctx: CanvasRenderingContext2D, pet: Pet, sprites: SpriteMap): void {
   const data = pet.toData();
