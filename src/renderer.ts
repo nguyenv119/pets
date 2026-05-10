@@ -2,10 +2,10 @@ import type { Pet } from './pet';
 import type { Ball } from './pet';
 import type { PetState, PetType } from './types';
 
-// Nominal sprite dimensions — updated at runtime from naturalWidth/naturalHeight.
-// Exported so main.ts can pass the correct imgW to pet.update().
-export const SPRITE_W = 32;
-export const SPRITE_H = 32;
+// Fixed draw size — all sprites rendered at this size for visual consistency.
+// Exported so main.ts can pass DRAW_W as imgW to pet.update() for correct clamping.
+export const DRAW_W = 64;
+export const DRAW_H = 64;
 
 // Map from PetState to the filename segment used in the asset path
 const STATE_TO_GIF: Record<PetState, string> = {
@@ -84,29 +84,15 @@ export function drawPet(ctx: CanvasRenderingContext2D, pet: Pet, sprites: Sprite
   const img = colorMap.get(pet.state);
   if (!img) return;
 
-  const w = img.naturalWidth || SPRITE_W;
-  const h = img.naturalHeight || SPRITE_H;
-
   if (pet.state === 'walkLeft') {
     ctx.save();
     ctx.scale(-1, 1);
-    ctx.translate(-(data.x * 2 + w), 0);
-    ctx.drawImage(img, data.x, data.y, w, h);
+    ctx.translate(-(data.x * 2 + DRAW_W), 0);
+    ctx.drawImage(img, data.x, data.y, DRAW_W, DRAW_H);
     ctx.restore();
   } else {
-    ctx.drawImage(img, data.x, data.y, w, h);
+    ctx.drawImage(img, data.x, data.y, DRAW_W, DRAW_H);
   }
-
-  // Hunger dot
-  const dotX = data.x + w / 2;
-  const dotY = data.y - 8;
-  ctx.beginPath();
-  ctx.arc(dotX, dotY, 5, 0, Math.PI * 2);
-  ctx.fillStyle =
-    data.hunger >= 80 ? 'green' :
-    data.hunger >= 40 ? 'yellow' :
-    'red';
-  ctx.fill();
 }
 
 /**

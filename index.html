@@ -6,11 +6,24 @@
     <title>Pets</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      body { background: #1a1a2e; overflow: hidden; }
-      canvas { display: block; }
+      body { overflow: hidden; }
+      #backdrop {
+        position: fixed;
+        inset: 0;
+        background: #1a1a2e;
+        background-size: cover;
+        background-position: center;
+        z-index: 0;
+      }
+      canvas {
+        position: fixed;
+        inset: 0;
+        z-index: 1;
+      }
     </style>
   </head>
   <body>
+    <div id="backdrop"></div>
     <canvas id="canvas"></canvas>
     <script type="module" src="/src/main.ts"></script>
   </body>

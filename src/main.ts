@@ -1,5 +1,5 @@
 import { Pet } from './pet';
-import { loadAllSprites, drawPet } from './renderer';
+import { loadAllSprites, drawPet, DRAW_W } from './renderer';
 
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -26,7 +26,7 @@ function tick(now: number): void {
   lastTime = now;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  pets.forEach(p => p.update(dt, null, canvas.width));
+  pets.forEach(p => p.update(dt, null, canvas.width, DRAW_W));
   pets.forEach(p => drawPet(ctx, p, sprites));
 
   requestAnimationFrame(tick);

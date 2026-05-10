@@ -1,7 +1,7 @@
 import type { PetData, PetState, PetType } from './types';
 
 // Horizontal movement speed in pixels per second
-const WALK_SPEED = 80;
+const WALK_SPEED = 120;
 
 // Hunger decay rate in points per second (100 → 0 over ~10 minutes)
 const HUNGER_DECAY_RATE = 100 / 600;
@@ -16,17 +16,17 @@ function nextState(current: PetState): [PetState, number] {
   const r = Math.random();
   switch (current) {
     case 'sitIdle':
-      if (r < 0.4) return ['walkLeft', randBetween(1, 3)];
-      if (r < 0.8) return ['walkRight', randBetween(1, 3)];
+      if (r < 0.4) return ['walkLeft', randBetween(3, 8)];
+      if (r < 0.8) return ['walkRight', randBetween(3, 8)];
       return ['sleep', randBetween(4, 8)];
 
     case 'walkLeft':
       if (r < 0.6) return ['sitIdle', randBetween(2, 4)];
-      return ['walkRight', randBetween(1, 3)];
+      return ['walkRight', randBetween(3, 8)];
 
     case 'walkRight':
       if (r < 0.6) return ['sitIdle', randBetween(2, 4)];
-      return ['walkLeft', randBetween(1, 3)];
+      return ['walkLeft', randBetween(3, 8)];
 
     case 'sleep':
       return ['sitIdle', randBetween(2, 4)];
