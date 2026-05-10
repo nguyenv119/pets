@@ -1,0 +1,70 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bd:*)",
+      "Bash(git:*)"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "beads",
+    "code-review-graph"
+  ],
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat AGENTS.md"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/ensure-code-review-graph.sh",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/bd-dolt-pull.sh",
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/enforce-reviewer-standards.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/bd-dolt-push.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "beads@beads-marketplace": true
+  }
+}
