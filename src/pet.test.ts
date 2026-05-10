@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Pet } from './pet';
+import type { Ball } from './pet';
 import type { PetData } from './types';
 
 // Base test fixture — a pet with deterministic initial state
@@ -258,15 +259,16 @@ describe('Pet FSM — state transitions', () => {
     expect(pet.state).toBe('sitIdle');
   });
 
-  it('idleWithBall transitions to sitIdle after 1.5s timer', () => {
+  it('idleWithBall transitions to sitIdle when timer expires', () => {
     /**
-     * Verifies that after catching a ball, the pet holds it for exactly 1.5s
-     * before returning to sitIdle.
+     * Verifies that idleWithBall exits to sitIdle once its timer runs out.
      *
      * This matters because if the idleWithBall state never exits, the pet
      * would be permanently stuck in the ball-holding pose.
      *
      * If violated, pets display the ball sprite indefinitely.
+     * Note: the entry timer for this state varies by path (1.5s from chase,
+     * randBetween(2,4) from nextState). This test verifies the exit, not the duration.
      */
     // GIVEN — a pet in idleWithBall with timer forced to 0
     const pet = makePet();
@@ -278,6 +280,40 @@ describe('Pet FSM — state transitions', () => {
 
     // THEN — pet returned to sitIdle
     expect(pet.state).toBe('sitIdle');
+  });
+
+  it('chase transitions to idleWithBall when ball deactivates', () => {
+    /**
+     * Verifies that when a pet is chasing a ball and the ball's active flag
+     * becomes false, the pet immediately transitions to idleWithBall with a
+     * hardcoded 1.5s timer — regardless of the FSM timer state.
+     *
+     * This matters because it is the only path from chase → idleWithBall. The
+     * 1.5s duration is intentionally shorter than the normal idleWithBall timer
+     * so the pet returns to idle quickly after picking up the ball. If this
+     * transition is broken, the pet would continue chasing a deactivated ball
+     * forever or transition to sitIdle without ever entering the ball-holding
+     * pose.
+     *
+     * If violated, the ball-catch animation (idleWithBall) never plays after
+     * the ball lands, and the onTransition callback does not fire for
+     * persistence.
+     */
+    // GIVEN — a pet in chase state, an onTransition spy, and a deactivated ball
+    const pet = makePet();
+    pet.state = 'chase';
+    pet['_timer'] = 10; // large timer so only the ball-deactivation branch fires
+    const onTransition = vi.fn();
+    pet.onTransition = onTransition;
+    const ball: Ball = { active: false, x: 300, y: 300 };
+
+    // WHEN — a single update tick with the deactivated ball
+    pet.update(0.016, ball);
+
+    // THEN — state is idleWithBall, timer is 1.5, callback fired once
+    expect(pet.state).toBe('idleWithBall');
+    expect(pet['_timer']).toBe(1.5);
+    expect(onTransition).toHaveBeenCalledOnce();
   });
 });
 
