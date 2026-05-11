@@ -8,29 +8,154 @@
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body { overflow: hidden; }
 
+      /* Ground top = pet feet level = (vh-48)*0.5 + 64 ≈ 50vh + 40px */
+      :root { --ground-top: calc(50vh + 40px); }
+
+      /* ── Sky ──────────────────────────────────────────────────── */
       #backdrop {
         position: fixed;
         inset: 0;
-        /* sky → grass → dirt path at ~40% canvas height → grass */
-        background: linear-gradient(
-          to bottom,
-          #87ceeb 0%,
-          #87ceeb 30%,
-          #4a7c2f 30%,
-          #4a7c2f 37%,
-          #c8a46e 37%,
-          #c8a46e 44%,
-          #4a7c2f 44%,
-          #4a7c2f 100%
+        background: linear-gradient(to bottom,
+          #2c5f9e  0%,
+          #4a83c9 14%,
+          #6aaed8 36%,
+          #8fcde8 58%,
+          #b0e0f4 74%
         );
         z-index: 0;
       }
 
-      /* Pet <img> elements live here — below the canvas so canvas overlays (dots, ball) render on top */
+      /* Pixel sun with cross rays */
+      #sun {
+        position: fixed;
+        top: 7vh; right: 12%;
+        width: 28px; height: 28px;
+        background: #fff700;
+        image-rendering: pixelated;
+        z-index: 0;
+        box-shadow:
+          0 0 0 4px  #ffee00,
+          0 0 0 10px rgba(255, 238, 0, 0.45),
+          0 0 0 22px rgba(255, 230, 0, 0.15);
+      }
+      #sun::before {
+        content: '';
+        position: absolute;
+        background: #fff700;
+        top: -10px; bottom: -10px; left: 3px; right: 3px; /* vertical ray */
+      }
+      #sun::after {
+        content: '';
+        position: absolute;
+        background: #fff700;
+        top: 3px; bottom: 3px; left: -10px; right: -10px; /* horizontal ray */
+      }
+
+      /* Pixel clouds — bump (narrow top) + wide base */
+      .cloud {
+        position: fixed;
+        z-index: 0;
+        image-rendering: pixelated;
+        opacity: 0.95;
+      }
+      #cloud-1 {
+        top: 9vh; left: 7%;
+        width: 144px; height: 64px;
+        background:
+          linear-gradient(#fff, #fff) 24px 0 / 96px 28px no-repeat,
+          linear-gradient(#fff, #fff)  0   28px / 144px 36px no-repeat;
+        animation: drift-a 30s ease-in-out infinite;
+      }
+      #cloud-2 {
+        top: 19vh; left: 31%;
+        width: 104px; height: 48px;
+        background:
+          linear-gradient(#fff, #fff) 18px 0 / 68px 22px no-repeat,
+          linear-gradient(#fff, #fff)  0   22px / 104px 26px no-repeat;
+        animation: drift-b 22s ease-in-out infinite;
+        animation-delay: -11s;
+      }
+      #cloud-3 {
+        top: 8vh; right: 23%;
+        width: 128px; height: 56px;
+        background:
+          linear-gradient(#fff, #fff) 20px 0 / 88px 24px no-repeat,
+          linear-gradient(#fff, #fff)  0   24px / 128px 32px no-repeat;
+        animation: drift-a 26s ease-in-out infinite reverse;
+        animation-delay: -8s;
+      }
+
+      @keyframes drift-a {
+        0%, 100% { transform: translateX(0); }
+        50%       { transform: translateX(22px); }
+      }
+      @keyframes drift-b {
+        0%, 100% { transform: translateX(0); }
+        50%       { transform: translateX(-18px); }
+      }
+
+      /* ── Ground (grass strip + dirt) ─────────────────────────── */
+      #ground {
+        position: fixed;
+        left: 0; width: 100%;
+        top: var(--ground-top);
+        bottom: 0;
+        z-index: 0;
+        /* crisp grass-to-dirt transition */
+        background: linear-gradient(to bottom,
+          #64c85a  0,
+          #64c85a  18px,
+          #3e8240  18px,
+          #3e8240  32px,
+          #7b5438  32px,
+          #6a4225  48%,
+          #5b3618  100%
+        );
+      }
+
+      /* Pixel grass blades — stick 10px above the ground div */
+      #ground::before {
+        content: '';
+        position: absolute;
+        top: -10px; left: 0;
+        width: 100%; height: 10px;
+        background: repeating-linear-gradient(90deg,
+          #80e060   0,  #80e060  4px,
+          transparent 4px, transparent 7px,
+          #58c042   7px, #58c042 11px,
+          transparent 11px, transparent 14px
+        );
+        image-rendering: pixelated;
+      }
+
+      /* ── Scene layer: houses, trees, hedge ──────────────────── */
+      #scene-layer {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+      }
+
+      .sprite {
+        position: absolute;
+        image-rendering: pixelated;
+      }
+
+      /* Bottom edge of each sprite flush with the grass surface */
+      #house-left  { width: 126px; left: 3%;   bottom: calc(100vh - var(--ground-top)); }
+      #house-right { width: 152px; right: 3%;  bottom: calc(100vh - var(--ground-top)); }
+      #tree-1      { width: 156px; left: 17%;  bottom: calc(100vh - var(--ground-top)); }
+      #tree-2      { width: 156px; right: 17%; bottom: calc(100vh - var(--ground-top)); }
+      #hedge {
+        width: 260px;
+        left: 50%; transform: translateX(-50%);
+        bottom: calc(100vh - var(--ground-top));
+      }
+
+      /* ── Pets layer (DOM imgs for GIFs) ─────────────────────── */
       #pets-layer {
         position: fixed;
-        top: 0;
-        left: 0;
+        top: 0; left: 0;
         width: 100%;
         z-index: 1;
         pointer-events: none;
@@ -40,11 +165,10 @@
         cursor: pointer;
       }
 
-      /* Canvas is transparent — only draws ball on top of pets */
+      /* Canvas: transparent overlay for ball, particles etc. */
       canvas {
         position: fixed;
-        top: 0;
-        left: 0;
+        top: 0; left: 0;
         z-index: 2;
         pointer-events: none;
       }
@@ -52,6 +176,18 @@
   </head>
   <body>
     <div id="backdrop"></div>
+    <div id="sun"></div>
+    <div class="cloud" id="cloud-1"></div>
+    <div class="cloud" id="cloud-2"></div>
+    <div class="cloud" id="cloud-3"></div>
+    <div id="ground"></div>
+    <div id="scene-layer">
+      <img src="assets/sprites/house_left.png"  class="sprite" id="house-left"  alt="">
+      <img src="assets/sprites/tree.png"         class="sprite" id="tree-1"      alt="">
+      <img src="assets/sprites/tree.png"         class="sprite" id="tree-2"      alt="">
+      <img src="assets/sprites/house_right.png" class="sprite" id="house-right" alt="">
+      <img src="assets/sprites/hedge.png"       class="sprite" id="hedge"       alt="">
+    </div>
     <div id="pets-layer"></div>
     <canvas id="canvas"></canvas>
     <script type="module" src="/src/main.ts"></script>

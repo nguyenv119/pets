@@ -6,15 +6,16 @@ const canvas = document.getElementById('canvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
 const petsLayer = document.getElementById('pets-layer') as HTMLElement;
 
+function groundY(): number { return canvas.height * PATH_Y_FRACTION; }
+
 function resize(): void {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight - 48;
   petsLayer.style.height = `${canvas.height}px`;
+  document.documentElement.style.setProperty('--ground-top', `${groundY() + 64}px`);
 }
 resize();
 window.addEventListener('resize', resize);
-
-function groundY(): number { return canvas.height * PATH_Y_FRACTION; }
 
 // Temporary hardcoded pets for visual verification — replaced in T3
 const pets: Pet[] = [
