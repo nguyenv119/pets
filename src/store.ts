@@ -9,6 +9,7 @@ export function savePets(pets: { toData(): PetData }[]): void {
 export function loadPetData(): PetData[] {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as PetData[]) : [];
+    const parsed: unknown = JSON.parse(raw ?? 'null');
+    return Array.isArray(parsed) ? (parsed as PetData[]) : [];
   } catch { return []; }
 }

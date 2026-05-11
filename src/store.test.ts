@@ -54,6 +54,28 @@ describe('loadPetData — empty storage', () => {
     expect(result).toEqual([]);
   });
 
+  it('returns empty array when stored value is valid JSON but not an array', () => {
+    /**
+     * Verifies that loadPetData() returns [] when the stored JSON parses
+     * successfully but is not an array (e.g., an object or a number).
+     *
+     * This matters because a schema migration or manual edit can replace the
+     * array with a non-array value. Blindly casting it as PetData[] would
+     * silently corrupt every pet constructed from the result.
+     *
+     * If violated, loading a non-array value propagates undefined fields into
+     * Pet constructors, which then re-serialize corrupted data back to storage.
+     */
+    // GIVEN — a valid JSON object (not an array) stored under the key
+    localStorage.setItem('pixel-pets-v1', JSON.stringify({ id: 'oops' }));
+
+    // WHEN — load with non-array JSON
+    const result = loadPetData();
+
+    // THEN — graceful fallback to empty array
+    expect(result).toEqual([]);
+  });
+
   it('returns empty array when stored value is not valid JSON', () => {
     /**
      * Verifies that loadPetData() returns [] rather than throwing when
