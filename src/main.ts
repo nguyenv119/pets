@@ -1,8 +1,6 @@
 import { Pet } from './pet';
-import { createPetView, updatePetView, DRAW_W } from './renderer';
+import { createPetView, updatePetView, DRAW_W, PATH_Y_FRACTION } from './renderer';
 import type { PetView } from './renderer';
-
-export const PATH_Y_FRACTION = 0.40;
 
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
