@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "pets-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "/Users/nguyenv/pets/pets-bd-fuvi-hoz.2-game-loop",
+      "port": 5173
+    }
+  ]
+}

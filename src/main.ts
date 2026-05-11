@@ -18,8 +18,8 @@ function groundY(): number { return canvas.height - DRAW_H; }
 
 // Temporary hardcoded pets for visual verification — replaced in T3
 const pets: Pet[] = [
-  new Pet({ id: '1', name: 'Rex',     type: 'dog', color: 'brown', x: 100, y: groundY(), hunger: 100 }),
-  new Pet({ id: '2', name: 'Kitsune', type: 'fox', color: 'red',   x: 400, y: groundY(), hunger: 100 }),
+  new Pet({ id: '1', name: 'Rex',     type: 'dog', color: 'brown', x: 100, y: groundY() }),
+  new Pet({ id: '2', name: 'Kitsune', type: 'fox', color: 'red',   x: 400, y: groundY() }),
 ];
 
 const views = new Map<Pet, PetView>();

@@ -12,7 +12,6 @@ function makePet(overrides: Partial<PetData> = {}): Pet {
     color: 'brown',
     x: 200,
     y: 300,
-    hunger: 100,
     ...overrides,
   });
 }
@@ -469,55 +468,6 @@ describe('Pet FSM — onTransition callback', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Hunger decay
-// ---------------------------------------------------------------------------
-
-describe('Pet FSM — hunger decay', () => {
-  it('decreases hunger over time', () => {
-    /**
-     * Verifies that the pet's hunger value decreases as time passes during
-     * update() calls.
-     *
-     * This matters because hunger is a core game mechanic — if it never
-     * decreases, feeding mechanics and hunger indicators never activate.
-     *
-     * If violated, pets always appear at full hunger and the hunger dot
-     * indicator never turns yellow or red.
-     */
-    // GIVEN — a pet at full hunger
-    const pet = makePet({ hunger: 100 });
-    pet['_timer'] = 10; // keep timer running so we only test hunger
-
-    // WHEN — advance 10 seconds
-    pet.update(10, null);
-
-    // THEN — hunger is lower
-    expect(pet.hunger).toBeLessThan(100);
-  });
-
-  it('does not let hunger go below 0', () => {
-    /**
-     * Verifies that hunger is clamped at 0 and never becomes negative.
-     *
-     * This matters because downstream code (e.g., hunger dot color) assumes
-     * hunger is in [0, 100]. A negative value could cause incorrect color
-     * mapping or display glitches.
-     *
-     * If violated, the hunger indicator could display invalid states.
-     */
-    // GIVEN — a pet at 0 hunger with more time passing
-    const pet = makePet({ hunger: 0 });
-    pet['_timer'] = 10;
-
-    // WHEN — advance a large amount of time
-    pet.update(100, null);
-
-    // THEN — hunger is not negative
-    expect(pet.hunger).toBeGreaterThanOrEqual(0);
-  });
-});
-
-// ---------------------------------------------------------------------------
 // toData snapshot
 // ---------------------------------------------------------------------------
 
@@ -529,12 +479,12 @@ describe('Pet FSM — toData()', () => {
      *
      * This matters because toData() is the serialization contract used by
      * persistence and UI layers. If any field is stale or missing, persisted
-     * pets would be restored with incorrect position, hunger, or identity.
+     * pets would be restored with incorrect position or identity.
      *
-     * If violated, pet saves/loads would silently corrupt x, hunger, or id.
+     * If violated, pet saves/loads would silently corrupt x or id.
      */
     // GIVEN — a pet with known initial values
-    const pet = makePet({ id: 'abc', name: 'Buddy', x: 150, y: 300, hunger: 75 });
+    const pet = makePet({ id: 'abc', name: 'Buddy', x: 150, y: 300 });
 
     // WHEN — read snapshot without any update
     const data = pet.toData();
@@ -546,7 +496,6 @@ describe('Pet FSM — toData()', () => {
     expect(data.color).toBe('brown');
     expect(data.x).toBe(150);
     expect(data.y).toBe(300);
-    expect(data.hunger).toBe(75);
   });
 
   it('returns updated x after movement', () => {

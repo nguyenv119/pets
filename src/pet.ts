@@ -48,7 +48,6 @@ export class Pet {
   state: PetState;
   x: number;
   y: number;
-  hunger: number;
 
   // Internal FSM timer (seconds until next transition)
   // Exposed with _ prefix so tests can force expiry
@@ -70,7 +69,6 @@ export class Pet {
     this._color = data.color;
     this.x = data.x;
     this.y = data.y;
-    this.hunger = data.hunger;
     this.state = 'sitIdle';
     this._timer = randBetween(2, 4);
   }
@@ -126,7 +124,6 @@ export class Pet {
       color: this._color,
       x: this.x,
       y: this.y,
-      hunger: this.hunger,
     };
   }
 

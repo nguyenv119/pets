@@ -8,5 +8,4 @@ export interface PetData {
   color: string;
   x: number;
   y: number;
-  hunger: number;
 }
