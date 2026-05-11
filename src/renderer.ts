@@ -2,7 +2,7 @@ import type { Pet } from './pet';
 import type { PetState } from './types';
 
 export const DRAW_W = 64;
-export const DRAW_H = 48; // natural height at DRAW_W=64 for ~120x85 GIFs
+export const PATH_Y_FRACTION = 0.40;
 
 const STATE_TO_GIF: Record<PetState, string> = {
   sitIdle:     'idle',

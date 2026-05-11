@@ -11,9 +11,18 @@
       #backdrop {
         position: fixed;
         inset: 0;
-        background: #1a1a2e;
-        background-size: cover;
-        background-position: center;
+        /* sky → grass → dirt path at ~40% canvas height → grass */
+        background: linear-gradient(
+          to bottom,
+          #87ceeb 0%,
+          #87ceeb 30%,
+          #4a7c2f 30%,
+          #4a7c2f 37%,
+          #c8a46e 37%,
+          #c8a46e 44%,
+          #4a7c2f 44%,
+          #4a7c2f 100%
+        );
         z-index: 0;
       }
 
