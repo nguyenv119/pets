@@ -8,7 +8,7 @@
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body { overflow: hidden; }
 
-      /* Ground top = pet feet level = (vh-48)*0.5 + 64 ≈ 50vh + 40px */
+      /* Ground top = pet feet level  ≈  50vh + 40px */
       :root { --ground-top: calc(50vh + 40px); }
 
       /* ── Sky ──────────────────────────────────────────────────── */
@@ -16,11 +16,11 @@
         position: fixed;
         inset: 0;
         background: linear-gradient(to bottom,
-          #2c5f9e  0%,
-          #4a83c9 14%,
-          #6aaed8 36%,
-          #8fcde8 58%,
-          #b0e0f4 74%
+          #1a4a8c  0%,
+          #3572be 12%,
+          #5698d6 30%,
+          #7dbae8 54%,
+          #a8d8f5 72%
         );
         z-index: 0;
       }
@@ -39,120 +39,137 @@
           0 0 0 22px rgba(255, 230, 0, 0.15);
       }
       #sun::before {
-        content: '';
-        position: absolute;
-        background: #fff700;
-        top: -10px; bottom: -10px; left: 3px; right: 3px; /* vertical ray */
+        content: ''; position: absolute; background: #fff700;
+        top: -10px; bottom: -10px; left: 3px; right: 3px;
       }
       #sun::after {
-        content: '';
-        position: absolute;
-        background: #fff700;
-        top: 3px; bottom: 3px; left: -10px; right: -10px; /* horizontal ray */
+        content: ''; position: absolute; background: #fff700;
+        top: 3px; bottom: 3px; left: -10px; right: -10px;
       }
 
-      /* Pixel clouds — bump (narrow top) + wide base */
+      /* ── Pixel clouds — 3-level stepped shapes ──────────────── */
       .cloud {
         position: fixed;
         z-index: 0;
         image-rendering: pixelated;
-        opacity: 0.95;
+        opacity: 0.97;
       }
+
+      /* Cloud 1: large (8px×24px/pixel = 192×96px, 3 levels) */
       #cloud-1 {
         top: 9vh; left: 7%;
-        width: 144px; height: 64px;
+        width: 192px; height: 96px;
         background:
-          linear-gradient(#fff, #fff) 24px 0 / 96px 28px no-repeat,
-          linear-gradient(#fff, #fff)  0   28px / 144px 36px no-repeat;
-        animation: drift-a 30s ease-in-out infinite;
+          linear-gradient(#fff, #fff)  72px    0 /  48px 24px no-repeat,
+          linear-gradient(#fff, #fff)  24px   24px / 144px 24px no-repeat,
+          linear-gradient(#fff, #fff)   0     48px / 192px 48px no-repeat;
+        animation: drift-a 34s ease-in-out infinite;
       }
+      /* Cloud 2: small (5px×20px/pixel = 100×60px, 2 levels) */
       #cloud-2 {
-        top: 19vh; left: 31%;
-        width: 104px; height: 48px;
+        top: 20vh; left: 30%;
+        width: 100px; height: 60px;
         background:
-          linear-gradient(#fff, #fff) 18px 0 / 68px 22px no-repeat,
-          linear-gradient(#fff, #fff)  0   22px / 104px 26px no-repeat;
-        animation: drift-b 22s ease-in-out infinite;
-        animation-delay: -11s;
+          linear-gradient(#fff, #fff)  20px    0 /  60px 20px no-repeat,
+          linear-gradient(#fff, #fff)   0     20px / 100px 40px no-repeat;
+        animation: drift-b 24s ease-in-out infinite;
+        animation-delay: -12s;
       }
+      /* Cloud 3: medium (8px×18px/pixel = 144×72px, 3 levels) */
       #cloud-3 {
-        top: 8vh; right: 23%;
-        width: 128px; height: 56px;
+        top: 8vh; right: 22%;
+        width: 144px; height: 72px;
         background:
-          linear-gradient(#fff, #fff) 20px 0 / 88px 24px no-repeat,
-          linear-gradient(#fff, #fff)  0   24px / 128px 32px no-repeat;
-        animation: drift-a 26s ease-in-out infinite reverse;
-        animation-delay: -8s;
+          linear-gradient(#fff, #fff)  45px    0 /  54px 18px no-repeat,
+          linear-gradient(#fff, #fff)  27px   18px /  90px 18px no-repeat,
+          linear-gradient(#fff, #fff)   0     36px / 144px 36px no-repeat;
+        animation: drift-a 28s ease-in-out infinite reverse;
+        animation-delay: -9s;
       }
 
       @keyframes drift-a {
         0%, 100% { transform: translateX(0); }
-        50%       { transform: translateX(22px); }
+        50%       { transform: translateX(26px); }
       }
       @keyframes drift-b {
         0%, 100% { transform: translateX(0); }
-        50%       { transform: translateX(-18px); }
+        50%       { transform: translateX(-20px); }
       }
 
-      /* ── Ground (grass strip + dirt) ─────────────────────────── */
+      /* ── Ground ──────────────────────────────────────────────── */
       #ground {
         position: fixed;
         left: 0; width: 100%;
         top: var(--ground-top);
         bottom: 0;
         z-index: 0;
-        /* crisp grass-to-dirt transition */
+        /* Crisp grass → dark grass → dirt, all pixel-sharp */
         background: linear-gradient(to bottom,
-          #64c85a  0,
-          #64c85a  18px,
-          #3e8240  18px,
-          #3e8240  32px,
-          #7b5438  32px,
-          #6a4225  48%,
-          #5b3618  100%
+          #72da62  0,
+          #72da62  8px,
+          #5ab84e  8px,
+          #5ab84e  22px,
+          #3e8040  22px,
+          #3e8040  36px,
+          #7c5438  36px,
+          #6a4225  55%,
+          #5a3618  100%
         );
       }
 
-      /* Pixel grass blades — stick 10px above the ground div */
+      /* Pixel grass blades — tall + medium, two separate heights */
       #ground::before {
-        content: '';
-        position: absolute;
-        top: -10px; left: 0;
-        width: 100%; height: 10px;
-        background: repeating-linear-gradient(90deg,
-          #80e060   0,  #80e060  4px,
-          transparent 4px, transparent 7px,
-          #58c042   7px, #58c042 11px,
-          transparent 11px, transparent 14px
-        );
+        content: ''; position: absolute;
+        top: -20px; left: 0; right: 0;
+        height: 20px;
+        background-image:
+          /* Tall blades: 5 px wide every 16 px, full 20 px height */
+          repeating-linear-gradient(90deg,
+            #80e260 0 5px, transparent 5px 16px
+          ),
+          /* Medium blades: 4 px wide every 16 px, offset column */
+          repeating-linear-gradient(90deg,
+            transparent 0 8px, #5bb84e 8px 12px, transparent 12px 16px
+          );
+        background-position: 0 0, 0 6px;
+        background-repeat: repeat, repeat-x;
         image-rendering: pixelated;
       }
 
-      /* ── Scene layer: houses, trees, hedge ──────────────────── */
+      /* Dirt tile texture — 16×16 px grid visible only in dirt section */
+      #ground::after {
+        content: ''; position: absolute;
+        top: 36px; left: 0; right: 0; bottom: 0;
+        background:
+          repeating-linear-gradient(0deg,
+            rgba(0,0,0,0.09) 0 1px, transparent 1px 16px
+          ),
+          repeating-linear-gradient(90deg,
+            rgba(0,0,0,0.07) 0 1px, transparent 1px 16px
+          );
+        pointer-events: none;
+      }
+
+      /* ── Scene sprites (houses + trees, no hedge) ───────────── */
       #scene-layer {
         position: fixed;
         inset: 0;
         z-index: 0;
         pointer-events: none;
       }
-
       .sprite {
         position: absolute;
         image-rendering: pixelated;
       }
 
-      /* Bottom edge of each sprite flush with the grass surface */
-      #house-left  { width: 126px; left: 3%;   bottom: calc(100vh - var(--ground-top)); }
-      #house-right { width: 152px; right: 3%;  bottom: calc(100vh - var(--ground-top)); }
-      #tree-1      { width: 156px; left: 17%;  bottom: calc(100vh - var(--ground-top)); }
-      #tree-2      { width: 156px; right: 17%; bottom: calc(100vh - var(--ground-top)); }
-      #hedge {
-        width: 260px;
-        left: 50%; transform: translateX(-50%);
-        bottom: calc(100vh - var(--ground-top));
-      }
+      /* Sprites bottom-aligned to grass surface */
+      #house-left  { width: 189px; left: 2%;   bottom: calc(100vh - var(--ground-top)); }
+      #house-right { width: 228px; right: 2%;  bottom: calc(100vh - var(--ground-top)); }
+      /* Trees sunk 12 px into ground so narrow trunk emerges from grass cleanly */
+      #tree-1      { width: 156px; left: 17%;  bottom: calc(100vh - var(--ground-top) - 12px); }
+      #tree-2      { width: 156px; right: 17%; bottom: calc(100vh - var(--ground-top) - 12px); }
 
-      /* ── Pets layer (DOM imgs for GIFs) ─────────────────────── */
+      /* ── Pets layer ─────────────────────────────────────────── */
       #pets-layer {
         position: fixed;
         top: 0; left: 0;
@@ -165,7 +182,6 @@
         cursor: pointer;
       }
 
-      /* Canvas: transparent overlay for ball, particles etc. */
       canvas {
         position: fixed;
         top: 0; left: 0;
@@ -186,7 +202,6 @@
       <img src="assets/sprites/tree.png"         class="sprite" id="tree-1"      alt="">
       <img src="assets/sprites/tree.png"         class="sprite" id="tree-2"      alt="">
       <img src="assets/sprites/house_right.png" class="sprite" id="house-right" alt="">
-      <img src="assets/sprites/hedge.png"       class="sprite" id="hedge"       alt="">
     </div>
     <div id="pets-layer"></div>
     <canvas id="canvas"></canvas>
