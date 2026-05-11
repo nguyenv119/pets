@@ -1,6 +1,8 @@
 import { Pet } from './pet';
-import { createPetView, updatePetView, DRAW_W, DRAW_H } from './renderer';
+import { createPetView, updatePetView, DRAW_W } from './renderer';
 import type { PetView } from './renderer';
+
+export const PATH_Y_FRACTION = 0.40;
 
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -14,7 +16,7 @@ function resize(): void {
 resize();
 window.addEventListener('resize', resize);
 
-function groundY(): number { return canvas.height - DRAW_H; }
+function groundY(): number { return canvas.height * PATH_Y_FRACTION; }
 
 // Temporary hardcoded pets for visual verification — replaced in T3
 const pets: Pet[] = [
