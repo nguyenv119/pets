@@ -1,5 +1,5 @@
 import { Pet } from './pet';
-import { createPetView, updatePetView, drawHungerDot, DRAW_W, DRAW_H } from './renderer';
+import { createPetView, updatePetView, DRAW_W, DRAW_H } from './renderer';
 import type { PetView } from './renderer';
 
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
@@ -36,7 +36,6 @@ function tick(now: number): void {
   pets.forEach(p => {
     p.update(dt, null, canvas.width, DRAW_W);
     updatePetView(views.get(p)!, p);
-    drawHungerDot(ctx, p);
   });
 
   requestAnimationFrame(tick);

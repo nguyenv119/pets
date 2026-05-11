@@ -2,7 +2,7 @@ import type { Pet } from './pet';
 import type { PetState } from './types';
 
 export const DRAW_W = 64;
-export const DRAW_H = 64;
+export const DRAW_H = 48; // natural height at DRAW_W=64 for ~120x85 GIFs
 
 const STATE_TO_GIF: Record<PetState, string> = {
   sitIdle:     'idle',
@@ -25,7 +25,7 @@ export function createPetView(pet: Pet, container: HTMLElement): PetView {
   el.style.cssText = [
     'position:absolute',
     `width:${DRAW_W}px`,
-    `height:${DRAW_H}px`,
+    'height:auto',
     'image-rendering:pixelated',
     'user-select:none',
   ].join(';');
@@ -46,13 +46,6 @@ export function updatePetView(view: PetView, pet: Pet): void {
 
 export function removePetView(view: PetView): void {
   view.el.remove();
-}
-
-export function drawHungerDot(ctx: CanvasRenderingContext2D, pet: Pet): void {
-  ctx.beginPath();
-  ctx.arc(pet.x + DRAW_W / 2, pet.y - 6, 5, 0, Math.PI * 2);
-  ctx.fillStyle = pet.hunger >= 80 ? '#22c55e' : pet.hunger >= 40 ? '#eab308' : '#ef4444';
-  ctx.fill();
 }
 
 export function drawBall(ctx: CanvasRenderingContext2D, ball: { x: number; y: number }): void {

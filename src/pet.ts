@@ -3,9 +3,6 @@ import type { PetData, PetState, PetType } from './types';
 // Horizontal movement speed in pixels per second
 const WALK_SPEED = 120;
 
-// Hunger decay rate in points per second (100 → 0 over ~10 minutes)
-const HUNGER_DECAY_RATE = 100 / 600;
-
 // Timer range helpers
 function randBetween(min: number, max: number): number {
   return min + Math.random() * (max - min);
@@ -87,9 +84,6 @@ export class Pet {
    * @param imgW  Sprite width used for right-edge clamping. Defaults to 32.
    */
   update(dt: number, ball: Ball | null, canvasW?: number, imgW = 32): void {
-    // Decay hunger
-    this.hunger = Math.max(0, this.hunger - HUNGER_DECAY_RATE * dt);
-
     // Chase logic: check if ball deactivated while chasing
     if (this.state === 'chase' && ball !== null && !ball.active) {
       this._transition('idleWithBall', 1.5);
@@ -99,18 +93,21 @@ export class Pet {
     // Decrement timer
     this._timer -= dt;
 
-    // Apply movement in walk states regardless of timer.
-    // Right-edge clamping requires a known canvas width; fall back to
-    // window.innerWidth in browser contexts. If neither is available
-    // (e.g., test environments without a DOM), skip the right clamp.
     const effectiveCanvasW: number | undefined =
       canvasW ?? (typeof window !== 'undefined' ? window.innerWidth : undefined);
 
     if (this.state === 'walkLeft') {
-      this.x = Math.max(0, this.x - WALK_SPEED * dt);
+      this.x -= WALK_SPEED * dt;
+      if (this.x <= 0) {
+        this.x = 0;
+        this._transition('walkRight', randBetween(3, 8));
+      }
     } else if (this.state === 'walkRight') {
-      const newX = this.x + WALK_SPEED * dt;
-      this.x = effectiveCanvasW !== undefined ? Math.min(effectiveCanvasW - imgW, newX) : newX;
+      this.x += WALK_SPEED * dt;
+      if (effectiveCanvasW !== undefined && this.x >= effectiveCanvasW - imgW) {
+        this.x = effectiveCanvasW - imgW;
+        this._transition('walkLeft', randBetween(3, 8));
+      }
     }
 
     // Trigger state transition when timer expires
