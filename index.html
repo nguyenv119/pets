@@ -6,11 +6,44 @@
     <title>Pets</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      body { background: #1a1a2e; overflow: hidden; }
-      canvas { display: block; }
+      body { overflow: hidden; }
+
+      #backdrop {
+        position: fixed;
+        inset: 0;
+        background: #1a1a2e;
+        background-size: cover;
+        background-position: center;
+        z-index: 0;
+      }
+
+      /* Pet <img> elements live here — below the canvas so canvas overlays (dots, ball) render on top */
+      #pets-layer {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        z-index: 1;
+        pointer-events: none;
+      }
+      #pets-layer img {
+        pointer-events: auto;
+        cursor: pointer;
+      }
+
+      /* Canvas is transparent — only draws ball on top of pets */
+      canvas {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 2;
+        pointer-events: none;
+      }
     </style>
   </head>
   <body>
+    <div id="backdrop"></div>
+    <div id="pets-layer"></div>
     <canvas id="canvas"></canvas>
     <script type="module" src="/src/main.ts"></script>
   </body>
