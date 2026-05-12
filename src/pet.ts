@@ -32,7 +32,7 @@ function nextState(current: PetState): [PetState, number] {
       return ['sitIdle', randBetween(2, 4)];
 
     case 'chase':
-      // chase exits via ball.active check in update(), not via timer
+      // chase exits via onBallLanded() called from main.ts when ball deactivates, not via timer
       return ['sitIdle', randBetween(2, 4)];
 
     case 'eat':
