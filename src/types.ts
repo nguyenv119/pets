@@ -1,4 +1,4 @@
-export type PetState = 'sitIdle' | 'walkLeft' | 'walkRight' | 'sleep' | 'chase' | 'idleWithBall';
+export type PetState = 'sitIdle' | 'walkLeft' | 'walkRight' | 'sleep' | 'chase' | 'idleWithBall' | 'eat';
 export type PetType = 'dog' | 'fox';
 
 export interface PetData {

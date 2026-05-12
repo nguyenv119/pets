@@ -1,6 +1,6 @@
 import { Pet } from './pet';
-import { createPetView, updatePetView, DRAW_W, PATH_Y_FRACTION } from './renderer';
-import type { PetView } from './renderer';
+import { createPetView, updatePetView, spawnFeedParticle, updateParticles, drawParticles, DRAW_W, PATH_Y_FRACTION } from './renderer';
+import type { Particle, PetView } from './renderer';
 import { savePets, loadPetData } from './store';
 import type { PetData } from './types';
 
@@ -32,6 +32,15 @@ if (pets.length === 0) {
 const views = new Map<Pet, PetView>();
 pets.forEach(p => views.set(p, createPetView(p, petsLayer)));
 
+const MAX_PARTICLES = 50;
+const particles: Particle[] = [];
+
+views.forEach((view, pet) => {
+  view.el.addEventListener('click', () => {
+    if (pet.feed() && particles.length < MAX_PARTICLES) particles.push(spawnFeedParticle(pet));
+  });
+});
+
 let lastTime = 0;
 
 function tick(now: number): void {
@@ -39,6 +48,9 @@ function tick(now: number): void {
   lastTime = now;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  updateParticles(particles, dt);
+  drawParticles(ctx, particles);
 
   pets.forEach(p => {
     p.update(dt, null, canvas.width, DRAW_W);
