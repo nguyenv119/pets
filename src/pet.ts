@@ -34,6 +34,9 @@ function nextState(current: PetState): [PetState, number] {
     case 'chase':
       // chase exits via ball.active check in update(), not via timer
       return ['sitIdle', randBetween(2, 4)];
+
+    case 'eat':
+      return ['sitIdle', randBetween(1, 2)];
   }
 }
 
@@ -113,6 +116,12 @@ export class Pet {
       const [ns, t] = nextState(this.state);
       this._transition(ns, t);
     }
+  }
+
+  /** Feed the pet: transitions to eat for 2s. No-op if currently chasing. */
+  feed(): void {
+    if (this.state === 'chase') return;
+    this._transition('eat', 2);
   }
 
   /** Returns a serializable snapshot of this pet's current state. */

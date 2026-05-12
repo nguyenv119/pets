@@ -11,6 +11,7 @@ const STATE_TO_GIF: Record<PetState, string> = {
   sleep:       'lie',
   chase:       'run',
   idleWithBall:'with_ball',
+  eat:         'idle',
 };
 
 export interface PetView {
@@ -53,4 +54,28 @@ export function drawBall(ctx: CanvasRenderingContext2D, ball: { x: number; y: nu
   ctx.arc(ball.x, ball.y, 8, 0, Math.PI * 2);
   ctx.fillStyle = 'yellow';
   ctx.fill();
+}
+
+// ---------------------------------------------------------------------------
+// Particle system — emoji burst drawn on the canvas
+// ---------------------------------------------------------------------------
+
+export interface Particle { x: number; y: number; vy: number; alpha: number; emoji: string; }
+
+export function spawnFeedParticle(pet: Pet): Particle {
+  return { x: pet.x + DRAW_W / 2, y: pet.y, vy: -40, alpha: 1, emoji: '🍖' };
+}
+
+export function updateParticles(particles: Particle[], dt: number): void {
+  for (const p of particles) { p.y += p.vy * dt; p.alpha = Math.max(0, p.alpha - dt / 1.5); }
+  particles.splice(0, particles.length, ...particles.filter(p => p.alpha > 0));
+}
+
+export function drawParticles(ctx: CanvasRenderingContext2D, particles: Particle[]): void {
+  ctx.save();
+  ctx.font = '20px serif';
+  ctx.textAlign = 'center';
+  for (const p of particles) { ctx.globalAlpha = p.alpha; ctx.fillText(p.emoji, p.x, p.y); }
+  ctx.globalAlpha = 1;
+  ctx.restore();
 }

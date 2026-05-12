@@ -468,6 +468,130 @@ describe('Pet FSM — onTransition callback', () => {
 });
 
 // ---------------------------------------------------------------------------
+// feed() method
+// ---------------------------------------------------------------------------
+
+describe('Pet FSM — feed()', () => {
+  it('transitions pet from sitIdle to eat state when fed', () => {
+    /**
+     * Verifies that calling feed() on a pet in sitIdle immediately transitions
+     * it to the 'eat' state with a 2-second timer.
+     *
+     * This matters because the eat state is the only way feeding is communicated
+     * visually. If feed() does not transition state, no eat animation or emoji
+     * burst would trigger.
+     *
+     * If violated, clicking a pet does nothing visually and the feeding
+     * interaction never plays.
+     */
+    // GIVEN — a pet in sitIdle state
+    const pet = makePet();
+    expect(pet.state).toBe('sitIdle');
+
+    // WHEN — feed() is called
+    pet.feed();
+
+    // THEN — pet enters eat state with a 2-second timer
+    expect(pet.state).toBe('eat');
+    expect(pet['_timer']).toBe(2);
+  });
+
+  it('transitions pet from sleep to eat when fed', () => {
+    /**
+     * Verifies that feed() works from states other than sitIdle (e.g., sleep).
+     *
+     * This matters because a user can click a pet at any time, regardless of
+     * its current state. Feed should be accepted from all non-chase states.
+     *
+     * If violated, feeding only works from sitIdle and is ignored in other
+     * non-chase states, creating confusing UX.
+     */
+    // GIVEN — a pet in sleep state
+    const pet = makePet();
+    pet.state = 'sleep';
+    pet['_timer'] = 10;
+
+    // WHEN — feed() is called
+    pet.feed();
+
+    // THEN — pet enters eat state
+    expect(pet.state).toBe('eat');
+    expect(pet['_timer']).toBe(2);
+  });
+
+  it('does nothing when feed() is called while chasing', () => {
+    /**
+     * Verifies that feed() is a no-op when the pet is in the 'chase' state.
+     *
+     * This matters because chase is an autonomous behavior that should not be
+     * interrupted by user interaction — interrupting it would leave the ball
+     * chasing system in an inconsistent state.
+     *
+     * If violated, feeding during a chase cancels the ball-chasing behavior and
+     * could cause the ball to never be "caught", breaking the game loop.
+     */
+    // GIVEN — a pet in chase state
+    const pet = makePet();
+    pet.state = 'chase';
+    pet['_timer'] = 5;
+
+    // WHEN — feed() is called
+    pet.feed();
+
+    // THEN — state and timer are unchanged
+    expect(pet.state).toBe('chase');
+    expect(pet['_timer']).toBe(5);
+  });
+
+  it('calls onTransition after feed() successfully transitions state', () => {
+    /**
+     * Verifies that the onTransition callback fires when feed() triggers a
+     * state change (and does NOT fire when feed() is a no-op in chase).
+     *
+     * This matters because onTransition drives persistence. If it does not fire
+     * on feed, the eat state is never saved and the pet could reload in an
+     * inconsistent state.
+     *
+     * If violated, feeding a pet does not persist and the state is lost on
+     * page reload.
+     */
+    // GIVEN — a pet in sitIdle with a transition spy
+    const pet = makePet();
+    const onTransition = vi.fn();
+    pet.onTransition = onTransition;
+
+    // WHEN — feed() is called
+    pet.feed();
+
+    // THEN — callback fires exactly once
+    expect(onTransition).toHaveBeenCalledOnce();
+  });
+
+  it('eat state transitions to sitIdle after its 2-second timer expires', () => {
+    /**
+     * Verifies that after feed() puts the pet in 'eat', the normal FSM timer
+     * eventually returns it to 'sitIdle' (the eat → sitIdle transition).
+     *
+     * This matters because the eat animation should last exactly 2 seconds and
+     * then automatically end. If the pet stays in eat forever, it never resumes
+     * normal wandering behavior.
+     *
+     * If violated, pets get stuck in the eat state permanently after being fed.
+     */
+    // GIVEN — a pet that has just been fed (eat state, timer=2)
+    const pet = makePet();
+    pet.feed();
+    expect(pet.state).toBe('eat');
+
+    // WHEN — advance time past the 2-second eat timer
+    pet.update(2.1, null);
+
+    // THEN — pet returned to sitIdle
+    expect(pet.state).toBe('sitIdle');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // toData snapshot
 // ---------------------------------------------------------------------------
 
