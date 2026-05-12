@@ -25,29 +25,26 @@
         z-index: 0;
       }
 
-      /* Pixel sun with cross rays */
+      /* ── Pixel sun — crisp cross, zero glow box ─────────────── */
       #sun {
         position: fixed;
         top: 7vh; right: 12%;
-        width: 28px; height: 28px;
+        width: 32px; height: 32px;
         background: #fff700;
         image-rendering: pixelated;
         z-index: 0;
-        box-shadow:
-          0 0 0 4px  #ffee00,
-          0 0 0 10px rgba(255, 238, 0, 0.45),
-          0 0 0 22px rgba(255, 230, 0, 0.15);
+        /* No box-shadow — pure pixel look */
       }
-      #sun::before {
-        content: ''; position: absolute; background: #fff700;
-        top: -10px; bottom: -10px; left: 3px; right: 3px;
+      #sun::before {   /* vertical ray */
+        content: ''; position: absolute; background: #ffe800;
+        top: -14px; bottom: -14px; left: 8px; right: 8px;
       }
-      #sun::after {
-        content: ''; position: absolute; background: #fff700;
-        top: 3px; bottom: 3px; left: -10px; right: -10px;
+      #sun::after {    /* horizontal ray */
+        content: ''; position: absolute; background: #ffe800;
+        top: 8px; bottom: 8px; left: -14px; right: -14px;
       }
 
-      /* ── Pixel clouds — 3-level stepped shapes ──────────────── */
+      /* ── Pixel clouds — 4 varied stepped shapes ─────────────── */
       .cloud {
         position: fixed;
         z-index: 0;
@@ -55,45 +52,73 @@
         opacity: 0.97;
       }
 
-      /* Cloud 1: large (8px×24px/pixel = 192×96px, 3 levels) */
+      /*
+        Cloud technique: each layer is linear-gradient(#color,#color) X Y / W H no-repeat
+        arranged as stacked rectangles to form a stepped silhouette.
+        Bottom two strips are light blue-grey (#ccd8e0, #b8c8d4) for Terraria cloud shadow depth.
+      */
+
+      /* Cloud 1: large squat — 4 white levels + 2 shadow strips (220×76px) */
       #cloud-1 {
-        top: 9vh; left: 7%;
-        width: 192px; height: 96px;
+        top: 8vh; left: 5%;
+        width: 220px; height: 76px;
         background:
-          linear-gradient(#fff, #fff)  72px    0 /  48px 24px no-repeat,
-          linear-gradient(#fff, #fff)  24px   24px / 144px 24px no-repeat,
-          linear-gradient(#fff, #fff)   0     48px / 192px 48px no-repeat;
+          linear-gradient(#fff,#fff)  80px  0px  / 60px 18px no-repeat,
+          linear-gradient(#fff,#fff)  30px 18px  / 150px 18px no-repeat,
+          linear-gradient(#fff,#fff)   0px 36px  / 200px 18px no-repeat,
+          linear-gradient(#ccd8e0,#ccd8e0) 0px 54px / 200px 8px no-repeat,
+          linear-gradient(#b8c8d4,#b8c8d4) 0px 62px / 200px 4px no-repeat;
         animation: drift-a 34s ease-in-out infinite;
       }
-      /* Cloud 2: small (5px×20px/pixel = 100×60px, 2 levels) */
+
+      /* Cloud 2: tall narrow — 4 white levels + 2 shadow strips (126×84px) */
       #cloud-2 {
-        top: 20vh; left: 30%;
-        width: 100px; height: 60px;
+        top: 13vh; left: 30%;
+        width: 126px; height: 80px;
         background:
-          linear-gradient(#fff, #fff)  20px    0 /  60px 20px no-repeat,
-          linear-gradient(#fff, #fff)   0     20px / 100px 40px no-repeat;
-        animation: drift-b 24s ease-in-out infinite;
-        animation-delay: -12s;
+          linear-gradient(#fff,#fff)  42px  0px  / 42px 18px no-repeat,
+          linear-gradient(#fff,#fff)  18px 18px  / 84px 18px no-repeat,
+          linear-gradient(#fff,#fff)   6px 36px  / 102px 18px no-repeat,
+          linear-gradient(#ccd8e0,#ccd8e0)  6px 54px / 102px 8px no-repeat,
+          linear-gradient(#b8c8d4,#b8c8d4)  6px 62px / 102px 4px no-repeat;
+        animation: drift-b 22s ease-in-out infinite;
+        animation-delay: -10s;
       }
-      /* Cloud 3: medium (8px×18px/pixel = 144×72px, 3 levels) */
+
+      /* Cloud 3: wide asymmetric — left-leaning bump, 3 white levels + shadow (192×64px) */
       #cloud-3 {
-        top: 8vh; right: 22%;
-        width: 144px; height: 72px;
+        top: 7vh; right: 22%;
+        width: 192px; height: 64px;
         background:
-          linear-gradient(#fff, #fff)  45px    0 /  54px 18px no-repeat,
-          linear-gradient(#fff, #fff)  27px   18px /  90px 18px no-repeat,
-          linear-gradient(#fff, #fff)   0     36px / 144px 36px no-repeat;
+          linear-gradient(#fff,#fff)  16px  0px  / 72px 16px no-repeat,
+          linear-gradient(#fff,#fff)   0px 16px  / 136px 16px no-repeat,
+          linear-gradient(#fff,#fff)   0px 32px  / 176px 16px no-repeat,
+          linear-gradient(#ccd8e0,#ccd8e0) 0px 48px / 176px 8px no-repeat,
+          linear-gradient(#b8c8d4,#b8c8d4) 0px 56px / 176px 4px no-repeat;
         animation: drift-a 28s ease-in-out infinite reverse;
         animation-delay: -9s;
       }
 
+      /* Cloud 4: tiny high wisp — 3 levels + shadow (90×42px) */
+      #cloud-4 {
+        top: 3vh; right: 40%;
+        width: 90px; height: 42px;
+        background:
+          linear-gradient(#fff,#fff) 18px  0px / 36px 12px no-repeat,
+          linear-gradient(#fff,#fff)  6px 12px / 66px 12px no-repeat,
+          linear-gradient(#fff,#fff)  0px 24px / 78px 12px no-repeat,
+          linear-gradient(#ccd8e0,#ccd8e0) 0px 36px / 78px 6px no-repeat;
+        animation: drift-b 18s ease-in-out infinite reverse;
+        animation-delay: -6s;
+      }
+
       @keyframes drift-a {
         0%, 100% { transform: translateX(0); }
-        50%       { transform: translateX(26px); }
+        50%       { transform: translateX(28px); }
       }
       @keyframes drift-b {
         0%, 100% { transform: translateX(0); }
-        50%       { transform: translateX(-20px); }
+        50%       { transform: translateX(-22px); }
       }
 
       /* ── Ground ──────────────────────────────────────────────── */
@@ -103,54 +128,98 @@
         top: var(--ground-top);
         bottom: 0;
         z-index: 0;
-        /* Crisp grass → dark grass → dirt, all pixel-sharp */
         background: linear-gradient(to bottom,
-          #72da62  0,
-          #72da62  8px,
-          #5ab84e  8px,
-          #5ab84e  22px,
-          #3e8040  22px,
-          #3e8040  36px,
-          #7c5438  36px,
-          #6a4225  55%,
-          #5a3618  100%
+          /* ── Terraria-style grass surface ── */
+          #8cff6a   0px,   /* 1px bright surface highlight */
+          #8cff6a   1px,
+          #5bcc3a   1px,   /* 3px bright grass top */
+          #5bcc3a   4px,
+          #4aaa2c   4px,   /* 7px main grass body */
+          #4aaa2c  11px,
+          #2d7020  11px,   /* 6px dark grass underside */
+          #2d7020  17px,
+          #1c4f14  17px,   /* 3px deep grass → dirt transition */
+          #1c4f14  20px,
+          /* ── Dirt layers ── */
+          #7c5438  20px,   /* top brown dirt */
+          #7c5438  80px,
+          #6b4228  80px,   /* mid dirt, slightly darker */
+          #6b4228 160px,
+          #4a3520 160px,   /* deep earth / underground */
+          #4a3520 100%
         );
       }
 
-      /* Pixel grass blades — tall + medium, two separate heights */
+      /* Three-height grass blades: tall (28px) / medium (20px) / short (12px) */
       #ground::before {
         content: ''; position: absolute;
-        top: -20px; left: 0; right: 0;
-        height: 20px;
+        top: -28px; left: 0; right: 0;
+        height: 28px;
         background-image:
-          /* Tall blades: 5 px wide every 16 px, full 20 px height */
+          /* Tall blades — 4px wide at x=0, period=16px, full height */
           repeating-linear-gradient(90deg,
-            #80e260 0 5px, transparent 5px 16px
+            #72ee48 0 4px, transparent 4px 16px
           ),
-          /* Medium blades: 4 px wide every 16 px, offset column */
+          /* Medium blades — 4px wide at x=6, period=16px, starts y=8 */
           repeating-linear-gradient(90deg,
-            transparent 0 8px, #5bb84e 8px 12px, transparent 12px 16px
+            transparent 0 6px, #52cc2c 6px 10px, transparent 10px 16px
+          ),
+          /* Short blades — 3px wide at x=11, period=16px, starts y=16 */
+          repeating-linear-gradient(90deg,
+            transparent 0 11px, #3a9820 11px 14px, transparent 14px 16px
           );
-        background-position: 0 0, 0 6px;
-        background-repeat: repeat, repeat-x;
+        /* Layer 1 uses `repeat` (full height), layers 2-3 use `repeat-x` with y offset */
+        background-position: 0 0, 0 8px, 0 16px;
+        background-repeat: repeat, repeat-x, repeat-x;
         image-rendering: pixelated;
       }
 
-      /* Dirt tile texture — 16×16 px grid visible only in dirt section */
+      /* Dirt grid lines + scattered rock/pebble speckles */
       #ground::after {
         content: ''; position: absolute;
-        top: 36px; left: 0; right: 0; bottom: 0;
+        top: 20px; left: 0; right: 0; bottom: 0;
         background:
+          /* ── 16×16 pixel tile grid ── */
           repeating-linear-gradient(0deg,
-            rgba(0,0,0,0.09) 0 1px, transparent 1px 16px
+            rgba(0,0,0,0.10) 0 1px, transparent 1px 16px
           ),
           repeating-linear-gradient(90deg,
-            rgba(0,0,0,0.07) 0 1px, transparent 1px 16px
+            rgba(0,0,0,0.08) 0 1px, transparent 1px 16px
+          ),
+          /* ── Rock speckles A — period 96px H × 72px V ── */
+          repeating-linear-gradient(90deg,
+            transparent  0   29px,
+            rgba(195,148,92,0.22) 29px 33px,
+            transparent 33px 55px,
+            rgba(172,128,76,0.17) 55px 59px,
+            transparent 59px 96px
+          ),
+          repeating-linear-gradient(0deg,
+            transparent  0   21px,
+            rgba(195,148,92,0.18) 21px 25px,
+            transparent 25px 44px,
+            rgba(152,108,62,0.14) 44px 47px,
+            transparent 47px 72px
+          ),
+          /* ── Rock speckles B — period 112px H × 88px V (offset phase) ── */
+          repeating-linear-gradient(90deg,
+            transparent  0   49px,
+            rgba(205,158,98,0.18) 49px 53px,
+            transparent 53px 81px,
+            rgba(168,124,72,0.14) 81px 85px,
+            transparent 85px 112px
+          ),
+          repeating-linear-gradient(0deg,
+            transparent  0   33px,
+            rgba(185,138,84,0.16) 33px 37px,
+            transparent 37px 61px,
+            rgba(148,104,57,0.12) 61px 64px,
+            transparent 64px 88px
           );
         pointer-events: none;
       }
 
-      /* ── Scene sprites (houses + trees, no hedge) ───────────── */
+      /* ── Scene sprites (houses + trees) ───────────────────── */
       #scene-layer {
         position: fixed;
         inset: 0;
@@ -196,6 +265,7 @@
     <div class="cloud" id="cloud-1"></div>
     <div class="cloud" id="cloud-2"></div>
     <div class="cloud" id="cloud-3"></div>
+    <div class="cloud" id="cloud-4"></div>
     <div id="ground"></div>
     <div id="scene-layer">
       <img src="assets/sprites/house_left.png"  class="sprite" id="house-left"  alt="">
