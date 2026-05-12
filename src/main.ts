@@ -1,6 +1,8 @@
 import { Pet } from './pet';
 import { createPetView, updatePetView, DRAW_W, PATH_Y_FRACTION } from './renderer';
 import type { PetView } from './renderer';
+import { savePets, loadPetData } from './store';
+import type { PetData } from './types';
 
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -17,11 +19,18 @@ function resize(): void {
 resize();
 window.addEventListener('resize', resize);
 
-// Temporary hardcoded pets for visual verification — replaced in T3
-const pets: Pet[] = [
-  new Pet({ id: '1', name: 'Rex',     type: 'dog', color: 'brown', x: 100, y: groundY() }),
-  new Pet({ id: '2', name: 'Kitsune', type: 'fox', color: 'red',   x: 400, y: groundY() }),
-];
+function groundY(): number { return canvas.height * PATH_Y_FRACTION; }
+
+function makePet(data: PetData): Pet {
+  const p = new Pet(data);
+  p.onTransition = () => savePets(pets);
+  return p;
+}
+
+let pets: Pet[] = loadPetData().map(makePet);
+if (pets.length === 0) {
+  pets = [makePet({ id: crypto.randomUUID(), name: 'Rex', type: 'dog', color: 'brown', x: 200, y: groundY() })];
+}
 
 const views = new Map<Pet, PetView>();
 pets.forEach(p => views.set(p, createPetView(p, petsLayer)));
