@@ -60,7 +60,7 @@ describe('spawnFeedParticle', () => {
     const pet = makePet({ x: 100, y: 200 });
 
     // WHEN — spawn a feed particle
-    const p = spawnFeedParticle(pet);
+    const [p] = spawnFeedParticle(pet);
 
     // THEN — x is pet.x + 32 (DRAW_W / 2 = 64 / 2)
     expect(p.x).toBe(132); // 100 + 32
@@ -80,7 +80,7 @@ describe('spawnFeedParticle', () => {
     const pet = makePet({ x: 100, y: 200 });
 
     // WHEN — spawn a feed particle
-    const p = spawnFeedParticle(pet);
+    const [p] = spawnFeedParticle(pet);
 
     // THEN — y matches pet.y
     expect(p.y).toBe(200);
@@ -100,7 +100,7 @@ describe('spawnFeedParticle', () => {
     const pet = makePet();
 
     // WHEN — spawn a feed particle
-    const p = spawnFeedParticle(pet);
+    const [p] = spawnFeedParticle(pet);
 
     // THEN — vy is negative (upward)
     expect(p.vy).toBeLessThan(0);
@@ -120,7 +120,7 @@ describe('spawnFeedParticle', () => {
     const pet = makePet();
 
     // WHEN — spawn a particle
-    const p = spawnFeedParticle(pet);
+    const [p] = spawnFeedParticle(pet);
 
     // THEN — alpha is 1 (fully opaque)
     expect(p.alpha).toBe(1);
@@ -140,10 +140,32 @@ describe('spawnFeedParticle', () => {
     const pet = makePet();
 
     // WHEN — spawn a particle
-    const p = spawnFeedParticle(pet);
+    const [p] = spawnFeedParticle(pet);
 
     // THEN — emoji is the meat/bone
     expect(p.emoji).toBe('🍖');
+  });
+
+  it('returns a heart particle as the second element', () => {
+    /**
+     * Verifies that spawnFeedParticle() returns two particles: a food emoji and
+     * a trailing heart emoji, so the feed animation has a two-stage visual effect.
+     *
+     * This matters because the heart is the affection signal — if it's missing,
+     * the interaction feels incomplete.
+     *
+     * If violated, only the food emoji appears and the heart burst is absent.
+     */
+    // GIVEN — any pet
+    const pet = makePet();
+
+    // WHEN — spawn feed particles
+    const particles = spawnFeedParticle(pet);
+
+    // THEN — second particle is the heart
+    expect(particles).toHaveLength(2);
+    expect(particles[1].emoji).toBe('❤️');
+    expect(particles[1].vy).toBeLessThan(0); // also floats upward
   });
 });
 

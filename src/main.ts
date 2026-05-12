@@ -52,7 +52,7 @@ const particles: Particle[] = [];
 
 views.forEach((view, pet) => {
   view.el.addEventListener('click', () => {
-    if (pet.feed() && particles.length < MAX_PARTICLES) particles.push(spawnFeedParticle(pet));
+    if (pet.feed() && particles.length < MAX_PARTICLES) particles.push(...spawnFeedParticle(pet));
   });
 });
 
