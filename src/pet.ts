@@ -32,7 +32,7 @@ function nextState(current: PetState): [PetState, number] {
       return ['sitIdle', randBetween(2, 4)];
 
     case 'chase':
-      // chase exits via ball.active check in update(), not via timer
+      // chase exits via onBallLanded() called from main.ts when ball deactivates, not via timer
       return ['sitIdle', randBetween(2, 4)];
 
     case 'eat':
@@ -41,7 +41,7 @@ function nextState(current: PetState): [PetState, number] {
 }
 
 export interface Ball {
-  active: boolean;
+  settled: boolean;
   x: number;
   y: number;
 }
@@ -51,6 +51,8 @@ export class Pet {
   state: PetState;
   x: number;
   y: number;
+  /** Direction the pet is facing — used by renderer for sprite flip. */
+  facing: 'left' | 'right' = 'right';
 
   // Internal FSM timer (seconds until next transition)
   // Exposed with _ prefix so tests can force expiry
@@ -85,9 +87,13 @@ export class Pet {
    * @param imgW  Sprite width used for right-edge clamping. Defaults to 32.
    */
   update(dt: number, ball: Ball | null, canvasW?: number, imgW = 32): void {
-    // Chase logic: check if ball deactivated while chasing
-    if (this.state === 'chase' && ball !== null && !ball.active) {
-      this._transition('idleWithBall', 1.5);
+    // Chase movement: move toward ball.x at WALK_SPEED px/s
+    if (this.state === 'chase' && ball !== null) {
+      const dir = ball.x > this.x ? 1 : -1;
+      this.facing = dir === 1 ? 'right' : 'left';
+      const step = WALK_SPEED * dt;
+      const dist = Math.abs(ball.x - this.x);
+      this.x += dir * Math.min(step, dist);
       return;
     }
 
@@ -98,12 +104,14 @@ export class Pet {
       canvasW ?? (typeof window !== 'undefined' ? window.innerWidth : undefined);
 
     if (this.state === 'walkLeft') {
+      this.facing = 'left';
       this.x -= WALK_SPEED * dt;
       if (this.x <= 0) {
         this.x = 0;
         this._transition('walkRight', randBetween(3, 8));
       }
     } else if (this.state === 'walkRight') {
+      this.facing = 'right';
       this.x += WALK_SPEED * dt;
       if (effectiveCanvasW !== undefined && this.x >= effectiveCanvasW - imgW) {
         this.x = effectiveCanvasW - imgW;
@@ -116,6 +124,16 @@ export class Pet {
       const [ns, t] = nextState(this.state);
       this._transition(ns, t);
     }
+  }
+
+  /** Force the pet into chase state immediately, bypassing the FSM timer. */
+  startChase(): void {
+    this._transition('chase', Infinity);
+  }
+
+  /** Called when the ball is picked up; all pets return to idle. */
+  onBallLanded(): void {
+    this._transition('sitIdle', 1.5);
   }
 
   /** Feed the pet: transitions to eat for 2s. No-op if currently chasing.

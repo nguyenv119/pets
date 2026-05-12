@@ -281,36 +281,35 @@ describe('Pet FSM — state transitions', () => {
     expect(pet.state).toBe('sitIdle');
   });
 
-  it('chase transitions to idleWithBall when ball deactivates', () => {
+  it('chase transitions to sitIdle via onBallLanded() when ball is picked up', () => {
     /**
-     * Verifies that when a pet is chasing a ball and the ball's active flag
-     * becomes false, the pet immediately transitions to idleWithBall with a
-     * hardcoded 1.5s timer — regardless of the FSM timer state.
+     * Verifies that when the ball is picked up, main.ts calls onBallLanded() on
+     * each pet, which transitions it to sitIdle with a hardcoded 1.5s timer.
      *
-     * This matters because it is the only path from chase → idleWithBall. The
-     * 1.5s duration is intentionally shorter than the normal idleWithBall timer
-     * so the pet returns to idle quickly after picking up the ball. If this
-     * transition is broken, the pet would continue chasing a deactivated ball
-     * forever or transition to sitIdle without ever entering the ball-holding
-     * pose.
+     * This matters because onBallLanded() is the only exit from chase state.
+     * The 1.5s duration gives a brief pause before the pet resumes its normal
+     * FSM cycle. If this transition is broken, the pet would continue chasing
+     * a deactivated ball forever.
      *
-     * If violated, the ball-catch animation (idleWithBall) never plays after
-     * the ball lands, and the onTransition callback does not fire for
-     * persistence.
+     * Design note: main.ts detects ball.settled, finds the winner pet, spawns
+     * a heart particle for it, then calls onBallLanded() on all pets and sets
+     * ball=null.
+     *
+     * If violated, pets remain stuck in chase state after the ball is picked up,
+     * and the onTransition callback does not fire for persistence.
      */
-    // GIVEN — a pet in chase state, an onTransition spy, and a deactivated ball
+    // GIVEN — a pet in chase state, an onTransition spy
     const pet = makePet();
     pet.state = 'chase';
-    pet['_timer'] = 10; // large timer so only the ball-deactivation branch fires
+    pet['_timer'] = 10; // large timer so only onBallLanded changes state
     const onTransition = vi.fn();
     pet.onTransition = onTransition;
-    const ball: Ball = { active: false, x: 300, y: 300 };
 
-    // WHEN — a single update tick with the deactivated ball
-    pet.update(0.016, ball);
+    // WHEN — main.ts detects ball pickup and calls onBallLanded()
+    pet.onBallLanded();
 
-    // THEN — state is idleWithBall, timer is 1.5, callback fired once
-    expect(pet.state).toBe('idleWithBall');
+    // THEN — state is sitIdle, timer is 1.5, callback fired once
+    expect(pet.state).toBe('sitIdle');
     expect(pet['_timer']).toBe(1.5);
     expect(onTransition).toHaveBeenCalledOnce();
   });
@@ -592,6 +591,205 @@ describe('Pet FSM — feed()', () => {
 
     // THEN — pet returned to sitIdle
     expect(pet.state).toBe('sitIdle');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// startChase() and onBallLanded()
+// ---------------------------------------------------------------------------
+
+describe('Pet FSM — startChase()', () => {
+  it('immediately transitions any state to chase, bypassing the timer', () => {
+    /**
+     * Verifies that startChase() forces the pet into the chase state regardless
+     * of its current state or timer value.
+     *
+     * This matters because throwBall() must cause ALL pets to start chasing
+     * immediately, even mid-walk or mid-sleep. If the timer is not bypassed,
+     * some pets would continue their current behavior until their timer naturally
+     * expires, which could take seconds.
+     *
+     * If violated, some pets ignore the ball throw and only start chasing after
+     * their current timer expires.
+     */
+    // GIVEN — a pet in the middle of a sleep cycle (large timer)
+    const pet = makePet();
+    pet.state = 'sleep';
+    pet['_timer'] = 7;
+
+    // WHEN — startChase() called
+    pet.startChase();
+
+    // THEN — state is chase immediately
+    expect(pet.state).toBe('chase');
+  });
+
+  it('fires onTransition when startChase() is called', () => {
+    /**
+     * Verifies that the onTransition callback fires when startChase() causes
+     * a state change.
+     *
+     * This matters because onTransition drives persistence; if it does not fire
+     * when chasing begins, the transition is not saved and the pet could reload
+     * in the wrong state.
+     *
+     * If violated, the chase start is not persisted and reloading mid-chase
+     * could produce incorrect behavior.
+     */
+    // GIVEN — a pet with an onTransition spy
+    const pet = makePet();
+    const onTransition = vi.fn();
+    pet.onTransition = onTransition;
+
+    // WHEN — startChase() called
+    pet.startChase();
+
+    // THEN — callback fired once
+    expect(onTransition).toHaveBeenCalledOnce();
+  });
+});
+
+describe('Pet FSM — onBallLanded()', () => {
+  it('transitions a chasing pet to sitIdle with 1.5s timer', () => {
+    /**
+     * Verifies that onBallLanded() moves a chasing pet into sitIdle with
+     * the correct 1.5-second timer.
+     *
+     * This matters because sitIdle is the resting state after ball pickup.
+     * The winner pet gets a heart emoji from main.ts, and all pets return
+     * to their normal FSM cycle.
+     *
+     * If violated, pets remain in chase state forever when the ball lands.
+     */
+    // GIVEN — a pet in chase state
+    const pet = makePet();
+    pet.state = 'chase';
+    pet['_timer'] = 5;
+
+    // WHEN — onBallLanded() called
+    pet.onBallLanded();
+
+    // THEN — state is sitIdle with 1.5s timer
+    expect(pet.state).toBe('sitIdle');
+    expect(pet['_timer']).toBe(1.5);
+  });
+
+  it('fires onTransition when onBallLanded() is called from chase', () => {
+    /**
+     * Verifies that the onTransition callback fires when the ball-landed
+     * transition occurs, ensuring persistence captures the state change.
+     *
+     * If violated, the sitIdle state is not persisted and a reload
+     * could miss the transition.
+     */
+    // GIVEN — a pet in chase with an onTransition spy
+    const pet = makePet();
+    pet.state = 'chase';
+    const onTransition = vi.fn();
+    pet.onTransition = onTransition;
+
+    // WHEN — onBallLanded() called
+    pet.onBallLanded();
+
+    // THEN — callback fired once
+    expect(onTransition).toHaveBeenCalledOnce();
+  });
+});
+
+describe('Pet FSM — chase movement', () => {
+  it('moves toward the ball x position when chasing', () => {
+    /**
+     * Verifies that a chasing pet moves its x coordinate toward the ball's x
+     * on each update tick.
+     *
+     * This matters because the chase state is only visually meaningful if pets
+     * physically move toward the ball. Without movement, pets stand in place
+     * playing the run animation but never reaching the ball.
+     *
+     * If violated, pets display the run GIF but don't move — the chase looks broken.
+     */
+    // GIVEN — a pet at x=100 chasing a ball at x=400
+    const pet = makePet({ x: 100 });
+    pet.state = 'chase';
+    pet['_timer'] = 10;
+    const ball: Ball = { settled: false, x: 400, y: 300 };
+
+    // WHEN — advance 1 second
+    pet.update(1, ball, 800);
+
+    // THEN — pet moved toward ball (x increased since ball is to the right)
+    expect(pet.x).toBeGreaterThan(100);
+  });
+
+  it('moves left when ball is to the left of the pet', () => {
+    /**
+     * Verifies that a chasing pet decreases x when the ball is to its left.
+     *
+     * This matters because chase movement must be bidirectional — the ball
+     * can land anywhere and pets must converge from either side.
+     *
+     * If violated, pets only chase balls thrown to the right and ignore balls
+     * to their left.
+     */
+    // GIVEN — a pet at x=400 chasing a ball at x=100 (ball to the left)
+    const pet = makePet({ x: 400 });
+    pet.state = 'chase';
+    pet['_timer'] = 10;
+    const ball: Ball = { settled: false, x: 100, y: 300 };
+
+    // WHEN — advance 1 second
+    pet.update(1, ball, 800);
+
+    // THEN — pet moved toward ball (x decreased)
+    expect(pet.x).toBeLessThan(400);
+  });
+
+  it('does not overshoot the ball x when close', () => {
+    /**
+     * Verifies that a pet chasing a nearby ball does not "jitter" past it on
+     * each tick — x is clamped so it does not overshoot.
+     *
+     * This matters because without clamping the pet would oscillate around the
+     * ball's x position, jittering rapidly and looking wrong.
+     *
+     * If violated, pets alternate left/right rapidly at the ball position instead
+     * of settling smoothly.
+     */
+    // GIVEN — a pet 5px to the left of the ball
+    const pet = makePet({ x: 395 });
+    pet.state = 'chase';
+    pet['_timer'] = 10;
+    const ball: Ball = { settled: false, x: 400, y: 300 };
+
+    // WHEN — advance 1 second (would move 120px without clamp)
+    pet.update(1, ball, 800);
+
+    // THEN — pet did not overshoot (x <= ball.x + small tolerance)
+    expect(pet.x).toBeLessThanOrEqual(ball.x + 1);
+  });
+
+  it('does not move when ball is null in chase state (inactive ball handled by transition)', () => {
+    /**
+     * Verifies that a pet in chase state with a null ball does not crash or
+     * update position — the chase-exit transition is driven by ball.active,
+     * not by movement code.
+     *
+     * This matters because main.ts sets ball = null after ball.active becomes
+     * false and notifies pets via onBallLanded(). If update() tries to access
+     * ball.x when ball is null, it would throw.
+     *
+     * If violated, the game crashes with a TypeError when the ball is cleaned up.
+     */
+    // GIVEN — a pet in chase state with no ball
+    const pet = makePet({ x: 200 });
+    pet.state = 'chase';
+    pet['_timer'] = 10;
+
+    // WHEN — update with null ball (should not throw)
+    expect(() => pet.update(0.016, null, 800)).not.toThrow();
+
+    // THEN — position unchanged (no ball to chase)
+    expect(pet.x).toBe(200);
   });
 });
 

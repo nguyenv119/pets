@@ -1,5 +1,6 @@
 import { Pet } from './pet';
-import { createPetView, updatePetView, spawnFeedParticle, updateParticles, drawParticles, DRAW_W, PATH_Y_FRACTION } from './renderer';
+import { Ball } from './ball';
+import { createPetView, updatePetView, spawnFeedParticle, updateParticles, drawParticles, drawBall, DRAW_W, PATH_Y_FRACTION } from './renderer';
 import type { Particle, PetView } from './renderer';
 import { savePets, loadPetData } from './store';
 import type { PetData } from './types';
@@ -26,18 +27,32 @@ function makePet(data: PetData): Pet {
 
 let pets: Pet[] = loadPetData().map(makePet);
 if (pets.length === 0) {
-  pets = [makePet({ id: crypto.randomUUID(), name: 'Rex', type: 'dog', color: 'brown', x: 200, y: groundY() })];
+  pets = [
+    makePet({ id: crypto.randomUUID(), name: 'Rex',     type: 'dog', color: 'brown', x: 150,                  y: groundY() }),
+    makePet({ id: crypto.randomUUID(), name: 'Kitsune', type: 'fox', color: 'red',   x: canvas.width / 2,     y: groundY() }),
+    makePet({ id: crypto.randomUUID(), name: 'Shadow',  type: 'dog', color: 'black', x: canvas.width - 200,   y: groundY() }),
+  ];
 }
 
 const views = new Map<Pet, PetView>();
 pets.forEach(p => views.set(p, createPetView(p, petsLayer)));
+
+let ball: Ball | null = null;
+
+export function throwBall(): void {
+  ball = new Ball(canvas.width, groundY());
+  pets.forEach(p => p.startChase());
+}
+
+// Expose to browser console for manual testing
+(window as unknown as Record<string, unknown>).throwBall = throwBall;
 
 const MAX_PARTICLES = 50;
 const particles: Particle[] = [];
 
 views.forEach((view, pet) => {
   view.el.addEventListener('click', () => {
-    if (pet.feed() && particles.length < MAX_PARTICLES) particles.push(spawnFeedParticle(pet));
+    if (pet.feed() && particles.length < MAX_PARTICLES) particles.push(...spawnFeedParticle(pet));
   });
 });
 
@@ -49,11 +64,27 @@ function tick(now: number): void {
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+  if (ball) {
+    ball.update(dt);
+    if (ball.settled) {
+      const PICK_UP_DIST = DRAW_W;
+      const winner = pets.find(p => Math.abs(p.x - ball!.x) < PICK_UP_DIST);
+      if (winner) {
+        // Heart emoji only for the pet that picked up the ball
+        particles.push({ x: winner.x + DRAW_W / 2, y: winner.y, vy: -40, alpha: 1, emoji: '❤️' });
+        pets.forEach(p => p.onBallLanded());
+        ball = null;
+      }
+    }
+  }
+
+  if (ball) drawBall(ctx, ball);
+
   updateParticles(particles, dt);
   drawParticles(ctx, particles);
 
   pets.forEach(p => {
-    p.update(dt, null, canvas.width, DRAW_W);
+    p.update(dt, ball, canvas.width, DRAW_W);
     updatePetView(views.get(p)!, p);
   });
 
