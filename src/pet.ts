@@ -131,9 +131,9 @@ export class Pet {
     this._transition('chase', Infinity);
   }
 
-  /** Called when the ball lands; transitions to idleWithBall for 1.5s. */
+  /** Called when the ball is picked up; all pets return to idle. */
   onBallLanded(): void {
-    this._transition('idleWithBall', 1.5);
+    this._transition('sitIdle', 1.5);
   }
 
   /** Feed the pet: transitions to eat for 2s. No-op if currently chasing.

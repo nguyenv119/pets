@@ -68,7 +68,10 @@ function tick(now: number): void {
     ball.update(dt);
     if (ball.settled) {
       const PICK_UP_DIST = DRAW_W;
-      if (pets.some(p => Math.abs(p.x - ball!.x) < PICK_UP_DIST)) {
+      const winner = pets.find(p => Math.abs(p.x - ball!.x) < PICK_UP_DIST);
+      if (winner) {
+        // Heart emoji only for the pet that picked up the ball
+        particles.push({ x: winner.x + DRAW_W / 2, y: winner.y, vy: -40, alpha: 1, emoji: '❤️' });
         pets.forEach(p => p.onBallLanded());
         ball = null;
       }

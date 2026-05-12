@@ -281,25 +281,22 @@ describe('Pet FSM — state transitions', () => {
     expect(pet.state).toBe('sitIdle');
   });
 
-  it('chase transitions to idleWithBall via onBallLanded() when ball deactivates', () => {
+  it('chase transitions to sitIdle via onBallLanded() when ball is picked up', () => {
     /**
-     * Verifies that when the ball deactivates, main.ts calls onBallLanded() on
-     * each pet, which transitions it to idleWithBall with a hardcoded 1.5s timer.
+     * Verifies that when the ball is picked up, main.ts calls onBallLanded() on
+     * each pet, which transitions it to sitIdle with a hardcoded 1.5s timer.
      *
-     * This matters because it is the only path from chase → idleWithBall. The
-     * 1.5s duration is intentionally shorter than the normal idleWithBall timer
-     * so the pet returns to idle quickly after picking up the ball. If this
-     * transition is broken, the pet would continue chasing a deactivated ball
-     * forever or transition to sitIdle without ever entering the ball-holding
-     * pose.
+     * This matters because onBallLanded() is the only exit from chase state.
+     * The 1.5s duration gives a brief pause before the pet resumes its normal
+     * FSM cycle. If this transition is broken, the pet would continue chasing
+     * a deactivated ball forever.
      *
-     * Design note: main.ts detects ball.active=false, calls onBallLanded(), then
-     * sets ball=null — pets always receive ball=null (not an inactive ball) in
-     * update() after the ball lands.
+     * Design note: main.ts detects ball.settled, finds the winner pet, spawns
+     * a heart particle for it, then calls onBallLanded() on all pets and sets
+     * ball=null.
      *
-     * If violated, the ball-catch animation (idleWithBall) never plays after
-     * the ball lands, and the onTransition callback does not fire for
-     * persistence.
+     * If violated, pets remain stuck in chase state after the ball is picked up,
+     * and the onTransition callback does not fire for persistence.
      */
     // GIVEN — a pet in chase state, an onTransition spy
     const pet = makePet();
@@ -308,11 +305,11 @@ describe('Pet FSM — state transitions', () => {
     const onTransition = vi.fn();
     pet.onTransition = onTransition;
 
-    // WHEN — main.ts detects ball.active=false and calls onBallLanded()
+    // WHEN — main.ts detects ball pickup and calls onBallLanded()
     pet.onBallLanded();
 
-    // THEN — state is idleWithBall, timer is 1.5, callback fired once
-    expect(pet.state).toBe('idleWithBall');
+    // THEN — state is sitIdle, timer is 1.5, callback fired once
+    expect(pet.state).toBe('sitIdle');
     expect(pet['_timer']).toBe(1.5);
     expect(onTransition).toHaveBeenCalledOnce();
   });
@@ -653,14 +650,14 @@ describe('Pet FSM — startChase()', () => {
 });
 
 describe('Pet FSM — onBallLanded()', () => {
-  it('transitions a chasing pet to idleWithBall with 1.5s timer', () => {
+  it('transitions a chasing pet to sitIdle with 1.5s timer', () => {
     /**
-     * Verifies that onBallLanded() moves a chasing pet into idleWithBall with
+     * Verifies that onBallLanded() moves a chasing pet into sitIdle with
      * the correct 1.5-second timer.
      *
-     * This matters because idleWithBall is the "ball caught" visual. Without
-     * it, pets never display the with_ball GIF and the interaction has no
-     * satisfying conclusion.
+     * This matters because sitIdle is the resting state after ball pickup.
+     * The winner pet gets a heart emoji from main.ts, and all pets return
+     * to their normal FSM cycle.
      *
      * If violated, pets remain in chase state forever when the ball lands.
      */
@@ -672,8 +669,8 @@ describe('Pet FSM — onBallLanded()', () => {
     // WHEN — onBallLanded() called
     pet.onBallLanded();
 
-    // THEN — state is idleWithBall with 1.5s timer
-    expect(pet.state).toBe('idleWithBall');
+    // THEN — state is sitIdle with 1.5s timer
+    expect(pet.state).toBe('sitIdle');
     expect(pet['_timer']).toBe(1.5);
   });
 
@@ -682,7 +679,7 @@ describe('Pet FSM — onBallLanded()', () => {
      * Verifies that the onTransition callback fires when the ball-landed
      * transition occurs, ensuring persistence captures the state change.
      *
-     * If violated, the idleWithBall state is not persisted and a reload
+     * If violated, the sitIdle state is not persisted and a reload
      * could miss the transition.
      */
     // GIVEN — a pet in chase with an onTransition spy
