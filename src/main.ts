@@ -19,8 +19,6 @@ function resize(): void {
 resize();
 window.addEventListener('resize', resize);
 
-function groundY(): number { return canvas.height * PATH_Y_FRACTION; }
-
 function makePet(data: PetData): Pet {
   const p = new Pet(data);
   p.onTransition = () => savePets(pets);
