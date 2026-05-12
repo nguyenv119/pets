@@ -135,14 +135,16 @@ describe('Ball — update() physics', () => {
     // GIVEN — a ball artificially placed just above the ground with downward velocity
     const groundY = 600;
     const ball = new Ball(800, groundY);
-    ball.y = groundY - ball.radius - 1; // one pixel above settled position
+    // _groundY = groundY + 56 - radius (ball bottom aligns with pets' feet at groundY+64)
+    const settleY = groundY + 56 - ball.radius;
+    ball.y = settleY - 1; // one pixel above settled position
     ball.vy = 100; // downward
 
     // WHEN — advance enough to reach the ground
     ball.update(0.1);
 
     // THEN — ball did not go below ground, vy is now negative (bounced)
-    expect(ball.y).toBeLessThanOrEqual(groundY - ball.radius);
+    expect(ball.y).toBeLessThanOrEqual(settleY);
     expect(ball.vy).toBeLessThan(0);
   });
 
@@ -159,7 +161,7 @@ describe('Ball — update() physics', () => {
     // GIVEN — a ball already at the ground with low bounce velocity
     const groundY = 600;
     const ball = new Ball(800, groundY);
-    ball.y = groundY - ball.radius; // exactly at settled position
+    ball.y = groundY + 56 - ball.radius; // exactly at settle boundary (_groundY)
     ball.vy = 10; // below the 30 px/s threshold after damping (* 0.55 = 5.5)
 
     // WHEN — one physics step (hits ground immediately, |vy * 0.55| = 5.5 < 30)
@@ -180,7 +182,7 @@ describe('Ball — update() physics', () => {
     // GIVEN — a ball that has just settled
     const groundY = 600;
     const ball = new Ball(800, groundY);
-    ball.y = groundY - ball.radius;
+    ball.y = groundY + 56 - ball.radius; // settle boundary
     ball.vy = 10;
     ball.update(0.016); // settle it
     expect(ball.settled).toBe(true);

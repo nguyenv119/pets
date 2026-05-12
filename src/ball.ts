@@ -14,7 +14,8 @@ export class Ball {
     this.vy = 0;                      // no upward launch — just fall
     this.vx = (Math.random() - 0.5) * 80;  // gentle horizontal drift
     this._canvasW = canvasW;
-    this._groundY = groundY - this.radius;  // settle at path level, not canvas bottom
+    // Ball bottom should align with pets' feet (pet tops are at groundY, sprites are DRAW_W tall)
+    this._groundY = groundY + 56 - this.radius; // 56 = DRAW_W(64) - some visual margin
   }
 
   update(dt: number): void {

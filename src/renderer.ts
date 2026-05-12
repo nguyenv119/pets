@@ -42,7 +42,7 @@ export function updatePetView(view: PetView, pet: Pet): void {
   }
   view.el.style.left = `${pet.x}px`;
   view.el.style.top = `${pet.y}px`;
-  view.el.style.transform = pet.state === 'walkLeft' ? 'scaleX(-1)' : 'none';
+  view.el.style.transform = pet.facing === 'left' ? 'scaleX(-1)' : 'none';
 }
 
 export function removePetView(view: PetView): void {

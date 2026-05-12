@@ -51,6 +51,8 @@ export class Pet {
   state: PetState;
   x: number;
   y: number;
+  /** Direction the pet is facing — used by renderer for sprite flip. */
+  facing: 'left' | 'right' = 'right';
 
   // Internal FSM timer (seconds until next transition)
   // Exposed with _ prefix so tests can force expiry
@@ -88,6 +90,7 @@ export class Pet {
     // Chase movement: move toward ball.x at WALK_SPEED px/s
     if (this.state === 'chase' && ball !== null) {
       const dir = ball.x > this.x ? 1 : -1;
+      this.facing = dir === 1 ? 'right' : 'left';
       const step = WALK_SPEED * dt;
       const dist = Math.abs(ball.x - this.x);
       this.x += dir * Math.min(step, dist);
@@ -101,12 +104,14 @@ export class Pet {
       canvasW ?? (typeof window !== 'undefined' ? window.innerWidth : undefined);
 
     if (this.state === 'walkLeft') {
+      this.facing = 'left';
       this.x -= WALK_SPEED * dt;
       if (this.x <= 0) {
         this.x = 0;
         this._transition('walkRight', randBetween(3, 8));
       }
     } else if (this.state === 'walkRight') {
+      this.facing = 'right';
       this.x += WALK_SPEED * dt;
       if (effectiveCanvasW !== undefined && this.x >= effectiveCanvasW - imgW) {
         this.x = effectiveCanvasW - imgW;
