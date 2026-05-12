@@ -27,7 +27,11 @@ function makePet(data: PetData): Pet {
 
 let pets: Pet[] = loadPetData().map(makePet);
 if (pets.length === 0) {
-  pets = [makePet({ id: crypto.randomUUID(), name: 'Rex', type: 'dog', color: 'brown', x: 200, y: groundY() })];
+  pets = [
+    makePet({ id: crypto.randomUUID(), name: 'Rex',     type: 'dog', color: 'brown', x: 150,                  y: groundY() }),
+    makePet({ id: crypto.randomUUID(), name: 'Kitsune', type: 'fox', color: 'red',   x: canvas.width / 2,     y: groundY() }),
+    makePet({ id: crypto.randomUUID(), name: 'Shadow',  type: 'dog', color: 'black', x: canvas.width - 200,   y: groundY() }),
+  ];
 }
 
 const views = new Map<Pet, PetView>();
@@ -36,9 +40,12 @@ pets.forEach(p => views.set(p, createPetView(p, petsLayer)));
 let ball: Ball | null = null;
 
 export function throwBall(): void {
-  ball = new Ball(canvas.width / 2, canvas.width, canvas.height);
+  ball = new Ball(canvas.width, groundY());
   pets.forEach(p => p.startChase());
 }
+
+// Expose to browser console for manual testing
+(window as unknown as Record<string, unknown>).throwBall = throwBall;
 
 const MAX_PARTICLES = 50;
 const particles: Particle[] = [];
@@ -59,9 +66,12 @@ function tick(now: number): void {
 
   if (ball) {
     ball.update(dt);
-    if (!ball.active) {
-      pets.forEach(p => p.onBallLanded());
-      ball = null;
+    if (ball.settled) {
+      const PICK_UP_DIST = DRAW_W;
+      if (pets.some(p => Math.abs(p.x - ball!.x) < PICK_UP_DIST)) {
+        pets.forEach(p => p.onBallLanded());
+        ball = null;
+      }
     }
   }
 
