@@ -253,11 +253,11 @@ describe('updateParticles', () => {
     const particles = [p];
 
     // WHEN — update by a large dt
-    updateParticles(particles, 2);
+    updateParticles(particles, 100);
 
-    // THEN — alpha is exactly 0 (particle will be pruned on same tick)
-    // Since pruning happens in the same call, alpha being 0 means it's removed
+    // THEN — particle is pruned AND alpha never went negative
     expect(particles).toHaveLength(0);
+    expect(p.alpha).toBeGreaterThanOrEqual(0);
   });
 });
 

@@ -32,12 +32,12 @@ if (pets.length === 0) {
 const views = new Map<Pet, PetView>();
 pets.forEach(p => views.set(p, createPetView(p, petsLayer)));
 
+const MAX_PARTICLES = 50;
 const particles: Particle[] = [];
 
 views.forEach((view, pet) => {
   view.el.addEventListener('click', () => {
-    pet.feed();
-    particles.push(spawnFeedParticle(pet));
+    if (pet.feed() && particles.length < MAX_PARTICLES) particles.push(spawnFeedParticle(pet));
   });
 });
 

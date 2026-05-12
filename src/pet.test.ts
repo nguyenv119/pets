@@ -489,9 +489,10 @@ describe('Pet FSM — feed()', () => {
     expect(pet.state).toBe('sitIdle');
 
     // WHEN — feed() is called
-    pet.feed();
+    const result = pet.feed();
 
-    // THEN — pet enters eat state with a 2-second timer
+    // THEN — returns true and pet enters eat state with a 2-second timer
+    expect(result).toBe(true);
     expect(pet.state).toBe('eat');
     expect(pet['_timer']).toBe(2);
   });
@@ -512,9 +513,10 @@ describe('Pet FSM — feed()', () => {
     pet['_timer'] = 10;
 
     // WHEN — feed() is called
-    pet.feed();
+    const result = pet.feed();
 
-    // THEN — pet enters eat state
+    // THEN — returns true and pet enters eat state
+    expect(result).toBe(true);
     expect(pet.state).toBe('eat');
     expect(pet['_timer']).toBe(2);
   });
@@ -536,9 +538,10 @@ describe('Pet FSM — feed()', () => {
     pet['_timer'] = 5;
 
     // WHEN — feed() is called
-    pet.feed();
+    const result = pet.feed();
 
-    // THEN — state and timer are unchanged
+    // THEN — returns false and state and timer are unchanged
+    expect(result).toBe(false);
     expect(pet.state).toBe('chase');
     expect(pet['_timer']).toBe(5);
   });
@@ -561,9 +564,10 @@ describe('Pet FSM — feed()', () => {
     pet.onTransition = onTransition;
 
     // WHEN — feed() is called
-    pet.feed();
+    const result = pet.feed();
 
-    // THEN — callback fires exactly once
+    // THEN — returns true and callback fires exactly once
+    expect(result).toBe(true);
     expect(onTransition).toHaveBeenCalledOnce();
   });
 

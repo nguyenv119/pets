@@ -118,10 +118,12 @@ export class Pet {
     }
   }
 
-  /** Feed the pet: transitions to eat for 2s. No-op if currently chasing. */
-  feed(): void {
-    if (this.state === 'chase') return;
+  /** Feed the pet: transitions to eat for 2s. No-op if currently chasing.
+   * Returns true if the transition happened, false if it was a no-op. */
+  feed(): boolean {
+    if (this.state === 'chase') return false;
     this._transition('eat', 2);
+    return true;
   }
 
   /** Returns a serializable snapshot of this pet's current state. */
