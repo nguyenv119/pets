@@ -85,9 +85,12 @@ export class Pet {
    * @param imgW  Sprite width used for right-edge clamping. Defaults to 32.
    */
   update(dt: number, ball: Ball | null, canvasW?: number, imgW = 32): void {
-    // Chase logic: check if ball deactivated while chasing
-    if (this.state === 'chase' && ball !== null && !ball.active) {
-      this._transition('idleWithBall', 1.5);
+    // Chase movement: move toward ball.x at WALK_SPEED px/s
+    if (this.state === 'chase' && ball !== null) {
+      const dir = ball.x > this.x ? 1 : -1;
+      const step = WALK_SPEED * dt;
+      const dist = Math.abs(ball.x - this.x);
+      this.x += dir * Math.min(step, dist);
       return;
     }
 
@@ -116,6 +119,16 @@ export class Pet {
       const [ns, t] = nextState(this.state);
       this._transition(ns, t);
     }
+  }
+
+  /** Force the pet into chase state immediately, bypassing the FSM timer. */
+  startChase(): void {
+    this._transition('chase', Infinity);
+  }
+
+  /** Called when the ball lands; transitions to idleWithBall for 1.5s. */
+  onBallLanded(): void {
+    this._transition('idleWithBall', 1.5);
   }
 
   /** Feed the pet: transitions to eat for 2s. No-op if currently chasing.

@@ -1,5 +1,6 @@
 import { Pet } from './pet';
-import { createPetView, updatePetView, spawnFeedParticle, updateParticles, drawParticles, DRAW_W, PATH_Y_FRACTION } from './renderer';
+import { Ball } from './ball';
+import { createPetView, updatePetView, spawnFeedParticle, updateParticles, drawParticles, drawBall, DRAW_W, PATH_Y_FRACTION } from './renderer';
 import type { Particle, PetView } from './renderer';
 import { savePets, loadPetData } from './store';
 import type { PetData } from './types';
@@ -32,6 +33,13 @@ if (pets.length === 0) {
 const views = new Map<Pet, PetView>();
 pets.forEach(p => views.set(p, createPetView(p, petsLayer)));
 
+let ball: Ball | null = null;
+
+export function throwBall(): void {
+  ball = new Ball(canvas.width / 2, canvas.width, canvas.height);
+  pets.forEach(p => p.startChase());
+}
+
 const MAX_PARTICLES = 50;
 const particles: Particle[] = [];
 
@@ -49,11 +57,21 @@ function tick(now: number): void {
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+  if (ball) {
+    ball.update(dt);
+    if (!ball.active) {
+      pets.forEach(p => p.onBallLanded());
+      ball = null;
+    }
+  }
+
+  if (ball) drawBall(ctx, ball);
+
   updateParticles(particles, dt);
   drawParticles(ctx, particles);
 
   pets.forEach(p => {
-    p.update(dt, null, canvas.width, DRAW_W);
+    p.update(dt, ball, canvas.width, DRAW_W);
     updatePetView(views.get(p)!, p);
   });
 
