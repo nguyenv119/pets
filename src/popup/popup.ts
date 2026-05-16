@@ -18,6 +18,7 @@ const petsList = document.getElementById('pets-list')!;
 const nameInput = document.getElementById('pet-name') as HTMLInputElement;
 const typeSelect = document.getElementById('pet-type') as HTMLSelectElement;
 const colorSelect = document.getElementById('pet-color') as HTMLSelectElement;
+const previewImg = document.getElementById('preview-img') as HTMLImageElement;
 const btnAdd = document.getElementById('btn-add')!;
 const btnThrowBall = document.getElementById('btn-throw-ball')!;
 
@@ -33,7 +34,7 @@ let pets: PetData[] = [];
 
 function renderPetList(): void {
   if (pets.length === 0) {
-    petsList.innerHTML = '<div class="empty-state">No pets yet. Add one below!</div>';
+    petsList.innerHTML = '<div class="empty-state">No pets yet — add one below!</div>';
     return;
   }
 
@@ -41,7 +42,10 @@ function renderPetList(): void {
     <div class="pet-item" data-id="${pet.id}">
       <div class="pet-info">
         <img src="${chrome.runtime.getURL(`assets/${pet.type}/${pet.color}_idle_8fps.gif`)}" alt="${pet.name}" />
-        <span>${pet.name} <small>(${pet.type})</small></span>
+        <div>
+          <div class="pet-name">${pet.name}</div>
+          <div class="pet-meta">${pet.color} ${pet.type}</div>
+        </div>
       </div>
       <button class="btn-remove" title="Remove ${pet.name}">&times;</button>
     </div>
@@ -59,10 +63,22 @@ function renderPetList(): void {
 
 function populateColors(): void {
   const type = typeSelect.value as PetType;
-  const colors = COLORS[type] || [];
+  const colors = COLORS[type] ?? [];
   colorSelect.innerHTML = colors.map(c =>
     `<option value="${c}">${c.charAt(0).toUpperCase() + c.slice(1)}</option>`
   ).join('');
+  updatePreview();
+}
+
+function updatePreview(): void {
+  const type = typeSelect.value as PetType;
+  const color = colorSelect.value;
+  if (type && color) {
+    previewImg.src = chrome.runtime.getURL(`assets/${type}/${color}_idle_8fps.gif`);
+    previewImg.style.display = 'block';
+  } else {
+    previewImg.style.display = 'none';
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -74,20 +90,22 @@ async function addPet(): Promise<void> {
   const type = typeSelect.value as PetType;
   const color = colorSelect.value;
 
+  if (!color) return; // guard against empty color
+
   const pet: PetData = {
     id: crypto.randomUUID(),
     name,
     type,
     color,
     x: Math.random() * 800,
-    y: 0, // will be set by content script
+    y: 0, // set by content script
   };
 
   pets.push(pet);
   await savePets(pets);
   renderPetList();
 
-  // Notify content scripts
+  // Notify content scripts via service worker
   const msg: ExtMessage = { type: 'ADD_PET', pet };
   chrome.runtime.sendMessage(msg);
 
@@ -100,7 +118,6 @@ async function removePet(id: string): Promise<void> {
   await savePets(pets);
   renderPetList();
 
-  // Notify content scripts
   const msg: ExtMessage = { type: 'REMOVE_PET', id };
   chrome.runtime.sendMessage(msg);
 }
@@ -115,6 +132,7 @@ function throwBall(): void {
 // ---------------------------------------------------------------------------
 
 typeSelect.addEventListener('change', populateColors);
+colorSelect.addEventListener('change', updatePreview);
 btnAdd.addEventListener('click', addPet);
 btnThrowBall.addEventListener('click', throwBall);
 
@@ -123,7 +141,7 @@ btnThrowBall.addEventListener('click', throwBall);
 // ---------------------------------------------------------------------------
 
 async function init(): Promise<void> {
-  populateColors();
+  populateColors(); // must run before any await so colors appear immediately
   pets = await loadPetData();
   renderPetList();
 }
