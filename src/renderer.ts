@@ -2,7 +2,7 @@ import type { Pet } from './pet';
 import type { PetState } from './types';
 
 export const DRAW_W = 64;
-export const PATH_Y_FRACTION = 0.40;
+export const PATH_Y_FRACTION = 0.88;
 
 const STATE_TO_GIF: Record<PetState, string> = {
   sitIdle:     'idle',

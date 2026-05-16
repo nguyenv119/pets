@@ -1,9 +1,33 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import { spawnFeedParticle, updateParticles, drawParticles } from './renderer';
+import { spawnFeedParticle, updateParticles, drawParticles, PATH_Y_FRACTION } from './renderer';
 import type { Particle } from './renderer';
 import { Pet } from './pet';
 import type { PetData } from './types';
+
+// ---------------------------------------------------------------------------
+// PATH_Y_FRACTION — walk-lane position
+// ---------------------------------------------------------------------------
+
+describe('PATH_Y_FRACTION', () => {
+  it('positions pets near the bottom of the viewport (0.88)', () => {
+    /**
+     * Verifies that PATH_Y_FRACTION is 0.88, placing pets at 88% of the canvas
+     * height so they walk near the bottom of the mp4 video background.
+     *
+     * This matters because the value controls where every pet's y-coordinate is
+     * anchored. If it reverts to 0.40 (the old gradient backdrop value) pets will
+     * walk across the middle of the screen instead of the bottom, misaligned with
+     * the video background.
+     *
+     * If violated, pets appear to float in the middle of the viewport rather than
+     * walking along the ground visible in the video.
+     */
+    // GIVEN — the exported constant
+    // WHEN / THEN — assert the updated bottom-walk-lane value
+    expect(PATH_Y_FRACTION).toBe(0.88);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Helpers
