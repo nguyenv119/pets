@@ -2,7 +2,6 @@ import type { Pet } from './pet';
 import type { PetState } from './types';
 
 export const DRAW_W = 64;
-export const PATH_Y_FRACTION = 0.40;
 
 const STATE_TO_GIF: Record<PetState, string> = {
   sitIdle:     'idle',
@@ -14,6 +13,14 @@ const STATE_TO_GIF: Record<PetState, string> = {
   eat:         'idle',
 };
 
+/** Resolve an asset path — uses chrome.runtime.getURL in extension context */
+export function getAssetURL(path: string): string {
+  if (typeof chrome !== 'undefined' && chrome.runtime?.getURL) {
+    return chrome.runtime.getURL(path);
+  }
+  return path;
+}
+
 export interface PetView {
   el: HTMLImageElement;
   _lastState: PetState;
@@ -22,7 +29,7 @@ export interface PetView {
 export function createPetView(pet: Pet, container: HTMLElement): PetView {
   const d = pet.toData();
   const el = document.createElement('img');
-  el.src = `assets/${d.type}/${d.color}_idle_8fps.gif`;
+  el.src = getAssetURL(`assets/${d.type}/${d.color}_idle_8fps.gif`);
   el.style.cssText = [
     'position:absolute',
     `width:${DRAW_W}px`,
@@ -37,7 +44,7 @@ export function createPetView(pet: Pet, container: HTMLElement): PetView {
 export function updatePetView(view: PetView, pet: Pet): void {
   const d = pet.toData();
   if (pet.state !== view._lastState) {
-    view.el.src = `assets/${d.type}/${d.color}_${STATE_TO_GIF[pet.state]}_8fps.gif`;
+    view.el.src = getAssetURL(`assets/${d.type}/${d.color}_${STATE_TO_GIF[pet.state]}_8fps.gif`);
     view._lastState = pet.state;
   }
   view.el.style.left = `${pet.x}px`;

@@ -9,3 +9,10 @@ export interface PetData {
   x: number;
   y: number;
 }
+
+// Extension messaging types (popup ↔ service worker ↔ content script)
+export type ExtMessage =
+  | { type: 'ADD_PET'; pet: PetData }
+  | { type: 'REMOVE_PET'; id: string }
+  | { type: 'THROW_BALL' }
+  | { type: 'PETS_UPDATED'; pets: PetData[] };
