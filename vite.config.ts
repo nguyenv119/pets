@@ -1,11 +1,5 @@
 import { defineConfig } from 'vite';
-import { crx } from '@crxjs/vite-plugin';
-import manifest from './manifest.json';
 
-export default defineConfig({
-  plugins: [crx({ manifest })],
-  build: {
-    outDir: 'dist',
-    emptyOutDir: true,
-  },
-});
+// Vite is used for testing (vitest) only.
+// Production build uses build.mjs (esbuild) for Chrome extension output.
+export default defineConfig({});
