@@ -1,7 +1,7 @@
 import type { Pet } from './pet';
 import type { PetState } from './types';
 
-export const DRAW_W = 64;
+export const DRAW_W = 128;
 
 const STATE_TO_GIF: Record<PetState, string> = {
   sitIdle:     'idle',
@@ -58,9 +58,12 @@ export function removePetView(view: PetView): void {
 
 export function drawBall(ctx: CanvasRenderingContext2D, ball: { x: number; y: number }): void {
   ctx.beginPath();
-  ctx.arc(ball.x, ball.y, 8, 0, Math.PI * 2);
+  ctx.arc(ball.x, ball.y, 14, 0, Math.PI * 2);
   ctx.fillStyle = 'yellow';
   ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#cc9900';
+  ctx.stroke();
 }
 
 // ---------------------------------------------------------------------------
@@ -80,7 +83,7 @@ export function updateParticles(particles: Particle[], dt: number): void {
 
 export function drawParticles(ctx: CanvasRenderingContext2D, particles: Particle[]): void {
   ctx.save();
-  ctx.font = '20px serif';
+  ctx.font = '32px serif';
   ctx.textAlign = 'center';
   for (const p of particles) { ctx.globalAlpha = p.alpha; ctx.fillText(p.emoji, p.x, p.y); }
   ctx.globalAlpha = 1;

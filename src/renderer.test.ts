@@ -62,8 +62,8 @@ describe('spawnFeedParticle', () => {
     // WHEN — spawn a feed particle
     const p = spawnFeedParticle(pet);
 
-    // THEN — x is pet.x + 32 (DRAW_W / 2 = 64 / 2)
-    expect(p.x).toBe(132); // 100 + 32
+    // THEN — x is pet.x + 64 (DRAW_W / 2 = 128 / 2)
+    expect(p.x).toBe(164); // 100 + 64
   });
 
   it('returns a particle at the pet y position', () => {

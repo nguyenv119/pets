@@ -38,6 +38,11 @@ h1 {
   margin-top: 4px;
 }
 
+.header-actions {
+  display: flex;
+  gap: 6px;
+}
+
 .btn-icon {
   width: 40px;
   height: 40px;
@@ -55,6 +60,11 @@ h1 {
 .btn-icon:hover {
   background: #252545;
   border-color: #7c5cbf;
+}
+
+.btn-icon.hidden-state {
+  opacity: 0.5;
+  border-color: #f55;
 }
 
 /* Pet list */

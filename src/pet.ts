@@ -2,6 +2,8 @@ import type { PetData, PetState, PetType } from './types';
 
 // Horizontal movement speed in pixels per second
 const WALK_SPEED = 120;
+const CHASE_SPEED = 250;
+const CHASE_RANGE = 600; // pixels — how far a pet can "see" the ball
 
 // Timer range helpers
 function randBetween(min: number, max: number): number {
@@ -85,17 +87,43 @@ export class Pet {
    * @param imgW  Sprite width used for right-edge clamping. Defaults to 32.
    */
   update(dt: number, ball: Ball | null, canvasW?: number, imgW = 32): void {
-    // Chase logic: check if ball deactivated while chasing
-    if (this.state === 'chase' && ball !== null && !ball.active) {
+    const effectiveCanvasW: number | undefined =
+      canvasW ?? (typeof window !== 'undefined' ? window.innerWidth : undefined);
+
+    // --- Chase logic ---
+    if (ball !== null && ball.active) {
+      const dist = Math.abs(ball.x - (this.x + imgW / 2));
+
+      // Enter chase if ball is within range and pet isn't eating
+      if (this.state !== 'chase' && this.state !== 'eat' && dist < CHASE_RANGE) {
+        this._transition('chase', 999); // timer irrelevant — exits via ball.active
+      }
+
+      // Move toward ball while chasing
+      if (this.state === 'chase') {
+        const petCenter = this.x + imgW / 2;
+        if (ball.x < petCenter - 4) {
+          this.x -= CHASE_SPEED * dt;
+        } else if (ball.x > petCenter + 4) {
+          this.x += CHASE_SPEED * dt;
+        }
+        // Clamp
+        if (this.x < 0) this.x = 0;
+        if (effectiveCanvasW !== undefined && this.x > effectiveCanvasW - imgW) {
+          this.x = effectiveCanvasW - imgW;
+        }
+        return; // skip normal FSM while chasing
+      }
+    }
+
+    // Ball deactivated while chasing → idle with ball
+    if (this.state === 'chase' && (ball === null || !ball.active)) {
       this._transition('idleWithBall', 1.5);
       return;
     }
 
-    // Decrement timer
+    // --- Normal FSM ---
     this._timer -= dt;
-
-    const effectiveCanvasW: number | undefined =
-      canvasW ?? (typeof window !== 'undefined' ? window.innerWidth : undefined);
 
     if (this.state === 'walkLeft') {
       this.x -= WALK_SPEED * dt;

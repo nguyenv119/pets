@@ -131,6 +131,12 @@ function addPetToScene(pet: Pet): void {
 }
 
 async function init(): Promise<void> {
+  // Restore visibility preference
+  const visResult = await chrome.storage.local.get('pixel-pets-visible');
+  if (visResult['pixel-pets-visible'] === false) {
+    host.style.display = 'none';
+  }
+
   const savedData = await loadPetData();
 
   if (savedData.length === 0) {
@@ -260,6 +266,12 @@ chrome.runtime.onMessage.addListener((msg: ExtMessage) => {
         vx: (Math.random() - 0.5) * 300,
         vy: -300,
       };
+      break;
+    }
+    case 'TOGGLE_VISIBILITY': {
+      host.style.display = msg.visible ? '' : 'none';
+      // Persist visibility preference
+      chrome.storage.local.set({ 'pixel-pets-visible': msg.visible });
       break;
     }
   }

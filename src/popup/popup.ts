@@ -21,12 +21,14 @@ const colorSelect = document.getElementById('pet-color') as HTMLSelectElement;
 const previewImg = document.getElementById('preview-img') as HTMLImageElement;
 const btnAdd = document.getElementById('btn-add')!;
 const btnThrowBall = document.getElementById('btn-throw-ball')!;
+const btnToggle = document.getElementById('btn-toggle')!;
 
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 
 let pets: PetData[] = [];
+let petsVisible = true;
 
 // ---------------------------------------------------------------------------
 // Render
@@ -127,6 +129,21 @@ function throwBall(): void {
   chrome.runtime.sendMessage(msg);
 }
 
+function toggleVisibility(): void {
+  petsVisible = !petsVisible;
+  const msg: ExtMessage = { type: 'TOGGLE_VISIBILITY', visible: petsVisible };
+  chrome.runtime.sendMessage(msg);
+
+  // Update button appearance
+  if (petsVisible) {
+    btnToggle.classList.remove('hidden-state');
+    btnToggle.title = 'Hide pets';
+  } else {
+    btnToggle.classList.add('hidden-state');
+    btnToggle.title = 'Show pets';
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Event listeners
 // ---------------------------------------------------------------------------
@@ -135,6 +152,7 @@ typeSelect.addEventListener('change', populateColors);
 colorSelect.addEventListener('change', updatePreview);
 btnAdd.addEventListener('click', addPet);
 btnThrowBall.addEventListener('click', throwBall);
+btnToggle.addEventListener('click', toggleVisibility);
 
 // ---------------------------------------------------------------------------
 // Init
@@ -142,6 +160,15 @@ btnThrowBall.addEventListener('click', throwBall);
 
 async function init(): Promise<void> {
   populateColors(); // must run before any await so colors appear immediately
+
+  // Load visibility preference
+  const visResult = await chrome.storage.local.get('pixel-pets-visible');
+  if (visResult['pixel-pets-visible'] === false) {
+    petsVisible = false;
+    btnToggle.classList.add('hidden-state');
+    btnToggle.title = 'Show pets';
+  }
+
   pets = await loadPetData();
   renderPetList();
 }
