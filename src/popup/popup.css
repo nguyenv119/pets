@@ -1,0 +1,19 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  width: 300px;
+  min-height: 200px;
+  font-family: system-ui, -apple-system, sans-serif;
+  padding: 16px;
+  background: #1a1a2e;
+  color: #eee;
+}
+
+h1 {
+  font-size: 18px;
+  margin-bottom: 8px;
+}
