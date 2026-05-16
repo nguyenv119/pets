@@ -1,6 +1,28 @@
 import type { ExtMessage } from './types';
 
-// Service worker — relays messages from popup to all content scripts
+// ---------------------------------------------------------------------------
+// On install / update — inject content script into all existing tabs.
+// Without this, tabs that were already open don't get pets until refreshed.
+// ---------------------------------------------------------------------------
+
+chrome.runtime.onInstalled.addListener(async () => {
+  const tabs = await chrome.tabs.query({ url: ['http://*/*', 'https://*/*'] });
+  for (const tab of tabs) {
+    if (tab.id != null) {
+      chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['content.js'],
+      }).catch(() => {
+        // Tab may not support scripting — ignore
+      });
+    }
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Message relay — popup → all content scripts
+// ---------------------------------------------------------------------------
+
 chrome.runtime.onMessage.addListener(
   (msg: ExtMessage, _sender, _sendResponse) => {
     if (msg.type === 'ADD_PET' || msg.type === 'REMOVE_PET' || msg.type === 'THROW_BALL' || msg.type === 'TOGGLE_VISIBILITY') {

@@ -15,6 +15,15 @@ import { savePets, loadPetData } from './store';
 import type { PetData, ExtMessage } from './types';
 
 // ---------------------------------------------------------------------------
+// Guard against double-injection (manifest + scripting API both inject)
+// ---------------------------------------------------------------------------
+
+if (document.getElementById('pixel-pets-host')) {
+  // Already injected — bail out silently
+  throw new Error('pixel-pets: already injected');
+}
+
+// ---------------------------------------------------------------------------
 // Shadow DOM setup — isolates pet CSS from host page
 // ---------------------------------------------------------------------------
 

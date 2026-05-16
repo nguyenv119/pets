@@ -5,6 +5,7 @@ const WALK_SPEED = 120;
 const CHASE_SPEED = 250;
 const CHASE_RANGE = 600; // pixels — how far a pet can "see" the ball
 const CATCH_DISTANCE = 25; // pixels — pet considers itself "at" the ball and stops
+const CATCH_RESUME = 40;  // pixels — ball must move this far before pet resumes chasing
 
 // Timer range helpers
 function randBetween(min: number, max: number): number {
@@ -112,11 +113,18 @@ export class Pet {
 
       // Move toward ball while chasing
       if (this.state === 'chase') {
-        if (dist <= CATCH_DISTANCE) {
-          // Close enough — stop running, just stand near the ball
+        if (this.nearBall) {
+          // Already at the ball — only resume chasing if ball moves far enough
+          // (hysteresis prevents flickering between idle/run at the boundary)
+          if (dist > CATCH_RESUME) {
+            this.nearBall = false;
+          }
+        } else if (dist <= CATCH_DISTANCE) {
+          // Just arrived — stop running
           this.nearBall = true;
-        } else {
-          this.nearBall = false;
+        }
+
+        if (!this.nearBall) {
           if (targetX < petCenter) {
             this.x -= CHASE_SPEED * dt;
             this.facingLeft = true;
