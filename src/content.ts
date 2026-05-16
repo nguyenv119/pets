@@ -6,6 +6,7 @@ import {
   updatePetView,
   removePetView,
   spawnFeedParticle,
+  spawnLoveParticle,
   updateParticles,
   drawParticles,
   drawBall,
@@ -226,7 +227,14 @@ function tick(now: number): void {
       offset = (chasingIdx - (chasingPets.length - 1) / 2) * CHASE_SPREAD;
       chasingIdx++;
     }
+    const prevState = pet.state;
     pet.update(dt, ballForPet, canvas.width, DRAW_W, offset);
+
+    // Spawn love emoji when a pet catches the ball
+    if (pet.state === 'idleWithBall' && prevState === 'chase' && particles.length < MAX_PARTICLES) {
+      particles.push(spawnLoveParticle(pet));
+    }
+
     const view = views.get(pet);
     if (view) updatePetView(view, pet);
   }

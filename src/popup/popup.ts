@@ -36,7 +36,13 @@ let petsVisible = true;
 
 function renderPetList(): void {
   if (pets.length === 0) {
-    petsList.innerHTML = '<div class="empty-state">No pets yet — add one below!</div>';
+    petsList.innerHTML = `
+      <div class="empty-state">
+        <img src="${chrome.runtime.getURL('assets/dog/brown_walk_8fps.gif')}" class="empty-pet" alt="" />
+        <p class="empty-title">It's quiet here...</p>
+        <p class="empty-cta">Adopt your first friend below!</p>
+      </div>
+    `;
     return;
   }
 

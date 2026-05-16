@@ -9,7 +9,7 @@ const STATE_TO_GIF: Record<PetState, string> = {
   walkRight:   'walk',
   sleep:       'lie',
   chase:       'run',
-  idleWithBall:'with_ball',
+  idleWithBall:'idle',
   eat:         'idle',
 };
 
@@ -84,6 +84,10 @@ export function spawnFeedParticle(pet: Pet): Particle {
   return { x: pet.x + DRAW_W / 2, y: pet.y, vy: -40, alpha: 1, emoji: '🍖' };
 }
 
+export function spawnLoveParticle(pet: Pet): Particle {
+  return { x: pet.x + DRAW_W / 2, y: pet.y - 8, vy: -30, alpha: 1, emoji: '❤️' };
+}
+
 export function updateParticles(particles: Particle[], dt: number): void {
   for (const p of particles) { p.y += p.vy * dt; p.alpha = Math.max(0, p.alpha - dt / 1.5); }
   particles.splice(0, particles.length, ...particles.filter(p => p.alpha > 0));
@@ -91,7 +95,7 @@ export function updateParticles(particles: Particle[], dt: number): void {
 
 export function drawParticles(ctx: CanvasRenderingContext2D, particles: Particle[]): void {
   ctx.save();
-  ctx.font = '32px serif';
+  ctx.font = '18px serif';
   ctx.textAlign = 'center';
   for (const p of particles) { ctx.globalAlpha = p.alpha; ctx.fillText(p.emoji, p.x, p.y); }
   ctx.globalAlpha = 1;
