@@ -205,11 +205,19 @@ function tick(now: number): void {
   updateParticles(particles, dt);
   drawParticles(ctx, particles);
 
-  // Update pets
+  // Update pets — spread them apart when chasing the same ball
   const ballForPet: Ball | null = ball ? { active: ball.active, x: ball.x, y: ball.y } : null;
+  const CHASE_SPREAD = 40; // pixels between each pet near the ball
+  const chasingPets = pets.filter(p => p.state === 'chase');
+  let chasingIdx = 0;
   for (const pet of pets) {
     pet.y = groundY();
-    pet.update(dt, ballForPet, canvas.width, DRAW_W);
+    let offset = 0;
+    if (pet.state === 'chase' && chasingPets.length > 1) {
+      offset = (chasingIdx - (chasingPets.length - 1) / 2) * CHASE_SPREAD;
+      chasingIdx++;
+    }
+    pet.update(dt, ballForPet, canvas.width, DRAW_W, offset);
     const view = views.get(pet);
     if (view) updatePetView(view, pet);
   }

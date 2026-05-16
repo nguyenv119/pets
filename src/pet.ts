@@ -4,6 +4,7 @@ import type { PetData, PetState, PetType } from './types';
 const WALK_SPEED = 120;
 const CHASE_SPEED = 250;
 const CHASE_RANGE = 600; // pixels — how far a pet can "see" the ball
+const CATCH_DISTANCE = 25; // pixels — pet considers itself "at" the ball and stops
 
 // Timer range helpers
 function randBetween(min: number, max: number): number {
@@ -58,6 +59,12 @@ export class Pet {
   // Exposed with _ prefix so tests can force expiry
   _timer: number;
 
+  /** True when chasing and close enough to the ball to stop running. */
+  nearBall = false;
+
+  /** True when the pet is moving or facing left (used for sprite flip). */
+  facingLeft = false;
+
   // Immutable identity fields
   private readonly _id: string;
   private readonly _name: string;
@@ -85,14 +92,18 @@ export class Pet {
    * @param canvasW  Canvas width used for x clamping. Defaults to window.innerWidth
    *                 when running in a browser context; 0 disables right clamp in tests.
    * @param imgW  Sprite width used for right-edge clamping. Defaults to 32.
+   * @param chaseOffset  Horizontal offset from ball center — spreads pets apart when
+   *                     multiple pets chase the same ball.
    */
-  update(dt: number, ball: Ball | null, canvasW?: number, imgW = 32): void {
+  update(dt: number, ball: Ball | null, canvasW?: number, imgW = 32, chaseOffset = 0): void {
     const effectiveCanvasW: number | undefined =
       canvasW ?? (typeof window !== 'undefined' ? window.innerWidth : undefined);
 
     // --- Chase logic ---
     if (ball !== null && ball.active) {
-      const dist = Math.abs(ball.x - (this.x + imgW / 2));
+      const targetX = ball.x + chaseOffset;
+      const petCenter = this.x + imgW / 2;
+      const dist = Math.abs(targetX - petCenter);
 
       // Enter chase if ball is within range and pet isn't eating
       if (this.state !== 'chase' && this.state !== 'eat' && dist < CHASE_RANGE) {
@@ -101,11 +112,18 @@ export class Pet {
 
       // Move toward ball while chasing
       if (this.state === 'chase') {
-        const petCenter = this.x + imgW / 2;
-        if (ball.x < petCenter - 4) {
-          this.x -= CHASE_SPEED * dt;
-        } else if (ball.x > petCenter + 4) {
-          this.x += CHASE_SPEED * dt;
+        if (dist <= CATCH_DISTANCE) {
+          // Close enough — stop running, just stand near the ball
+          this.nearBall = true;
+        } else {
+          this.nearBall = false;
+          if (targetX < petCenter) {
+            this.x -= CHASE_SPEED * dt;
+            this.facingLeft = true;
+          } else {
+            this.x += CHASE_SPEED * dt;
+            this.facingLeft = false;
+          }
         }
         // Clamp
         if (this.x < 0) this.x = 0;
@@ -118,6 +136,7 @@ export class Pet {
 
     // Ball deactivated while chasing → idle with ball
     if (this.state === 'chase' && (ball === null || !ball.active)) {
+      this.nearBall = false;
       this._transition('idleWithBall', 1.5);
       return;
     }
@@ -126,12 +145,14 @@ export class Pet {
     this._timer -= dt;
 
     if (this.state === 'walkLeft') {
+      this.facingLeft = true;
       this.x -= WALK_SPEED * dt;
       if (this.x <= 0) {
         this.x = 0;
         this._transition('walkRight', randBetween(3, 8));
       }
     } else if (this.state === 'walkRight') {
+      this.facingLeft = false;
       this.x += WALK_SPEED * dt;
       if (effectiveCanvasW !== undefined && this.x >= effectiveCanvasW - imgW) {
         this.x = effectiveCanvasW - imgW;
