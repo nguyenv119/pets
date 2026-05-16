@@ -244,3 +244,10 @@ footer p {
   font-size: 11px;
   color: #555;
 }
+
+footer .note {
+  margin-top: 8px;
+  font-size: 10px;
+  color: #444;
+  line-height: 1.4;
+}

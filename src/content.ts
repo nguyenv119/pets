@@ -113,7 +113,7 @@ window.addEventListener('resize', resize);
 // ---------------------------------------------------------------------------
 
 function groundY(): number {
-  return window.innerHeight - DRAW_W - 16;
+  return window.innerHeight - DRAW_W;
 }
 
 // ---------------------------------------------------------------------------
@@ -239,13 +239,13 @@ function tick(now: number): void {
 // ---------------------------------------------------------------------------
 
 document.addEventListener('dblclick', (e) => {
-  // Throw ball from click position upward
+  // Drop ball from above the screen at the click's X position
   ball = {
     active: true,
     x: e.clientX,
-    y: e.clientY,
-    vx: (Math.random() - 0.5) * 200,
-    vy: -400,
+    y: -20,
+    vx: (Math.random() - 0.5) * 150,
+    vy: 0, // gravity pulls it down
   };
 });
 
@@ -276,12 +276,13 @@ chrome.runtime.onMessage.addListener((msg: ExtMessage) => {
       break;
     }
     case 'THROW_BALL': {
+      // Drop ball from above the screen at a random X
       ball = {
         active: true,
-        x: window.innerWidth / 2,
-        y: window.innerHeight * 0.3,
-        vx: (Math.random() - 0.5) * 300,
-        vy: -300,
+        x: Math.random() * (window.innerWidth - 100) + 50,
+        y: -20,
+        vx: (Math.random() - 0.5) * 200,
+        vy: 0,
       };
       break;
     }
