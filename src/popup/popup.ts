@@ -18,7 +18,6 @@ const petsList = document.getElementById('pets-list')!;
 const nameInput = document.getElementById('pet-name') as HTMLInputElement;
 const typeSelect = document.getElementById('pet-type') as HTMLSelectElement;
 const colorSelect = document.getElementById('pet-color') as HTMLSelectElement;
-const previewImg = document.getElementById('preview-img') as HTMLImageElement;
 const btnAdd = document.getElementById('btn-add')!;
 const btnThrowBall = document.getElementById('btn-throw-ball')!;
 const btnToggle = document.getElementById('btn-toggle')!;
@@ -75,18 +74,6 @@ function populateColors(): void {
   colorSelect.innerHTML = colors.map(c =>
     `<option value="${c}">${c.charAt(0).toUpperCase() + c.slice(1)}</option>`
   ).join('');
-  updatePreview();
-}
-
-function updatePreview(): void {
-  const type = typeSelect.value as PetType;
-  const color = colorSelect.value;
-  if (type && color) {
-    previewImg.src = chrome.runtime.getURL(`assets/${type}/${color}_idle_8fps.gif`);
-    previewImg.style.display = 'block';
-  } else {
-    previewImg.style.display = 'none';
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -155,7 +142,6 @@ function toggleVisibility(): void {
 // ---------------------------------------------------------------------------
 
 typeSelect.addEventListener('change', populateColors);
-colorSelect.addEventListener('change', updatePreview);
 btnAdd.addEventListener('click', addPet);
 btnThrowBall.addEventListener('click', throwBall);
 btnToggle.addEventListener('click', toggleVisibility);
