@@ -8,8 +8,39 @@
   </head>
   <body>
     <div id="app">
-      <h1>Pixel Pets</h1>
-      <p>Your pixel pet companions</p>
+      <header>
+        <h1>Pixel Pets</h1>
+      </header>
+
+      <section id="pets-list">
+        <!-- Populated by popup.ts -->
+      </section>
+
+      <section id="add-pet-form">
+        <h2>Add Pet</h2>
+        <div class="form-row">
+          <label for="pet-name">Name</label>
+          <input type="text" id="pet-name" placeholder="Rex" maxlength="16" />
+        </div>
+        <div class="form-row">
+          <label for="pet-type">Type</label>
+          <select id="pet-type">
+            <option value="dog">Dog</option>
+            <option value="fox">Fox</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="pet-color">Color</label>
+          <select id="pet-color">
+            <!-- Options populated dynamically based on type -->
+          </select>
+        </div>
+        <button id="btn-add" class="btn-primary">Add Pet</button>
+      </section>
+
+      <section id="actions">
+        <button id="btn-throw-ball" class="btn-secondary">Throw Ball</button>
+      </section>
     </div>
     <script type="module" src="popup.ts"></script>
   </body>
