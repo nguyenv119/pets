@@ -59,7 +59,7 @@ h1 {
 
 .btn-icon:hover {
   background: #3a3020;
-  border-color: #e0953a;
+  border-color: #c8882a;
 }
 
 .btn-icon.hidden-state {
@@ -76,18 +76,19 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 14px;
-  margin-bottom: 6px;
-  background: #241e16;
+  padding: 12px 14px 12px 16px;
+  margin-bottom: 4px;
+  background: #28201a;
   border-radius: 10px;
   border: 1px solid #3a2e22;
-  border-left: 3px solid #e0953a;
+  border-left: 3px solid #6a4418;
+  margin-left: 2px;
   transition: border-color 0.15s;
 }
 
 .pet-item:hover {
   border-color: #5a4a30;
-  border-left-color: #eeaa50;
+  border-left-color: #8a5c20;
 }
 
 .pet-info {
@@ -112,7 +113,7 @@ h1 {
 
 .pet-meta {
   font-size: 11px;
-  color: #9a8a72;
+  color: #7a6040;
   margin-top: 2px;
 }
 
@@ -134,8 +135,8 @@ h1 {
 
 .empty-state {
   text-align: center;
-  padding: 28px 16px 24px;
-  background: #241e16;
+  padding: 18px 16px 16px;
+  background: #28201a;
   border-radius: 10px;
   border: 1px dashed #4a3c2e;
 }
@@ -144,7 +145,8 @@ h1 {
   width: 48px;
   height: 48px;
   image-rendering: pixelated;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
+  margin-left: 4px;
 }
 
 .empty-title {
@@ -155,7 +157,7 @@ h1 {
 
 .empty-cta {
   font-size: 12px;
-  color: #e0953a;
+  color: #c8882a;
   font-weight: 500;
 }
 
@@ -163,24 +165,24 @@ h1 {
 #add-pet-form {
   margin-bottom: 16px;
   padding: 16px;
-  background: #241e16;
+  background: #28201a;
   border-radius: 10px;
   border: 1px solid #3a2e22;
 }
 
 #add-pet-form h2 {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: #e0953a;
+  letter-spacing: 0.12em;
+  color: #a06820;
   margin-bottom: 12px;
 }
 
 .form-grid {
   display: grid;
   grid-template-columns: 60px 1fr;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
   margin-bottom: 14px;
 }
@@ -206,7 +208,7 @@ h1 {
 .form-grid input:focus,
 .form-grid select:focus {
   outline: none;
-  border-color: #e0953a;
+  border-color: #c8882a;
 }
 
 .form-grid select {
