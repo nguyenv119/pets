@@ -36,7 +36,7 @@ function nextState(current: PetState): [PetState, number] {
       return ['sitIdle', randBetween(2, 4)];
 
     case 'chase':
-      // chase exits via ball.active check in update(), not via timer
+      // chase exits via onBallLanded() called from main.ts when ball deactivates, not via timer
       return ['sitIdle', randBetween(2, 4)];
 
     case 'eat':
@@ -45,7 +45,7 @@ function nextState(current: PetState): [PetState, number] {
 }
 
 export interface Ball {
-  active: boolean;
+  settled: boolean;
   x: number;
   y: number;
 }
@@ -55,6 +55,8 @@ export class Pet {
   state: PetState;
   x: number;
   y: number;
+  /** Direction the pet is facing — used by renderer for sprite flip. */
+  facing: 'left' | 'right' = 'right';
 
   // Internal FSM timer (seconds until next transition)
   // Exposed with _ prefix so tests can force expiry
@@ -114,13 +116,10 @@ export class Pet {
       // Move toward ball while chasing
       if (this.state === 'chase') {
         if (this.nearBall) {
-          // Already at the ball — only resume chasing if ball moves far enough
-          // (hysteresis prevents flickering between idle/run at the boundary)
           if (dist > CATCH_RESUME) {
             this.nearBall = false;
           }
         } else if (dist <= CATCH_DISTANCE) {
-          // Just arrived — stop running
           this.nearBall = true;
         }
 
@@ -138,7 +137,7 @@ export class Pet {
         if (effectiveCanvasW !== undefined && this.x > effectiveCanvasW - imgW) {
           this.x = effectiveCanvasW - imgW;
         }
-        return; // skip normal FSM while chasing
+        return;
       }
     }
 
@@ -173,6 +172,16 @@ export class Pet {
       const [ns, t] = nextState(this.state);
       this._transition(ns, t);
     }
+  }
+
+  /** Force the pet into chase state immediately, bypassing the FSM timer. */
+  startChase(): void {
+    this._transition('chase', Infinity);
+  }
+
+  /** Called when the ball is picked up; all pets return to idle. */
+  onBallLanded(): void {
+    this._transition('sitIdle', 1.5);
   }
 
   /** Feed the pet: transitions to eat for 2s. No-op if currently chasing.
