@@ -135,8 +135,13 @@ function addPetToScene(pet: Pet): void {
   view.el.addEventListener('click', (e) => {
     e.stopPropagation();
     if (pet.feed() && particles.length < MAX_PARTICLES) {
-      particles.push(spawnFeedParticle(pet));
+      particles.push(...spawnFeedParticle(pet));
     }
+  });
+
+  // Prevent double-clicks on pets from dropping a ball
+  view.el.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
   });
 }
 

@@ -45,7 +45,7 @@ function nextState(current: PetState): [PetState, number] {
 }
 
 export interface Ball {
-  settled: boolean;
+  active: boolean;
   x: number;
   y: number;
 }
