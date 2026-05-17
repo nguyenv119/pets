@@ -2,14 +2,18 @@ import type { PetData } from './types';
 
 const KEY = 'pixel-pets-v1';
 
-export function savePets(pets: { toData(): PetData }[]): void {
-  localStorage.setItem(KEY, JSON.stringify(pets.map(p => p.toData())));
+/** Save pets to chrome.storage.local */
+export async function savePets(pets: PetData[]): Promise<void> {
+  await chrome.storage.local.set({ [KEY]: pets });
 }
 
-export function loadPetData(): PetData[] {
+/** Load pets from chrome.storage.local */
+export async function loadPetData(): Promise<PetData[]> {
   try {
-    const raw = localStorage.getItem(KEY);
-    const parsed: unknown = JSON.parse(raw ?? 'null');
-    return Array.isArray(parsed) ? (parsed as PetData[]) : [];
-  } catch { return []; }
+    const result = await chrome.storage.local.get(KEY);
+    const data: unknown = result[KEY];
+    return Array.isArray(data) ? (data as PetData[]) : [];
+  } catch {
+    return [];
+  }
 }

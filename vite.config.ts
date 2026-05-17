@@ -1,2 +1,5 @@
 import { defineConfig } from 'vite';
-export default defineConfig({ base: '/' });
+
+// Vite is used for testing (vitest) only.
+// Production build uses build.mjs (esbuild) for Chrome extension output.
+export default defineConfig({});

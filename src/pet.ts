@@ -2,6 +2,10 @@ import type { PetData, PetState, PetType } from './types';
 
 // Horizontal movement speed in pixels per second
 const WALK_SPEED = 120;
+const CHASE_SPEED = 250;
+const CHASE_RANGE = 600; // pixels — how far a pet can "see" the ball
+const CATCH_DISTANCE = 25; // pixels — pet considers itself "at" the ball and stops
+const CATCH_RESUME = 40;  // pixels — ball must move this far before pet resumes chasing
 
 // Timer range helpers
 function randBetween(min: number, max: number): number {
@@ -58,6 +62,12 @@ export class Pet {
   // Exposed with _ prefix so tests can force expiry
   _timer: number;
 
+  /** True when chasing and close enough to the ball to stop running. */
+  nearBall = false;
+
+  /** True when the pet is moving or facing left (used for sprite flip). */
+  facingLeft = false;
+
   // Immutable identity fields
   private readonly _id: string;
   private readonly _name: string;
@@ -85,33 +95,71 @@ export class Pet {
    * @param canvasW  Canvas width used for x clamping. Defaults to window.innerWidth
    *                 when running in a browser context; 0 disables right clamp in tests.
    * @param imgW  Sprite width used for right-edge clamping. Defaults to 32.
+   * @param chaseOffset  Horizontal offset from ball center — spreads pets apart when
+   *                     multiple pets chase the same ball.
    */
-  update(dt: number, ball: Ball | null, canvasW?: number, imgW = 32): void {
-    // Chase movement: move toward ball.x at WALK_SPEED px/s
-    if (this.state === 'chase' && ball !== null) {
-      const dir = ball.x > this.x ? 1 : -1;
-      this.facing = dir === 1 ? 'right' : 'left';
-      const step = WALK_SPEED * dt;
-      const dist = Math.abs(ball.x - this.x);
-      this.x += dir * Math.min(step, dist);
-      return;
-    }
-
-    // Decrement timer
-    this._timer -= dt;
-
+  update(dt: number, ball: Ball | null, canvasW?: number, imgW = 32, chaseOffset = 0): void {
     const effectiveCanvasW: number | undefined =
       canvasW ?? (typeof window !== 'undefined' ? window.innerWidth : undefined);
 
+    // --- Chase logic ---
+    if (ball !== null && ball.active) {
+      const targetX = ball.x + chaseOffset;
+      const petCenter = this.x + imgW / 2;
+      const dist = Math.abs(targetX - petCenter);
+
+      // Enter chase if ball is within range and pet isn't eating
+      if (this.state !== 'chase' && this.state !== 'eat' && dist < CHASE_RANGE) {
+        this._transition('chase', 999); // timer irrelevant — exits via ball.active
+      }
+
+      // Move toward ball while chasing
+      if (this.state === 'chase') {
+        if (this.nearBall) {
+          if (dist > CATCH_RESUME) {
+            this.nearBall = false;
+          }
+        } else if (dist <= CATCH_DISTANCE) {
+          this.nearBall = true;
+        }
+
+        if (!this.nearBall) {
+          if (targetX < petCenter) {
+            this.x -= CHASE_SPEED * dt;
+            this.facingLeft = true;
+          } else {
+            this.x += CHASE_SPEED * dt;
+            this.facingLeft = false;
+          }
+        }
+        // Clamp
+        if (this.x < 0) this.x = 0;
+        if (effectiveCanvasW !== undefined && this.x > effectiveCanvasW - imgW) {
+          this.x = effectiveCanvasW - imgW;
+        }
+        return;
+      }
+    }
+
+    // Ball deactivated while chasing → idle with ball
+    if (this.state === 'chase' && (ball === null || !ball.active)) {
+      this.nearBall = false;
+      this._transition('idleWithBall', 1.5);
+      return;
+    }
+
+    // --- Normal FSM ---
+    this._timer -= dt;
+
     if (this.state === 'walkLeft') {
-      this.facing = 'left';
+      this.facingLeft = true;
       this.x -= WALK_SPEED * dt;
       if (this.x <= 0) {
         this.x = 0;
         this._transition('walkRight', randBetween(3, 8));
       }
     } else if (this.state === 'walkRight') {
-      this.facing = 'right';
+      this.facingLeft = false;
       this.x += WALK_SPEED * dt;
       if (effectiveCanvasW !== undefined && this.x >= effectiveCanvasW - imgW) {
         this.x = effectiveCanvasW - imgW;

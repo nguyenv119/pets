@@ -2,7 +2,6 @@ import type { Pet } from './pet';
 import type { PetState } from './types';
 
 export const DRAW_W = 64;
-export const PATH_Y_FRACTION = 0.40;
 
 const STATE_TO_GIF: Record<PetState, string> = {
   sitIdle:     'idle',
@@ -10,19 +9,28 @@ const STATE_TO_GIF: Record<PetState, string> = {
   walkRight:   'walk',
   sleep:       'lie',
   chase:       'run',
-  idleWithBall:'with_ball',
+  idleWithBall:'idle',
   eat:         'idle',
 };
+
+/** Resolve an asset path — uses chrome.runtime.getURL in extension context */
+export function getAssetURL(path: string): string {
+  if (typeof chrome !== 'undefined' && chrome.runtime?.getURL) {
+    return chrome.runtime.getURL(path);
+  }
+  return path;
+}
 
 export interface PetView {
   el: HTMLImageElement;
   _lastState: PetState;
+  _lastNearBall: boolean;
 }
 
 export function createPetView(pet: Pet, container: HTMLElement): PetView {
   const d = pet.toData();
   const el = document.createElement('img');
-  el.src = `assets/${d.type}/${d.color}_idle_8fps.gif`;
+  el.src = getAssetURL(`assets/${d.type}/${d.color}_idle_8fps.gif`);
   el.style.cssText = [
     'position:absolute',
     `width:${DRAW_W}px`,
@@ -31,18 +39,25 @@ export function createPetView(pet: Pet, container: HTMLElement): PetView {
     'user-select:none',
   ].join(';');
   container.appendChild(el);
-  return { el, _lastState: 'sitIdle' };
+  return { el, _lastState: 'sitIdle', _lastNearBall: false };
 }
 
 export function updatePetView(view: PetView, pet: Pet): void {
   const d = pet.toData();
-  if (pet.state !== view._lastState) {
-    view.el.src = `assets/${d.type}/${d.color}_${STATE_TO_GIF[pet.state]}_8fps.gif`;
+
+  // When chasing but close to ball, show idle GIF instead of run-in-place
+  const effectiveGif = (pet.state === 'chase' && pet.nearBall)
+    ? 'idle'
+    : STATE_TO_GIF[pet.state];
+
+  if (pet.state !== view._lastState || pet.nearBall !== view._lastNearBall) {
+    view.el.src = getAssetURL(`assets/${d.type}/${d.color}_${effectiveGif}_8fps.gif`);
     view._lastState = pet.state;
+    view._lastNearBall = pet.nearBall;
   }
   view.el.style.left = `${pet.x}px`;
   view.el.style.top = `${pet.y}px`;
-  view.el.style.transform = pet.facing === 'left' ? 'scaleX(-1)' : 'none';
+  view.el.style.transform = pet.facingLeft ? 'scaleX(-1)' : 'none';
 }
 
 export function removePetView(view: PetView): void {
@@ -54,6 +69,9 @@ export function drawBall(ctx: CanvasRenderingContext2D, ball: { x: number; y: nu
   ctx.arc(ball.x, ball.y, 8, 0, Math.PI * 2);
   ctx.fillStyle = '#b5d92a'; // tennis-ball yellow-green to match with_ball GIF
   ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#cc9900';
+  ctx.stroke();
 }
 
 // ---------------------------------------------------------------------------
@@ -70,6 +88,10 @@ export function spawnFeedParticle(pet: Pet): Particle[] {
   ];
 }
 
+export function spawnLoveParticle(pet: Pet): Particle {
+  return { x: pet.x + DRAW_W / 2, y: pet.y - 8, vy: -30, alpha: 1, emoji: '❤️' };
+}
+
 export function updateParticles(particles: Particle[], dt: number): void {
   for (const p of particles) { p.y += p.vy * dt; p.alpha = Math.max(0, p.alpha - dt / 1.5); }
   particles.splice(0, particles.length, ...particles.filter(p => p.alpha > 0));
@@ -77,7 +99,7 @@ export function updateParticles(particles: Particle[], dt: number): void {
 
 export function drawParticles(ctx: CanvasRenderingContext2D, particles: Particle[]): void {
   ctx.save();
-  ctx.font = '20px serif';
+  ctx.font = '18px serif';
   ctx.textAlign = 'center';
   for (const p of particles) { ctx.globalAlpha = p.alpha; ctx.fillText(p.emoji, p.x, p.y); }
   ctx.globalAlpha = 1;

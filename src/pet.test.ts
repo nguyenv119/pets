@@ -712,7 +712,7 @@ describe('Pet FSM — chase movement', () => {
     const pet = makePet({ x: 100 });
     pet.state = 'chase';
     pet['_timer'] = 10;
-    const ball: Ball = { settled: false, x: 400, y: 300 };
+    const ball: Ball = { active: true, x: 400, y: 300 };
 
     // WHEN — advance 1 second
     pet.update(1, ball, 800);
@@ -735,7 +735,7 @@ describe('Pet FSM — chase movement', () => {
     const pet = makePet({ x: 400 });
     pet.state = 'chase';
     pet['_timer'] = 10;
-    const ball: Ball = { settled: false, x: 100, y: 300 };
+    const ball: Ball = { active: true, x: 100, y: 300 };
 
     // WHEN — advance 1 second
     pet.update(1, ball, 800);
@@ -759,7 +759,7 @@ describe('Pet FSM — chase movement', () => {
     const pet = makePet({ x: 395 });
     pet.state = 'chase';
     pet['_timer'] = 10;
-    const ball: Ball = { settled: false, x: 400, y: 300 };
+    const ball: Ball = { active: true, x: 400, y: 300 };
 
     // WHEN — advance 1 second (would move 120px without clamp)
     pet.update(1, ball, 800);
