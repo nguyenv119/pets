@@ -7,17 +7,16 @@
 body {
   width: 420px;
   min-height: 400px;
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: 'Nunito', system-ui, -apple-system, sans-serif;
   padding: 20px;
-  background: #fdf6f0;
-  color: #3d2a2a;
+  background: #FFE3B0;
+  color: #484848;
 }
 
 /* Header */
 header {
-  margin-bottom: 20px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #e8d5e8;
+  margin-bottom: 16px;
+  padding-bottom: 10px;
 }
 
 .header-row {
@@ -28,15 +27,9 @@ header {
 
 h1 {
   font-size: 22px;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: -0.5px;
-  color: #3d2a2a;
-}
-
-.subtitle {
-  font-size: 12px;
-  color: #9e7b7b;
-  margin-top: 4px;
+  color: #4A5A20;
 }
 
 .header-actions {
@@ -45,12 +38,12 @@ h1 {
 }
 
 .btn-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  border: 1px solid #d4b8e0;
-  background: #f0e6f6;
-  font-size: 18px;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid #D9E378;
+  background: #EEF4C8;
+  color: #6B8030;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -59,38 +52,34 @@ h1 {
 }
 
 .btn-icon:hover {
-  background: #e8daf0;
-  border-color: #c9a0dc;
+  background: #E4EDC0;
+  border-color: #B8C853;
 }
 
 .btn-icon.hidden-state {
-  opacity: 0.5;
-  border-color: #e07070;
+  opacity: 0.4;
 }
 
 /* Pet list */
 #pets-list {
-  margin-bottom: 20px;
+  margin-bottom: 14px;
 }
 
 .pet-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 14px 12px 16px;
-  margin-bottom: 4px;
-  background: #f0e6f6;
+  padding: 12px 14px;
+  margin-bottom: 5px;
+  background: #D9E378;
   border-radius: 10px;
-  border: 1px solid #e0d0ea;
-  border-left: 3px solid #c9a0dc;
-  margin-left: 2px;
+  border: 1px solid #C8D268;
   transition: border-color 0.15s, background 0.15s;
 }
 
 .pet-item:hover {
-  background: #ecddf4;
-  border-color: #d4b8e0;
-  border-left-color: #b888cc;
+  background: #D0DC68;
+  border-color: #B8C853;
 }
 
 .pet-info {
@@ -103,27 +92,25 @@ h1 {
   width: 40px;
   height: 40px;
   image-rendering: pixelated;
-  border-radius: 6px;
-  background: #f8f0fc;
-  padding: 4px;
 }
 
 .pet-name {
   font-size: 14px;
-  font-weight: 500;
-  color: #3d2a2a;
+  font-weight: 700;
+  color: #4A5A20;
 }
 
 .pet-meta {
-  font-size: 11px;
-  color: #9e7b7b;
+  font-size: 13px;
+  color: #6B8030;
   margin-top: 2px;
+  font-weight: 400;
 }
 
 .btn-remove {
   background: none;
   border: 1px solid transparent;
-  color: #d05050;
+  color: #4A5A20;
   cursor: pointer;
   font-size: 18px;
   padding: 4px 10px;
@@ -132,16 +119,16 @@ h1 {
 }
 
 .btn-remove:hover {
-  background: rgba(208, 80, 80, 0.08);
-  border-color: rgba(208, 80, 80, 0.2);
+  background: rgba(74, 90, 32, 0.08);
+  border-color: rgba(74, 90, 32, 0.2);
 }
 
 .empty-state {
   text-align: center;
   padding: 18px 16px 16px;
-  background: #faf0fc;
+  background: #D9E378;
   border-radius: 10px;
-  border: 1px dashed #d4b8e0;
+  border: 1px dashed #C8D268;
 }
 
 .empty-pet {
@@ -154,32 +141,24 @@ h1 {
 
 .empty-title {
   font-size: 15px;
-  color: #6a4a4a;
+  color: #484848;
   margin-bottom: 4px;
+  font-weight: 600;
 }
 
 .empty-cta {
   font-size: 12px;
-  color: #b5838d;
-  font-weight: 500;
+  color: #6B8030;
+  font-weight: 600;
 }
 
 /* Add pet form */
 #add-pet-form {
   margin-bottom: 16px;
   padding: 16px;
-  background: #f0e6f6;
-  border-radius: 10px;
-  border: 1px solid #e0d0ea;
-}
-
-#add-pet-form h2 {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: #b5838d;
-  margin-bottom: 12px;
+  background: #F5F08F;
+  border-radius: 12px;
+  border: none;
 }
 
 .form-grid {
@@ -192,17 +171,17 @@ h1 {
 
 .form-grid label {
   font-size: 12px;
-  color: #6a4a4a;
-  font-weight: 500;
+  color: #6B8030;
+  font-weight: 600;
 }
 
 .form-grid input,
 .form-grid select {
   padding: 8px 10px;
-  background: #fdf0f8;
-  border: 1px solid #e8c4d8;
-  border-radius: 10px;
-  color: #3d2a2a;
+  background: #FFF8E8;
+  border: 1px solid #D9E378;
+  border-radius: 8px;
+  color: #484848;
   font-size: 13px;
   font-family: inherit;
   transition: border-color 0.15s;
@@ -211,7 +190,7 @@ h1 {
 .form-grid input:focus,
 .form-grid select:focus {
   outline: none;
-  border-color: #c9a0dc;
+  border-color: #B8C853;
 }
 
 .form-grid select {
@@ -222,23 +201,23 @@ h1 {
 .btn-primary {
   width: 100%;
   padding: 10px 16px;
-  background: #f9c74f;
-  color: #3d2a2a;
+  background: #B8C853;
+  color: #3D4A1A;
   border: none;
-  border-radius: 10px;
+  border-radius: 8px;
   cursor: pointer;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   font-family: inherit;
   transition: background 0.15s;
 }
 
 .btn-primary:hover {
-  background: #fad56b;
+  background: #A8B848;
 }
 
 .btn-primary:active {
-  background: #e8b83e;
+  background: #98A838;
 }
 
 /* Footer */
@@ -246,17 +225,18 @@ footer {
   text-align: center;
   margin-top: 16px;
   padding-top: 12px;
-  border-top: 1px solid #e8d5e8;
 }
 
 footer p {
   font-size: 11px;
-  color: #b09898;
+  color: #6B8030;
+  font-weight: 400;
 }
 
 footer .note {
   margin-top: 8px;
   font-size: 10px;
-  color: #c0a8a8;
+  color: #6B8030;
+  opacity: 0.6;
   line-height: 1.4;
 }

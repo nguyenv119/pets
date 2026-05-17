@@ -4,6 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pixel Pets</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
@@ -12,11 +15,14 @@
         <div class="header-row">
           <h1>Pixel Pets</h1>
           <div class="header-actions">
-            <button id="btn-toggle" class="btn-icon" title="Show/hide pets">👁️</button>
-            <button id="btn-throw-ball" class="btn-icon" title="Throw ball on page">🎾</button>
+            <button id="btn-toggle" class="btn-icon" title="Show/hide pets">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+            <button id="btn-throw-ball" class="btn-icon" title="Throw ball on page">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M6 4c3 4 3 12 0 16"/><path d="M18 4c-3 4-3 12 0 16"/></svg>
+            </button>
           </div>
         </div>
-        <p class="subtitle">Your pixel companions on every page</p>
       </header>
 
       <section id="pets-list">
@@ -24,7 +30,6 @@
       </section>
 
       <section id="add-pet-form">
-        <h2>Add a new pet</h2>
         <div class="form-grid">
           <label for="pet-name">Name</label>
           <input type="text" id="pet-name" placeholder="Rex" maxlength="16" />
