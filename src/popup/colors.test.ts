@@ -60,8 +60,13 @@ describe('COLORS — pet type registry', () => {
      * If violated, selecting a wrong chicken color causes a missing GIF and an
      * invisible pet on screen.
      */
-    // GIVEN / WHEN / THEN
-    expect(COLORS.chicken).toEqual(['brown', 'white']);
+    // GIVEN — the static COLORS registry
+
+    // WHEN — look up chicken colors
+    const chickenColors = COLORS.chicken;
+
+    // THEN — brown and white are the available variants
+    expect(chickenColors).toEqual(['brown', 'white']);
   });
 
   it('crab has only color red', () => {
@@ -71,8 +76,13 @@ describe('COLORS — pet type registry', () => {
      * If an extra color is listed, a GIF that does not exist would be requested,
      * breaking the sprite.
      */
-    // GIVEN / WHEN / THEN
-    expect(COLORS.crab).toEqual(['red']);
+    // GIVEN — the static COLORS registry
+
+    // WHEN — look up crab colors
+    const crabColors = COLORS.crab;
+
+    // THEN — red is the only variant
+    expect(crabColors).toEqual(['red']);
   });
 
   it('dog has 5 colors: akita, black, brown, red, white', () => {
@@ -87,8 +97,13 @@ describe('COLORS — pet type registry', () => {
      * If violated, previously adopting users see missing sprites for brown or
      * black dogs on reload.
      */
-    // GIVEN / WHEN / THEN
-    expect(COLORS.dog).toEqual(['akita', 'black', 'brown', 'red', 'white']);
+    // GIVEN — the static COLORS registry
+
+    // WHEN — look up dog colors
+    const dogColors = COLORS.dog;
+
+    // THEN — all 5 variants present, including the 3 new ones
+    expect(dogColors).toEqual(['akita', 'black', 'brown', 'red', 'white']);
   });
 
   it('fox retains its original colors: red and white', () => {
@@ -100,47 +115,77 @@ describe('COLORS — pet type registry', () => {
      *
      * If violated, previously adopted fox pets show broken images.
      */
-    // GIVEN / WHEN / THEN
-    expect(COLORS.fox).toEqual(['red', 'white']);
+    // GIVEN — the static COLORS registry
+
+    // WHEN — look up fox colors
+    const foxColors = COLORS.fox;
+
+    // THEN — original red and white preserved
+    expect(foxColors).toEqual(['red', 'white']);
   });
 
   it('monkey has only color gray', () => {
     /**
      * Verifies that monkey is limited to its single available color (gray).
      */
-    // GIVEN / WHEN / THEN
-    expect(COLORS.monkey).toEqual(['gray']);
+    // GIVEN — the static COLORS registry
+
+    // WHEN — look up monkey colors
+    const monkeyColors = COLORS.monkey;
+
+    // THEN — gray is the only variant
+    expect(monkeyColors).toEqual(['gray']);
   });
 
   it('panda has colors black and brown', () => {
     /**
      * Verifies the exact color list for panda.
      */
-    // GIVEN / WHEN / THEN
-    expect(COLORS.panda).toEqual(['black', 'brown']);
+    // GIVEN — the static COLORS registry
+
+    // WHEN — look up panda colors
+    const pandaColors = COLORS.panda;
+
+    // THEN — black and brown are the available variants
+    expect(pandaColors).toEqual(['black', 'brown']);
   });
 
   it('snail has only color brown', () => {
     /**
      * Verifies that snail is limited to its single available color (brown).
      */
-    // GIVEN / WHEN / THEN
-    expect(COLORS.snail).toEqual(['brown']);
+    // GIVEN — the static COLORS registry
+
+    // WHEN — look up snail colors
+    const snailColors = COLORS.snail;
+
+    // THEN — brown is the only variant
+    expect(snailColors).toEqual(['brown']);
   });
 
   it('totoro has only color gray', () => {
     /**
      * Verifies that totoro is limited to its single available color (gray).
      */
-    // GIVEN / WHEN / THEN
-    expect(COLORS.totoro).toEqual(['gray']);
+    // GIVEN — the static COLORS registry
+
+    // WHEN — look up totoro colors
+    const totoroColors = COLORS.totoro;
+
+    // THEN — gray is the only variant
+    expect(totoroColors).toEqual(['gray']);
   });
 
   it('turtle has colors green and orange', () => {
     /**
      * Verifies the exact color list for turtle.
      */
-    // GIVEN / WHEN / THEN
-    expect(COLORS.turtle).toEqual(['green', 'orange']);
+    // GIVEN — the static COLORS registry
+
+    // WHEN — look up turtle colors
+    const turtleColors = COLORS.turtle;
+
+    // THEN — green and orange are the available variants
+    expect(turtleColors).toEqual(['green', 'orange']);
   });
 });
