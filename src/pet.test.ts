@@ -794,6 +794,118 @@ describe('Pet FSM — chase movement', () => {
 });
 
 // ---------------------------------------------------------------------------
+// horse and panda pet types
+// ---------------------------------------------------------------------------
+
+describe('Pet — horse and panda PetType support', () => {
+  it('constructs a horse pet and toData() returns type "horse"', () => {
+    /**
+     * Verifies that 'horse' is a valid PetType accepted by the Pet constructor
+     * and that toData() round-trips the type field correctly.
+     *
+     * This matters because PetType drives sprite asset path construction
+     * (assets/${type}/${color}_${gif}_8fps.gif). If 'horse' is not in the union,
+     * TypeScript will reject valid horse pets at compile time, and the renderer
+     * will never load horse sprites.
+     *
+     * If violated, adding a horse pet throws a TypeScript error and horse
+     * sprites are never rendered.
+     */
+    // GIVEN — a PetData record with type 'horse'
+    const data: import('./types').PetData = {
+      id: 'h1',
+      name: 'Thunder',
+      type: 'horse',
+      color: 'brown',
+      x: 100,
+      y: 0,
+    };
+
+    // WHEN — construct a Pet and snapshot it
+    const pet = new Pet(data);
+    const snapshot = pet.toData();
+
+    // THEN — type is preserved as 'horse'
+    expect(snapshot.type).toBe('horse');
+    expect(snapshot.id).toBe('h1');
+  });
+
+  it('constructs a panda pet and toData() returns type "panda"', () => {
+    /**
+     * Verifies that 'panda' is a valid PetType accepted by the Pet constructor
+     * and that toData() round-trips the type field correctly.
+     *
+     * This matters for the same reason as the horse test — the renderer uses
+     * pet.type to build asset URLs. If 'panda' is not in the union, panda pets
+     * are rejected at compile time and their sprites are never loaded.
+     *
+     * If violated, adding a panda pet throws a TypeScript error and panda
+     * sprites are never rendered.
+     */
+    // GIVEN — a PetData record with type 'panda'
+    const data: import('./types').PetData = {
+      id: 'p1',
+      name: 'Bamboo',
+      type: 'panda',
+      color: 'black',
+      x: 200,
+      y: 0,
+    };
+
+    // WHEN — construct a Pet and snapshot it
+    const pet = new Pet(data);
+    const snapshot = pet.toData();
+
+    // THEN — type is preserved as 'panda'
+    expect(snapshot.type).toBe('panda');
+    expect(snapshot.id).toBe('p1');
+  });
+
+  it('horse pet starts in sitIdle and FSM transitions work identically', () => {
+    /**
+     * Verifies that the FSM behaves the same for horse pets as for dog/fox pets —
+     * the FSM is type-agnostic and should not branch on pet type.
+     *
+     * This matters because the FSM drives all autonomous behavior (walking,
+     * sleeping, chasing). If a new type breaks FSM execution, horse/panda pets
+     * would appear frozen or crash on update.
+     *
+     * If violated, horse pets are frozen on the first frame.
+     */
+    // GIVEN — a horse pet in its initial state
+    const pet = new Pet({ id: 'h2', name: 'Thunder', type: 'horse', color: 'brown', x: 100, y: 0 });
+
+    // WHEN — advance time past the sitIdle timer
+    vi.spyOn(Math, 'random').mockReturnValue(0.0); // deterministic → walkLeft
+    pet.update(5, null);
+
+    // THEN — horse pet transitions out of sitIdle like any other pet
+    expect(pet.state).toBe('walkLeft');
+    vi.restoreAllMocks();
+  });
+
+  it('panda pet starts in sitIdle and FSM transitions work identically', () => {
+    /**
+     * Verifies that the FSM behaves the same for panda pets as for other types.
+     *
+     * Same contract as the horse FSM test — ensures type-agnostic FSM operation.
+     *
+     * If violated, panda pets are frozen or crash on the first update tick.
+     */
+    // GIVEN — a panda pet in its initial state
+    const pet = new Pet({ id: 'p2', name: 'Bamboo', type: 'panda', color: 'black', x: 100, y: 0 });
+
+    // WHEN — advance time past the sitIdle timer
+    vi.spyOn(Math, 'random').mockReturnValue(0.5); // deterministic → walkRight
+    pet.update(5, null);
+
+    // THEN — panda pet transitions out of sitIdle
+    expect(pet.state).toBe('walkRight');
+    vi.restoreAllMocks();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // toData snapshot
 // ---------------------------------------------------------------------------
 

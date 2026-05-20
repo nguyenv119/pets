@@ -1,5 +1,5 @@
 export type PetState = 'sitIdle' | 'walkLeft' | 'walkRight' | 'sleep' | 'chase' | 'idleWithBall' | 'eat';
-export type PetType = 'dog' | 'fox';
+export type PetType = 'dog' | 'fox' | 'horse' | 'panda';
 
 export interface PetData {
   id: string;

@@ -8,6 +8,8 @@ import { loadPetData, savePets } from '../store';
 const COLORS: Record<PetType, string[]> = {
   dog: ['brown', 'black'],
   fox: ['red', 'white'],
+  horse: ['brown', 'black'],
+  panda: ['black', 'brown'],
 };
 
 // ---------------------------------------------------------------------------
