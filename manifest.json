@@ -29,7 +29,17 @@
   "permissions": ["storage", "scripting"],
   "web_accessible_resources": [
     {
-      "resources": ["assets/dog/*.gif", "assets/fox/*.gif"],
+      "resources": [
+        "assets/chicken/*.gif",
+        "assets/crab/*.gif",
+        "assets/dog/*.gif",
+        "assets/fox/*.gif",
+        "assets/monkey/*.gif",
+        "assets/panda/*.gif",
+        "assets/snail/*.gif",
+        "assets/totoro/*.gif",
+        "assets/turtle/*.gif"
+      ],
       "matches": ["<all_urls>"]
     }
   ]

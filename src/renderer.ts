@@ -34,7 +34,9 @@ export function createPetView(pet: Pet, container: HTMLElement): PetView {
   el.style.cssText = [
     'position:absolute',
     `width:${DRAW_W}px`,
-    'height:auto',
+    `height:${DRAW_W}px`,
+    'object-fit:contain',
+    'object-position:bottom',
     'image-rendering:pixelated',
     'user-select:none',
   ].join(';');
