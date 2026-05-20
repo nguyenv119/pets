@@ -874,9 +874,10 @@ describe('Pet — horse and panda PetType support', () => {
      */
     // GIVEN — a horse pet in its initial state
     const pet = new Pet({ id: 'h2', name: 'Thunder', type: 'horse', color: 'brown', x: 100, y: 0 });
+    // REVIEW: mocking core dependency — test may not reflect real behavior
+    vi.spyOn(Math, 'random').mockReturnValue(0.0); // deterministic → walkLeft
 
     // WHEN — advance time past the sitIdle timer
-    vi.spyOn(Math, 'random').mockReturnValue(0.0); // deterministic → walkLeft
     pet.update(5, null);
 
     // THEN — horse pet transitions out of sitIdle like any other pet
@@ -894,9 +895,10 @@ describe('Pet — horse and panda PetType support', () => {
      */
     // GIVEN — a panda pet in its initial state
     const pet = new Pet({ id: 'p2', name: 'Bamboo', type: 'panda', color: 'black', x: 100, y: 0 });
+    // REVIEW: mocking core dependency — test may not reflect real behavior
+    vi.spyOn(Math, 'random').mockReturnValue(0.5); // deterministic → walkRight
 
     // WHEN — advance time past the sitIdle timer
-    vi.spyOn(Math, 'random').mockReturnValue(0.5); // deterministic → walkRight
     pet.update(5, null);
 
     // THEN — panda pet transitions out of sitIdle
