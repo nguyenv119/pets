@@ -1,14 +1,6 @@
 import type { PetData, PetType, ExtMessage } from '../types';
 import { loadPetData, savePets } from '../store';
-
-// ---------------------------------------------------------------------------
-// Color options per pet type
-// ---------------------------------------------------------------------------
-
-const COLORS: Record<PetType, string[]> = {
-  dog: ['brown', 'black'],
-  fox: ['red', 'white'],
-};
+import { COLORS } from './colors';
 
 // ---------------------------------------------------------------------------
 // DOM references
