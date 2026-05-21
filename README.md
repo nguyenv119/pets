@@ -11,10 +11,17 @@ Tiny pixel companions that live in your browser. They walk, sleep, chase balls, 
 
 ## Currently housing
 
-- Dogs (brown, black)
-- Foxes (red, white)
-
-More friends coming soon.
+| Pet | Colors |
+|-----|--------|
+| Dog | akita, black, brown, red, white |
+| Fox | red, white |
+| Panda | black, brown |
+| Turtle | green, orange |
+| Chicken | brown, white |
+| Monkey | gray |
+| Crab | red |
+| Snail | brown |
+| Totoro | gray |
 
 ## Install
 
