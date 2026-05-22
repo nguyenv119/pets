@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pixel Pets</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <div class="header-row">
+          <h1>Pixel Pets</h1>
+          <div class="header-actions">
+            <button id="btn-toggle" class="btn-icon" title="Show/hide pets">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+            <button id="btn-throw-ball" class="btn-icon" title="Throw ball on page">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M6 4c3 4 3 12 0 16"/><path d="M18 4c-3 4-3 12 0 16"/></svg>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <section id="pets-list">
+        <!-- Populated by popup.ts -->
+      </section>
+
+      <section id="add-pet-form">
+        <div class="form-grid">
+          <label for="pet-name">Name</label>
+          <input type="text" id="pet-name" placeholder="Rex" maxlength="16" />
+
+          <label for="pet-type">Type</label>
+          <select id="pet-type">
+            <option value="chicken">🐔 Chicken</option>
+            <option value="crab">🦀 Crab</option>
+            <option value="dog">🐕 Dog</option>
+            <option value="fox">🦊 Fox</option>
+            <option value="monkey">🐒 Monkey</option>
+            <option value="panda">🐼 Panda</option>
+            <option value="snail">🐌 Snail</option>
+            <option value="totoro">🌳 Totoro</option>
+            <option value="turtle">🐢 Turtle</option>
+          </select>
+
+          <label for="pet-color">Color</label>
+          <select id="pet-color">
+            <!-- Options populated dynamically based on type -->
+          </select>
+        </div>
+
+        <button id="btn-add" class="btn-primary">Add Pet</button>
+      </section>
+
+      <footer>
+        <p>Click a pet to feed · Double-click page to throw ball</p>
+        <p class="note">Your pets can't visit a few special pages like new tabs.</p>
+      </footer>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>

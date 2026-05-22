@@ -80,7 +80,8 @@ out
 
 # Nuxt.js build / generate output
 .nuxt
-dist
+# dist is intentionally tracked so users can install the extension without building
+# dist
 .output
 
 # Gatsby files
