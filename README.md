@@ -8,6 +8,8 @@ Tiny pixel companions that live in your browser. They walk, sleep, chase balls, 
 </p>
 
 <img width="700" alt="Pets on a webpage" src="https://github.com/user-attachments/assets/57ce7d23-6f53-405f-bf77-8506a7a640e3" />
+<img width="700" height="400" alt="image" src="https://github.com/user-attachments/assets/715f5198-b4cb-4eb2-97a3-cabdde314cf9" />
+
 
 ## Currently housing
 
