@@ -27,10 +27,11 @@ Tiny pixel companions that live in your browser. They walk, sleep, chase balls, 
 
 ## Install
 
-1. Download the zip file from this repo and unzip it
-2. Open `chrome://extensions` and enable **Developer mode** (toggle in the top right)
-3. Click **Load unpacked** and select the `dist/` folder
-4. Your first pet (Rex) appears automatically
+1. Clone this repo
+2. `npm install && node build.mjs`
+3. Open `chrome://extensions`, enable Developer mode
+4. Click "Load unpacked" and select the `dist/` folder
+5. Your first pet (Rex) appears automatically
 
 ## Controls
 
