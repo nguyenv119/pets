@@ -43,6 +43,14 @@ Tiny pixel companions that live in your browser. They walk, sleep, chase balls, 
 | Show/hide | Eye button in the popup |
 | Remove a pet | Hit the **x** on their card |
 
+## Credits
+
+Pet sprite GIFs are from [vscode-pets](https://github.com/tonybaloney/vscode-pets) by Anthony Shaw, used under the MIT License. See [LICENSE](LICENSE) for full text.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
 ---
 
 *They're not much, but they're yours.*

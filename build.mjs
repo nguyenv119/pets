@@ -37,6 +37,7 @@ await esbuild.build({
 // 4. Copy static assets
 cpSync('assets', 'dist/assets', { recursive: true });
 cpSync('src/popup/popup.css', 'dist/popup/popup.css');
+cpSync('LICENSE', 'dist/LICENSE');
 
 // 5. Write popup.html that references built JS (not .ts source)
 const popupHtml = readFileSync('src/popup/popup.html', 'utf-8')
