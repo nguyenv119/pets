@@ -8,6 +8,7 @@ export const COLORS: Record<PetType, string[]> = {
   fox:     ['red', 'white'],
   monkey:  ['gray'],
   panda:   ['black', 'brown'],
+  rabbit:  ['white'],
   snail:   ['brown'],
   totoro:  ['gray'],
   turtle:  ['green', 'orange'],
