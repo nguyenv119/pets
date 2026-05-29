@@ -33,7 +33,8 @@ from collections import deque
 from PIL import Image
 
 SRC = "/tmp/orig_run.gif"  # original corrupted run (git 9e6b3a8) — has distinct animated frames
-CANVAS_H = 100  # match idle's height so contain-scale matches (idle = 51x100)
+CANVAS_H = 80  # midpoint between original 66 (renders ~0.97 scale) and idle-matched 100
+               # (renders 0.64); 80 -> 0.80 scale, halfway in rendered size
 
 # strict palette
 TRANSP, WHITE, BLACK, BLUE = 0, 1, 2, 3
@@ -173,7 +174,7 @@ def verify(path):
 
 if __name__ == "__main__":
     frames, _ = build_frames()
-    save_gif(frames, "assets/rabbit/white_walk_8fps.gif", duration=125)
-    save_gif(frames, "assets/rabbit/white_run_8fps.gif", duration=75)
-    verify("assets/rabbit/white_walk_8fps.gif")
-    verify("assets/rabbit/white_run_8fps.gif")
+    save_gif(frames, "assets/miffy/white_walk_8fps.gif", duration=125)
+    save_gif(frames, "assets/miffy/white_run_8fps.gif", duration=75)
+    verify("assets/miffy/white_walk_8fps.gif")
+    verify("assets/miffy/white_run_8fps.gif")

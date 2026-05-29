@@ -24,6 +24,7 @@ Tiny pixel companions that live in your browser. They walk, sleep, chase balls, 
 | Crab | red |
 | Snail | brown |
 | Totoro | gray |
+| Miffy | white |
 
 ## Install
 
