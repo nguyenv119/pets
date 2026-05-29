@@ -1,5 +1,5 @@
 export type PetState = 'sitIdle' | 'walkLeft' | 'walkRight' | 'sleep' | 'chase' | 'idleWithBall' | 'eat';
-export type PetType = 'chicken' | 'crab' | 'dog' | 'fox' | 'monkey' | 'panda' | 'snail' | 'totoro' | 'turtle';
+export type PetType = 'chicken' | 'crab' | 'dog' | 'fox' | 'miffy' | 'monkey' | 'panda' | 'snail' | 'totoro' | 'turtle';
 
 export interface PetData {
   id: string;

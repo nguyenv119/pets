@@ -151,5 +151,3 @@ dolt/
 # Dolt database files (added by bd init)
 .dolt/
 *.db
-# bd worktree
-pets-bd-fuvi-hoz.16-chrome-ext-scaffold/
