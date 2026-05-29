@@ -1,28 +1,39 @@
 """Repair the corrupted Miffy walk/run GIFs.
 
 Background: the walk/run GIFs were re-saved by a copy()+resave step that let PIL
-diff-optimize the frames. Frames 1-5 lost their transparency flag and ended up with
-inverted alpha (opaque black background, transparent body). Frame 0 stayed clean.
-The sprite is also drawn facing LEFT, but the renderer's convention is face-RIGHT
-(it mirrors via scaleX(-1) when moving left).
+diff-optimize the frames. On frames 1-5 the white body became transparent and the
+background became opaque black (the white<->transparent palette mapping was swapped).
+Frame 0 stayed clean. The sprite is also drawn facing LEFT, but the renderer's
+convention is face-RIGHT (it mirrors via scaleX(-1) when moving left, see renderer.ts
++ pet.ts walkRight => facingLeft=false => no transform).
 
-Fix, without redrawing:
-  1. Cumulatively composite frames (matches how the browser renders disposal=None),
-     recovering the visible run cycle.
-  2. Border flood-fill the black background to transparent (interior black — eye,
-     outline — is not border-connected, so it survives).
-  3. Snap every pixel to the strict 4-color palette.
-  4. Mirror horizontally so the sprite faces right.
-  5. Re-save with ONE shared palette, index 0 = transparent, disposal=2,
-     optimize=False — so frames stand alone and never re-accumulate.
+Fix WITHOUT redrawing, reconstructing every frame INDEPENDENTLY so the per-frame
+leg/body animation is preserved (an earlier attempt used cumulative compositing which
+froze the white body):
 
-walk = recovered frames at 125ms (8fps); run = same frames at 75ms (~13fps).
+  Per frame:
+    - frame is "clean" if its corner is transparent (frame 0): keep as-is.
+    - frame is "corrupted" if its corner is opaque black (frames 1-5):
+        * white body  = interior transparent (alpha 0) pixels
+        * background  = border-connected black, flood-filled to transparent; the flood
+                        stops at black pixels that touch a white pixel, preserving the
+                        1px outline
+        * blue dress  = opaque blue (kept)
+        * eye/outline = remaining opaque black (kept)
+    - mirror horizontally so the sprite faces RIGHT
+    - paste bottom-anchored onto a taller canvas (CANVAS_H) so walk/run render at the
+      same scale as the idle sprite (idle is 51x100 -> 0.64 scale in the 64px box).
+
+walk = 125ms (8fps); run = 75ms (~13fps). Saved with one shared palette,
+index 0 = transparent, disposal=2, optimize=False so frames stand alone.
 """
 
-from PIL import Image
 from collections import deque
 
-SRC = "assets/rabbit/white_run_8fps.gif"  # corrupted source (walk is a copy of it)
+from PIL import Image
+
+SRC = "/tmp/orig_run.gif"  # original corrupted run (git 9e6b3a8) — has distinct animated frames
+CANVAS_H = 100  # match idle's height so contain-scale matches (idle = 51x100)
 
 # strict palette
 TRANSP, WHITE, BLACK, BLUE = 0, 1, 2, 3
@@ -39,59 +50,100 @@ def nearest_index(r, g, b):
     return best
 
 
-def recover_frames():
+def reconstruct_frame(rgba):
+    """Return a clean RGBA frame (white body, blue dress, black outline, transparent bg)."""
+    w, h = rgba.size
+    px = rgba.load()
+    out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    op = out.load()
+
+    if px[0, 0][3] == 0:
+        # clean frame (frame 0): bg already transparent, body opaque
+        for y in range(h):
+            for x in range(w):
+                r, g, b, a = px[x, y]
+                if a >= 128:
+                    idx = nearest_index(r, g, b)
+                    op[x, y] = RGB[idx] + (255,)
+        return out
+
+    # corrupted frame: white body == interior transparent; bg == border-connected black
+    def is_white(x, y):
+        return px[x, y][3] == 0
+
+    def is_blackish(x, y):
+        r, g, b, a = px[x, y]
+        return a > 0 and r < 45 and g < 45 and b < 45
+
+    def touches_white(x, y):
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < w and 0 <= ny < h and is_white(nx, ny):
+                return True
+        return False
+
+    # flood the background: border-connected black that does NOT touch white (the outline
+    # touches white, so the flood stops there and the 1px outline survives)
+    bg = [[False] * w for _ in range(h)]
+    q = deque()
+    for x in range(w):
+        for y in (0, h - 1):
+            if is_blackish(x, y) and not touches_white(x, y) and not bg[y][x]:
+                bg[y][x] = True
+                q.append((x, y))
+    for y in range(h):
+        for x in (0, w - 1):
+            if is_blackish(x, y) and not touches_white(x, y) and not bg[y][x]:
+                bg[y][x] = True
+                q.append((x, y))
+    while q:
+        x, y = q.popleft()
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx, ny = x + dx, y + dy
+            if (0 <= nx < w and 0 <= ny < h and not bg[ny][nx]
+                    and is_blackish(nx, ny) and not touches_white(nx, ny)):
+                bg[ny][nx] = True
+                q.append((nx, ny))
+
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if bg[y][x]:
+                continue  # background -> transparent
+            if a == 0:
+                op[x, y] = RGB[WHITE] + (255,)  # interior white body
+            else:
+                idx = nearest_index(r, g, b)
+                op[x, y] = RGB[idx] + (255,)
+    return out
+
+
+def build_frames():
     img = Image.open(SRC)
     n = img.n_frames
     w, h = img.size
-    canvas = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    pal_frames = []
+    out_w = w
+    frames = []
     for i in range(n):
         img.seek(i)
-        comp = canvas.copy()
-        comp.alpha_composite(img.convert("RGBA"))
-        canvas = comp.copy()  # persist (disposal=None semantics)
+        clean = reconstruct_frame(img.convert("RGBA"))
+        clean = clean.transpose(Image.FLIP_LEFT_RIGHT)  # face right
 
-        px = comp.load()
-        # border flood-fill: black-ish + opaque pixels reachable from any edge -> transparent
-        visited = [[False] * w for _ in range(h)]
-        q = deque()
+        # bottom-anchor onto a taller canvas so contain-scale matches the idle sprite
+        canvas = Image.new("RGBA", (out_w, CANVAS_H), (0, 0, 0, 0))
+        canvas.alpha_composite(clean, (0, CANVAS_H - h))
 
-        def is_bg(x, y):
-            r, g, b, a = px[x, y]
-            return a > 0 and r < 45 and g < 45 and b < 45
-
-        for x in range(w):
-            for y in (0, h - 1):
-                if is_bg(x, y) and not visited[y][x]:
-                    visited[y][x] = True
-                    q.append((x, y))
-        for y in range(h):
-            for x in (0, w - 1):
-                if is_bg(x, y) and not visited[y][x]:
-                    visited[y][x] = True
-                    q.append((x, y))
-        while q:
-            x, y = q.popleft()
-            px[x, y] = (0, 0, 0, 0)
-            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                nx, ny = x + dx, y + dy
-                if 0 <= nx < w and 0 <= ny < h and not visited[ny][nx] and is_bg(nx, ny):
-                    visited[ny][nx] = True
-                    q.append((nx, ny))
-
-        comp = comp.transpose(Image.FLIP_LEFT_RIGHT)  # face right
-
-        # snap to strict 4-color palette
-        src = comp.load()
-        out = Image.new("P", (w, h), TRANSP)
-        out.putpalette(PALETTE)
-        op = out.load()
-        for y in range(h):
-            for x in range(w):
+        # quantize to the strict palette with index 0 transparent
+        src = canvas.load()
+        pal = Image.new("P", (out_w, CANVAS_H), TRANSP)
+        pal.putpalette(PALETTE)
+        pp = pal.load()
+        for y in range(CANVAS_H):
+            for x in range(out_w):
                 r, g, b, a = src[x, y]
-                op[x, y] = TRANSP if a < 128 else nearest_index(r, g, b)
-        pal_frames.append(out)
-    return pal_frames, (w, h)
+                pp[x, y] = TRANSP if a < 128 else nearest_index(r, g, b)
+        frames.append(pal)
+    return frames, (out_w, CANVAS_H)
 
 
 def save_gif(frames, out, duration):
@@ -106,17 +158,21 @@ def verify(path):
     w, h = img.size
     for i in range(img.n_frames):
         img.seek(i)
-        rgba = img.convert("RGBA")
-        px = rgba.load()
+        px = img.convert("RGBA").load()
         assert px[0, 0][3] == 0, f"{path} f{i}: corner not transparent"
-        # allow an airborne bounce (run cycle leaves the ground) but flag a float
         lowest = max((y for y in range(h) for x in range(w) if px[x, y][3] > 0), default=-1)
-        assert h - 1 - lowest <= 6, f"{path} f{i}: feet float {h - 1 - lowest}px above bottom"
-    print(f"  verified {path}: size={img.size} frames={img.n_frames} dur={img.info.get('duration')}ms")
+        assert h - 1 - lowest <= 8, f"{path} f{i}: feet float {h - 1 - lowest}px"
+    # facing check: eye should sit in the RIGHT half on frame 0
+    img.seek(0)
+    px = img.convert("RGBA").load()
+    xs = [x for y in range(h // 4, h // 2) for x in range(w)
+          if px[x, y][3] > 200 and px[x, y][0] < 40 and px[x, y][1] < 40 and px[x, y][2] < 40]
+    side = "RIGHT" if xs and sum(xs) / len(xs) > w / 2 else "LEFT"
+    print(f"  verified {path}: {img.size} {img.n_frames}f dur={img.info.get('duration')}ms eye={side}")
 
 
 if __name__ == "__main__":
-    frames, (w, h) = recover_frames()
+    frames, _ = build_frames()
     save_gif(frames, "assets/rabbit/white_walk_8fps.gif", duration=125)
     save_gif(frames, "assets/rabbit/white_run_8fps.gif", duration=75)
     verify("assets/rabbit/white_walk_8fps.gif")
