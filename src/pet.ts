@@ -4,7 +4,7 @@ import type { PetData, PetState, PetType } from './types';
 const WALK_SPEED = 120;
 const CHASE_SPEED = 250;
 const CHASE_RANGE = 600; // pixels — how far a pet can "see" the ball
-const CATCH_DISTANCE = 25; // pixels — pet considers itself "at" the ball and stops
+export const CATCH_DISTANCE = 25; // pixels — pet considers itself "at" the ball and stops
 const CATCH_RESUME = 40;  // pixels — ball must move this far before pet resumes chasing
 
 // Timer range helpers
@@ -141,10 +141,11 @@ export class Pet {
       }
     }
 
-    // Ball deactivated while chasing → idle with ball
+    // Ball deactivated while chasing → return to sitIdle (only the catcher
+    // gets idleWithBall, via catch() called by content.ts on contact)
     if (this.state === 'chase' && (ball === null || !ball.active)) {
       this.nearBall = false;
-      this._transition('idleWithBall', 1.5);
+      this._transition('sitIdle', 1.5);
       return;
     }
 
@@ -182,6 +183,16 @@ export class Pet {
   /** Called when the ball is picked up; all pets return to idle. */
   onBallLanded(): void {
     this._transition('sitIdle', 1.5);
+  }
+
+  /**
+   * Called by content.ts when this pet is the first to physically contact the
+   * ball. Clears nearBall and transitions to idleWithBall so the pet holds the
+   * ball sprite. All other chasers receive onBallLanded() instead.
+   */
+  catch(): void {
+    this.nearBall = false;
+    this._transition('idleWithBall', 1.5);
   }
 
   /** Feed the pet: transitions to eat for 2s. No-op if currently chasing.

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Pet } from './pet';
+import { Pet, CATCH_DISTANCE } from './pet';
 import type { Ball } from './pet';
 import type { PetData } from './types';
 
@@ -846,5 +846,113 @@ describe('Pet FSM — toData()', () => {
 
     // THEN — snapshot x reflects the new position
     expect(data.x).toBeGreaterThan(200);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// catch() method
+// ---------------------------------------------------------------------------
+
+describe('Pet FSM — catch()', () => {
+  it('transitions a chasing pet to idleWithBall when catch() is called', () => {
+    /**
+     * Verifies that calling catch() on a pet in 'chase' immediately transitions
+     * it to 'idleWithBall' with a 1.5-second timer and clears the nearBall flag.
+     *
+     * This matters because catch() is the canonical way content.ts signals
+     * that a pet physically contacted the ball. Only the first pet to reach
+     * the ball should enter idleWithBall; all others must call onBallLanded()
+     * instead. If catch() does not set idleWithBall, the winning pet displays
+     * the wrong sprite and holds no ball.
+     *
+     * If violated, the catching pet stays in chase state after contact and
+     * never displays the ball-holding animation.
+     */
+    // GIVEN — a pet in chase state, nearBall set
+    const pet = makePet();
+    pet.state = 'chase';
+    pet['_timer'] = 10;
+    pet.nearBall = true;
+
+    // WHEN — content.ts detects contact and calls catch()
+    pet.catch();
+
+    // THEN — state is idleWithBall, nearBall cleared, timer is 1.5s
+    expect(pet.state).toBe('idleWithBall');
+    expect(pet['_timer']).toBe(1.5);
+    expect(pet.nearBall).toBe(false);
+  });
+
+  it('fires onTransition when catch() is called', () => {
+    /**
+     * Verifies that the onTransition callback fires after catch() triggers a
+     * state change.
+     *
+     * This matters because onTransition drives persistence. Without it, the
+     * idleWithBall state would not be saved and could be lost on page reload.
+     *
+     * If violated, the catch state transition is not persisted.
+     */
+    // GIVEN — a pet in chase with an onTransition spy
+    const pet = makePet();
+    pet.state = 'chase';
+    const onTransition = vi.fn();
+    pet.onTransition = onTransition;
+
+    // WHEN — catch() called
+    pet.catch();
+
+    // THEN — callback fired once
+    expect(onTransition).toHaveBeenCalledOnce();
+  });
+
+  it('exports CATCH_DISTANCE as a positive number', () => {
+    /**
+     * Verifies that CATCH_DISTANCE is exported from pet.ts and is a positive
+     * number, so content.ts can import it for contact detection without
+     * duplicating the magic constant.
+     *
+     * This matters because if the constant is duplicated, the two values can
+     * drift apart over time — pets would visually appear to catch the ball
+     * at the wrong distance.
+     *
+     * If violated, content.ts would need a hard-coded copy of the distance
+     * that silently diverges from the pet's own nearBall threshold.
+     */
+    // GIVEN — imported CATCH_DISTANCE from pet.ts
+
+    // WHEN — reading the exported value
+
+    // THEN — it is a positive finite number
+    expect(typeof CATCH_DISTANCE).toBe('number');
+    expect(CATCH_DISTANCE).toBeGreaterThan(0);
+    expect(Number.isFinite(CATCH_DISTANCE)).toBe(true);
+  });
+
+  it('transitions a chasing pet to sitIdle (NOT idleWithBall) when ball becomes inactive', () => {
+    /**
+     * Verifies that when a chasing pet calls update() with a deactivated ball
+     * (ball.active === false), it transitions to 'sitIdle' rather than
+     * 'idleWithBall'.
+     *
+     * This matters because only the pet that physically contacted the ball
+     * (via catch()) should hold it. All other chasers must fall back to
+     * sitIdle when the ball stops. Granting idleWithBall to every pet when the
+     * ball deactivates made it appear that every pet caught the ball.
+     *
+     * If violated, every pet that was chasing transitions to idleWithBall and
+     * displays a ball-holding sprite when only one should.
+     */
+    // GIVEN — a pet in chase state, ball has just become inactive
+    const pet = makePet({ x: 200 });
+    pet.state = 'chase';
+    pet['_timer'] = 10;
+    const inactiveBall: Ball = { active: false, x: 300, y: 300 };
+
+    // WHEN — update is called with the inactive ball
+    pet.update(0.016, inactiveBall, 800);
+
+    // THEN — pet transitions to sitIdle, not idleWithBall
+    expect(pet.state).toBe('sitIdle');
   });
 });
