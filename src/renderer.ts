@@ -37,12 +37,12 @@ const TYPE_SCALE: Partial<Record<PetType, number>> = {
 };
 
 /**
- * Resolves the gif name for a given pet type, state, nearBall flag, and hovered flag.
- * When hovered is true and the type has a swipe gif, returns "swipe" regardless of state.
+ * Resolves the gif name for a given pet type, state, nearBall flag, hovered flag, and greeting flag.
+ * When hovered or greeting is true and the type has a swipe gif, returns "swipe" regardless of state.
  * Exported for testing.
  */
-export function resolveGifName(type: PetType, state: PetState, nearBall: boolean, hovered = false): string {
-  if (hovered && HAS_SWIPE.has(type)) return 'swipe';
+export function resolveGifName(type: PetType, state: PetState, nearBall: boolean, hovered = false, greeting = false): string {
+  if ((hovered || greeting) && HAS_SWIPE.has(type)) return 'swipe';
   if (state === 'chase' && nearBall) return 'idle';
   const gif = STATE_TO_GIF[state];
   if (gif === 'lie' && !HAS_LIE.has(type)) return 'idle';
@@ -62,6 +62,7 @@ export interface PetView {
   _lastState: PetState;
   _lastNearBall: boolean;
   _lastHovered: boolean;
+  _lastGreeting: boolean;
 }
 
 export function createPetView(pet: Pet, container: HTMLElement): PetView {
@@ -79,18 +80,24 @@ export function createPetView(pet: Pet, container: HTMLElement): PetView {
     'user-select:none',
   ].join(';');
   container.appendChild(el);
-  return { el, _lastState: 'sitIdle', _lastNearBall: false, _lastHovered: false };
+  return { el, _lastState: 'sitIdle', _lastNearBall: false, _lastHovered: false, _lastGreeting: false };
 }
 
 export function updatePetView(view: PetView, pet: Pet): void {
   const d = pet.toData();
-  const effectiveGif = resolveGifName(d.type, pet.state, pet.nearBall, pet.hovered);
+  const effectiveGif = resolveGifName(d.type, pet.state, pet.nearBall, pet.hovered, pet.greeting);
 
-  if (pet.state !== view._lastState || pet.nearBall !== view._lastNearBall || pet.hovered !== view._lastHovered) {
+  if (
+    pet.state !== view._lastState ||
+    pet.nearBall !== view._lastNearBall ||
+    pet.hovered !== view._lastHovered ||
+    pet.greeting !== view._lastGreeting
+  ) {
     view.el.src = getAssetURL(`assets/${d.type}/${d.color}_${effectiveGif}_8fps.gif`);
     view._lastState = pet.state;
     view._lastNearBall = pet.nearBall;
     view._lastHovered = pet.hovered;
+    view._lastGreeting = pet.greeting;
   }
   view.el.style.left = `${pet.x}px`;
   view.el.style.top = `${pet.y}px`;
