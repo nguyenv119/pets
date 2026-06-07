@@ -68,6 +68,96 @@ function renderPetList(): void {
       removePet(id);
     });
   });
+
+}
+
+// ---------------------------------------------------------------------------
+// Drag-and-drop reorder
+// ---------------------------------------------------------------------------
+
+function getItemAtY(y: number): HTMLElement | null {
+  const items = Array.from(petsList.querySelectorAll<HTMLElement>('.pet-item'));
+  for (const item of items) {
+    const rect = item.getBoundingClientRect();
+    if (y >= rect.top && y <= rect.bottom) return item;
+  }
+  return null;
+}
+
+function clearDropClasses(): void {
+  petsList.querySelectorAll<HTMLElement>('.pet-item').forEach(el => {
+    el.classList.remove('drop-before', 'drop-after');
+  });
+}
+
+function initDragAndDrop(): void {
+  petsList.addEventListener('dragstart', (e: DragEvent) => {
+    const item = (e.target as HTMLElement).closest<HTMLElement>('.pet-item');
+    if (!item) return;
+    e.dataTransfer!.setData('text/plain', item.dataset.id!);
+    e.dataTransfer!.effectAllowed = 'move';
+    // defer so the drag image captures the normal state
+    setTimeout(() => item.classList.add('dragging'), 0);
+  });
+
+  petsList.addEventListener('dragover', (e: DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer!.dropEffect = 'move';
+    clearDropClasses();
+    const hovered = getItemAtY(e.clientY);
+    if (!hovered) return;
+    const rect = hovered.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    if (e.clientY < midY) {
+      hovered.classList.add('drop-before');
+    } else {
+      hovered.classList.add('drop-after');
+    }
+  });
+
+  petsList.addEventListener('dragleave', (e: DragEvent) => {
+    // Only clear if leaving the entire list
+    if (!petsList.contains(e.relatedTarget as Node)) {
+      clearDropClasses();
+    }
+  });
+
+  petsList.addEventListener('drop', async (e: DragEvent) => {
+    e.preventDefault();
+    clearDropClasses();
+    petsList.querySelectorAll<HTMLElement>('.pet-item').forEach(el => el.classList.remove('dragging'));
+
+    const draggedId = e.dataTransfer!.getData('text/plain');
+    const hovered = getItemAtY(e.clientY);
+    if (!hovered) return;
+    const targetId = hovered.dataset.id!;
+    if (draggedId === targetId) return;
+
+    const draggedIdx = pets.findIndex(p => p.id === draggedId);
+    const targetIdx = pets.findIndex(p => p.id === targetId);
+    if (draggedIdx === -1 || targetIdx === -1) return;
+
+    // Determine insert position: before or after target
+    const rect = hovered.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    const insertAfter = e.clientY >= midY;
+
+    // Splice dragged item out then insert at new position
+    const [dragged] = pets.splice(draggedIdx, 1);
+    const newTargetIdx = pets.findIndex(p => p.id === targetId);
+    pets.splice(insertAfter ? newTargetIdx + 1 : newTargetIdx, 0, dragged);
+
+    await savePets(pets);
+    renderPetList();
+
+    const msg: ExtMessage = { type: 'PETS_REORDERED', pets: [...pets] };
+    chrome.runtime.sendMessage(msg);
+  });
+
+  petsList.addEventListener('dragend', () => {
+    clearDropClasses();
+    petsList.querySelectorAll<HTMLElement>('.pet-item').forEach(el => el.classList.remove('dragging'));
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -194,6 +284,7 @@ async function init(): Promise<void> {
 
   pets = await loadPetData();
   renderPetList();
+  initDragAndDrop();
   setAddFormExpanded(pets.length === 0);
 
   // Probe whether the content script is alive on the active tab.

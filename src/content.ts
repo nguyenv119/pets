@@ -365,6 +365,23 @@ chrome.runtime.onMessage.addListener((msg: ExtMessage, _sender, sendResponse) =>
       chrome.storage.local.set({ 'pixel-pets-visible': msg.visible });
       break;
     }
+    case 'PETS_REORDERED': {
+      // Reconcile local pets[] order by id — preserve existing Pet objects,
+      // do NOT recreate views. Match by id then rebuild pets[] in incoming order.
+      const incoming = msg.pets;
+      const petById = new Map<string, Pet>(pets.map(p => [p.toData().id, p]));
+      const reordered: Pet[] = [];
+      for (const data of incoming) {
+        const existing = petById.get(data.id);
+        if (existing) reordered.push(existing);
+      }
+      // Append any pets not in the incoming list (shouldn't normally happen)
+      for (const p of pets) {
+        if (!reordered.includes(p)) reordered.push(p);
+      }
+      pets = reordered;
+      break;
+    }
   }
 });
 
