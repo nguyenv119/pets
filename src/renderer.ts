@@ -1,5 +1,5 @@
 import type { Pet } from './pet';
-import type { PetState } from './types';
+import type { PetState, PetType } from './types';
 
 export const DRAW_W = 64;
 
@@ -12,6 +12,25 @@ const STATE_TO_GIF: Record<PetState, string> = {
   idleWithBall:'idle',
   eat:         'idle',
 };
+
+/**
+ * Pet types that have a "lie" gif. New types (cockatiel, rat, snake, horse)
+ * do not include a lie animation, so sleep falls back to "idle" for them.
+ */
+const HAS_LIE: ReadonlySet<PetType> = new Set([
+  'chicken', 'crab', 'dog', 'fox', 'miffy', 'monkey', 'panda', 'snail', 'totoro', 'turtle',
+]);
+
+/**
+ * Resolves the gif name for a given pet type, state, and nearBall flag.
+ * Exported for testing.
+ */
+export function resolveGifName(type: PetType, state: PetState, nearBall: boolean): string {
+  if (state === 'chase' && nearBall) return 'idle';
+  const gif = STATE_TO_GIF[state];
+  if (gif === 'lie' && !HAS_LIE.has(type)) return 'idle';
+  return gif;
+}
 
 /** Resolve an asset path — uses chrome.runtime.getURL in extension context */
 export function getAssetURL(path: string): string {
@@ -46,11 +65,7 @@ export function createPetView(pet: Pet, container: HTMLElement): PetView {
 
 export function updatePetView(view: PetView, pet: Pet): void {
   const d = pet.toData();
-
-  // When chasing but close to ball, show idle GIF instead of run-in-place
-  const effectiveGif = (pet.state === 'chase' && pet.nearBall)
-    ? 'idle'
-    : STATE_TO_GIF[pet.state];
+  const effectiveGif = resolveGifName(d.type, pet.state, pet.nearBall);
 
   if (pet.state !== view._lastState || pet.nearBall !== view._lastNearBall) {
     view.el.src = getAssetURL(`assets/${d.type}/${d.color}_${effectiveGif}_8fps.gif`);
