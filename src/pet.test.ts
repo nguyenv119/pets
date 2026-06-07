@@ -956,3 +956,120 @@ describe('Pet FSM — catch()', () => {
     expect(pet.state).toBe('sitIdle');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Pet.hovered flag
+// ---------------------------------------------------------------------------
+
+describe('Pet.hovered flag', () => {
+  it('starts as false by default', () => {
+    /**
+     * Verifies that the hovered flag is initialized to false on construction.
+     *
+     * This matters because a newly created pet has never been hovered — showing
+     * a swipe gif before any interaction would be incorrect visual feedback.
+     *
+     * If violated, every new pet spawns playing the swipe animation without
+     * the user hovering over it.
+     */
+    // GIVEN — a freshly constructed pet
+    const pet = makePet();
+
+    // WHEN — no interaction
+
+    // THEN — hovered is false
+    expect(pet.hovered).toBe(false);
+  });
+
+  it('can be set to true', () => {
+    /**
+     * Verifies that the hovered flag can be toggled on by external code
+     * (content.ts mouseenter handler).
+     *
+     * This matters because the hover state drives the swipe gif override in
+     * renderer.ts. If the flag cannot be set, the wave animation never triggers.
+     *
+     * If violated, mouseenter in content.ts cannot signal the hover state and
+     * the swipe animation never plays.
+     */
+    // GIVEN — a freshly constructed pet
+    const pet = makePet();
+
+    // WHEN — set hovered to true
+    pet.hovered = true;
+
+    // THEN — hovered is true
+    expect(pet.hovered).toBe(true);
+  });
+
+  it('is not included in toData() serialization', () => {
+    /**
+     * Verifies that the hovered flag is ephemeral and not persisted to storage
+     * via toData().
+     *
+     * This matters because hover is a transient interaction state — if it were
+     * persisted, pets could reload in a permanently-hovered state, showing the
+     * wave animation after page refresh without any user input.
+     *
+     * If violated, pets reload waving at the user after a page navigation.
+     */
+    // GIVEN — a pet with hovered set to true
+    const pet = makePet();
+    pet.hovered = true;
+
+    // WHEN — serialize to data
+    const data = pet.toData();
+
+    // THEN — hovered is not in the serialized output
+    expect('hovered' in data).toBe(false);
+  });
+
+  it('update() returns early without moving when hovered is true (walk state)', () => {
+    /**
+     * Verifies that a hovered pet does not update its position or FSM during
+     * the walk animation so the pet appears "frozen" while the user hovers.
+     *
+     * This matters because a pet walking off-screen while the user tries to
+     * interact with it is poor UX — pausing motion during hover keeps the pet
+     * in frame.
+     *
+     * If violated, pets continue walking (and possibly leaving the screen) while
+     * the user is hovering over them.
+     */
+    // GIVEN — a pet in walkRight state with hovered=true
+    const pet = makePet({ x: 100 });
+    pet.state = 'walkRight';
+    pet._timer = 10;
+    pet.hovered = true;
+    const initialX = pet.x;
+
+    // WHEN — advance 1 second
+    pet.update(1, null, 800);
+
+    // THEN — x did not change (early return prevented movement)
+    expect(pet.x).toBe(initialX);
+  });
+
+  it('update() resumes normal FSM when hovered is false', () => {
+    /**
+     * Verifies that removing the hover flag (mouseleave) allows the pet to
+     * resume its normal movement and FSM progression.
+     *
+     * This matters because a pet that stays frozen after the user moves the
+     * cursor away would break the autonomous wandering behavior permanently.
+     *
+     * If violated, pets freeze permanently after being hovered once.
+     */
+    // GIVEN — a pet in walkRight state with hovered=false
+    const pet = makePet({ x: 100 });
+    pet.state = 'walkRight';
+    pet._timer = 10;
+    pet.hovered = false;
+
+    // WHEN — advance 1 second
+    pet.update(1, null, 800);
+
+    // THEN — x increased (pet moved right)
+    expect(pet.x).toBeGreaterThan(100);
+  });
+});

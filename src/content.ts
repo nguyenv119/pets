@@ -7,6 +7,7 @@ import {
   removePetView,
   spawnFeedParticle,
   spawnLoveParticle,
+  spawnWaveParticle,
   updateParticles,
   drawParticles,
   drawBall,
@@ -142,6 +143,18 @@ function addPetToScene(pet: Pet): void {
   // Prevent double-clicks on pets from dropping a ball
   view.el.addEventListener('dblclick', (e) => {
     e.stopPropagation();
+  });
+
+  // Hover: show wave animation and spawn 👋 particle (Miffy excluded — no swipe gif)
+  view.el.addEventListener('mouseenter', () => {
+    pet.hovered = true;
+    if (pet.type !== 'miffy' && particles.length < MAX_PARTICLES) {
+      particles.push(spawnWaveParticle(pet));
+    }
+  });
+
+  view.el.addEventListener('mouseleave', () => {
+    pet.hovered = false;
   });
 }
 
