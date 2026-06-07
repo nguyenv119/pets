@@ -266,8 +266,14 @@ document.addEventListener('dblclick', (e) => {
 // Message handling (from popup via service worker)
 // ---------------------------------------------------------------------------
 
-chrome.runtime.onMessage.addListener((msg: ExtMessage) => {
+chrome.runtime.onMessage.addListener((msg: ExtMessage, _sender, sendResponse) => {
   switch (msg.type) {
+    case 'PING': {
+      // Reply so the popup knows the content script is alive on this tab.
+      // Return true to keep the message channel open for the async response.
+      sendResponse({ alive: true });
+      return true;
+    }
     case 'ADD_PET': {
       const newPet = makePet(msg.pet);
       pets.push(newPet);

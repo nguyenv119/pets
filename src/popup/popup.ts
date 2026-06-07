@@ -1,6 +1,7 @@
 import type { PetData, PetType, ExtMessage } from '../types';
 import { loadPetData, savePets } from '../store';
 import { COLORS } from './colors';
+import { pingTab } from './tab-probe';
 
 // ---------------------------------------------------------------------------
 // DOM references
@@ -11,8 +12,9 @@ const nameInput = document.getElementById('pet-name') as HTMLInputElement;
 const typeSelect = document.getElementById('pet-type') as HTMLSelectElement;
 const colorSelect = document.getElementById('pet-color') as HTMLSelectElement;
 const btnAdd = document.getElementById('btn-add')!;
-const btnThrowBall = document.getElementById('btn-throw-ball')!;
+const btnThrowBall = document.getElementById('btn-throw-ball') as HTMLButtonElement;
 const btnToggle = document.getElementById('btn-toggle')!;
+const specialPageBanner = document.getElementById('special-page-banner')!;
 
 // ---------------------------------------------------------------------------
 // State
@@ -139,6 +141,15 @@ btnThrowBall.addEventListener('click', throwBall);
 btnToggle.addEventListener('click', toggleVisibility);
 
 // ---------------------------------------------------------------------------
+// Special-page detection
+// ---------------------------------------------------------------------------
+
+function showSpecialPageBanner(): void {
+  specialPageBanner.removeAttribute('hidden');
+  btnThrowBall.disabled = true;
+}
+
+// ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
 
@@ -155,6 +166,12 @@ async function init(): Promise<void> {
 
   pets = await loadPetData();
   renderPetList();
+
+  // Probe whether the content script is alive on the active tab.
+  // If not (special browser page), show the banner and disable Throw Ball.
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const alive = tab?.id != null && await pingTab(tab.id);
+  if (!alive) showSpecialPageBanner();
 }
 
 init();
