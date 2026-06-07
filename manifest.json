@@ -31,13 +31,17 @@
     {
       "resources": [
         "assets/chicken/*.gif",
+        "assets/cockatiel/*.gif",
         "assets/crab/*.gif",
         "assets/dog/*.gif",
         "assets/fox/*.gif",
+        "assets/horse/*.gif",
         "assets/miffy/*.gif",
         "assets/monkey/*.gif",
         "assets/panda/*.gif",
+        "assets/rat/*.gif",
         "assets/snail/*.gif",
+        "assets/snake/*.gif",
         "assets/totoro/*.gif",
         "assets/turtle/*.gif"
       ],

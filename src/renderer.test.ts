@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import { spawnFeedParticle, updateParticles, drawParticles } from './renderer';
+import { spawnFeedParticle, updateParticles, drawParticles, resolveGifName } from './renderer';
 import type { Particle } from './renderer';
 import { Pet } from './pet';
 import type { PetData } from './types';
@@ -39,6 +39,141 @@ function makeCtxStub(): CanvasRenderingContext2D {
   } as unknown as CanvasRenderingContext2D;
   return stub;
 }
+
+// ---------------------------------------------------------------------------
+// resolveGifName — HAS_LIE fallback
+// ---------------------------------------------------------------------------
+
+describe('resolveGifName', () => {
+  it('returns "lie" for a legacy type (chicken) in sleep state', () => {
+    /**
+     * Verifies that pet types from the original roster (which have a lie gif)
+     * still map the sleep state to "lie".
+     *
+     * This matters because those GIF files exist on disk and are the correct
+     * animation. Switching to "idle" for these types would play the wrong
+     * animation when a pet is sleeping.
+     *
+     * If violated, legacy pets play the idle animation while sleeping instead
+     * of lying down.
+     */
+    // GIVEN — a legacy type that has a lie gif
+    // WHEN — resolving gif name for sleep state
+    const result = resolveGifName('chicken', 'sleep', false);
+
+    // THEN — returns "lie"
+    expect(result).toBe('lie');
+  });
+
+  it('returns "idle" for a new type (cockatiel) in sleep state', () => {
+    /**
+     * Verifies that new pet types (cockatiel, rat, snake, horse) which do NOT
+     * have a lie gif fall back to "idle" when the state is "sleep".
+     *
+     * This matters because requesting a non-existent lie gif produces a 404,
+     * leaving the pet sprite broken. Falling back to idle is the correct
+     * visual behavior for these types.
+     *
+     * If violated, cockatiel/rat/snake/horse pets show a broken image when
+     * sleeping instead of the idle animation.
+     */
+    // GIVEN — a new type that lacks a lie gif
+    // WHEN — resolving gif name for sleep state
+    const result = resolveGifName('cockatiel', 'sleep', false);
+
+    // THEN — returns "idle" (no lie gif exists for this type)
+    expect(result).toBe('idle');
+  });
+
+  it('returns "idle" for rat in sleep state', () => {
+    /**
+     * Verifies the lie fallback applies consistently to all new animal types,
+     * specifically rat.
+     *
+     * Same reasoning as the cockatiel test — rat has no lie gif so idle is used.
+     *
+     * If violated, rat pets show broken images while sleeping.
+     */
+    // GIVEN — rat is a new type without a lie gif
+    // WHEN — resolving gif name for sleep
+    const result = resolveGifName('rat', 'sleep', false);
+
+    // THEN — idle fallback applied
+    expect(result).toBe('idle');
+  });
+
+  it('returns "idle" for snake in sleep state', () => {
+    /**
+     * Verifies the sleep→idle fallback applies to snake.
+     *
+     * Snake has no `green_lie_8fps.gif` upstream (vscode-pets), so requesting
+     * the lie gif would 404 and the sprite would render as a broken-image
+     * icon mid-sleep. The fallback keeps it on its idle gif instead.
+     *
+     * If violated, sleeping snakes flash a broken-image placeholder.
+     */
+    // GIVEN — snake is a new type without a lie gif
+    // WHEN — resolving gif name for sleep
+    const result = resolveGifName('snake', 'sleep', false);
+
+    // THEN — idle fallback applied
+    expect(result).toBe('idle');
+  });
+
+  it('returns "idle" for horse in sleep state', () => {
+    /**
+     * Verifies the sleep→idle fallback applies to horse.
+     *
+     * Horse has no `<color>_lie_8fps.gif` upstream for any of its 11 variants;
+     * without the fallback every sleeping horse (any color/paint/socks variant)
+     * would render as a broken-image icon.
+     *
+     * If violated, sleeping horses flash a broken-image placeholder.
+     */
+    // GIVEN — horse is a new type without a lie gif
+    // WHEN — resolving gif name for sleep
+    const result = resolveGifName('horse', 'sleep', false);
+
+    // THEN — idle fallback applied
+    expect(result).toBe('idle');
+  });
+
+  it('returns "run" for cockatiel in chase state (non-sleep states unaffected)', () => {
+    /**
+     * Verifies that only the sleep state triggers the lie fallback — all other
+     * states (including chase) still map normally for new types.
+     *
+     * This matters because a blanket fallback would break the run animation
+     * while chasing a ball, not just the sleep animation.
+     *
+     * If violated, new pet types never run — they idle even when chasing.
+     */
+    // GIVEN — a new type in the chase state
+    // WHEN — resolving gif name
+    const result = resolveGifName('cockatiel', 'chase', false);
+
+    // THEN — returns "run" (normal mapping, no fallback needed)
+    expect(result).toBe('run');
+  });
+
+  it('returns "idle" for chase state when nearBall is true (existing behavior)', () => {
+    /**
+     * Verifies that the nearBall override still works for new types: when a
+     * pet is chasing but is already at the ball, it should show idle not run.
+     *
+     * This ensures the HAS_LIE change does not break the nearBall logic.
+     *
+     * If violated, pets at the ball still play the run animation, which looks
+     * wrong (spinning in place).
+     */
+    // GIVEN — a new type chasing but with nearBall = true
+    // WHEN — resolving gif name
+    const result = resolveGifName('horse', 'chase', true);
+
+    // THEN — idle (nearBall override takes priority)
+    expect(result).toBe('idle');
+  });
+});
 
 // ---------------------------------------------------------------------------
 // spawnFeedParticle

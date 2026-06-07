@@ -6,10 +6,11 @@ import { COLORS } from './colors';
 // ---------------------------------------------------------------------------
 
 describe('COLORS — pet type registry', () => {
-  it('contains entries for all 9 expected pet types', () => {
+  it('contains entries for all 14 expected pet types', () => {
     /**
      * Verifies that the COLORS map has an entry for every PetType in the
-     * expanded roster: chicken, crab, dog, fox, monkey, panda, snail, totoro, turtle.
+     * expanded roster: chicken, crab, dog, fox, miffy, monkey, panda, snail, totoro,
+     * turtle, cockatiel, rat, snake, horse.
      *
      * This matters because populateColors() indexes into COLORS by type. A
      * missing entry returns undefined, causing colorSelect to render no options
@@ -20,33 +21,97 @@ describe('COLORS — pet type registry', () => {
      */
     // GIVEN — the COLORS registry
     const expectedTypes = [
-      'chicken', 'crab', 'dog', 'fox', 'monkey', 'panda', 'snail', 'totoro', 'turtle',
+      'chicken', 'crab', 'dog', 'fox', 'miffy', 'monkey', 'panda', 'snail', 'totoro', 'turtle',
+      'cockatiel', 'rat', 'snake', 'horse',
     ] as const;
 
     // WHEN — check every expected type
     for (const type of expectedTypes) {
       // THEN — each type has at least one color
-      expect(COLORS[type], `COLORS['${type}'] should be defined`).toBeDefined();
-      expect(COLORS[type].length, `COLORS['${type}'] should have at least 1 color`).toBeGreaterThan(0);
+      expect((COLORS as Record<string, string[] | undefined>)[type], `COLORS['${type}'] should be defined`).toBeDefined();
+      expect((COLORS as Record<string, string[] | undefined>)[type]!.length, `COLORS['${type}'] should have at least 1 color`).toBeGreaterThan(0);
     }
   });
 
-  it('does NOT contain an entry for horse', () => {
+  it('contains entries for the 4 new pet types', () => {
     /**
-     * Verifies that horse has been removed from the COLORS map as part of the
-     * roster update.
+     * Verifies that cockatiel, rat, snake, and horse were added to the COLORS map.
      *
-     * This matters because leftover keys for removed animals would cause TypeScript
-     * to complain about surplus properties and could confuse future maintainers
-     * about which types are canonical.
+     * This matters because populateColors() indexes into COLORS by type. A
+     * missing entry returns undefined, causing an empty color dropdown and
+     * blocking the Add Pet flow for the new animals.
      *
-     * If violated, horse still appears as an option (or as a dead key) in the map,
-     * cluttering the codebase with orphaned data.
+     * If violated, users who select a new animal type see no color options and
+     * cannot complete the Add Pet form.
      */
     // GIVEN — the COLORS registry
-    // WHEN — look up horse
-    // THEN — horse is not present
-    expect((COLORS as Record<string, string[] | undefined>)['horse']).toBeUndefined();
+    const newTypes = ['cockatiel', 'rat', 'snake', 'horse'] as const;
+
+    // WHEN — check every new type
+    for (const type of newTypes) {
+      // THEN — each type has at least one color
+      expect((COLORS as Record<string, string[] | undefined>)[type], `COLORS['${type}'] should be defined`).toBeDefined();
+    }
+  });
+
+  it('cockatiel has colors brown and gray', () => {
+    /**
+     * Verifies the exact color list for cockatiel matches the available GIF files.
+     *
+     * The GIF filenames use these exact color strings. An incorrect entry would
+     * resolve to a missing file, breaking the sprite for that color variant.
+     *
+     * If violated, one or both cockatiel colors render with broken images.
+     */
+    // GIVEN — the static COLORS registry
+    // WHEN — look up cockatiel colors
+    const colors = (COLORS as Record<string, string[]>)['cockatiel'];
+    // THEN — brown and gray are the available variants
+    expect(colors).toEqual(['brown', 'gray']);
+  });
+
+  it('rat has colors brown, gray, and white', () => {
+    /**
+     * Verifies the exact color list for rat matches the available GIF files.
+     */
+    // GIVEN — the static COLORS registry
+    // WHEN — look up rat colors
+    const colors = (COLORS as Record<string, string[]>)['rat'];
+    // THEN — three variants
+    expect(colors).toEqual(['brown', 'gray', 'white']);
+  });
+
+  it('snake has only color green', () => {
+    /**
+     * Verifies that snake is limited to its single available color (green).
+     */
+    // GIVEN — the static COLORS registry
+    // WHEN — look up snake colors
+    const colors = (COLORS as Record<string, string[]>)['snake'];
+    // THEN — green is the only variant
+    expect(colors).toEqual(['green']);
+  });
+
+  it('horse has all 11 color variants', () => {
+    /**
+     * Verifies that all 11 horse color variants are registered. Horse has the
+     * largest palette in the roster including named patterns (paint_*, socks_*,
+     * magical, warrior).
+     *
+     * Missing any variant would prevent that horse color from being selectable
+     * and its GIF would never be requested despite being downloaded.
+     *
+     * If violated, some horse color variants are inaccessible from the UI.
+     */
+    // GIVEN — the static COLORS registry
+    // WHEN — look up horse colors
+    const colors = (COLORS as Record<string, string[]>)['horse'];
+    // THEN — all 11 variants
+    expect(colors).toEqual([
+      'black', 'brown', 'white', 'magical', 'warrior',
+      'paint_beige', 'paint_black', 'paint_brown',
+      'socks_beige', 'socks_black', 'socks_brown',
+    ]);
   });
 
   it('chicken has colors brown and white', () => {

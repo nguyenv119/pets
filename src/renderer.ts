@@ -1,5 +1,5 @@
 import type { Pet } from './pet';
-import type { PetState } from './types';
+import type { PetState, PetType } from './types';
 
 export const DRAW_W = 64;
 
@@ -12,6 +12,32 @@ const STATE_TO_GIF: Record<PetState, string> = {
   idleWithBall:'idle',
   eat:         'idle',
 };
+
+/**
+ * Pet types that have a "lie" gif. New types (cockatiel, rat, snake, horse)
+ * do not include a lie animation, so sleep falls back to "idle" for them.
+ */
+const HAS_LIE: ReadonlySet<PetType> = new Set([
+  'chicken', 'crab', 'dog', 'fox', 'miffy', 'monkey', 'panda', 'snail', 'totoro', 'turtle',
+]);
+
+// Upstream snake sprite (90x90) fills its bounding box edge-to-edge while other
+// pets have padding, so it renders visibly larger than peers. Scale down so its
+// on-screen footprint roughly matches dog/cockatiel/horse.
+const TYPE_SCALE: Partial<Record<PetType, number>> = {
+  snake: 0.5,
+};
+
+/**
+ * Resolves the gif name for a given pet type, state, and nearBall flag.
+ * Exported for testing.
+ */
+export function resolveGifName(type: PetType, state: PetState, nearBall: boolean): string {
+  if (state === 'chase' && nearBall) return 'idle';
+  const gif = STATE_TO_GIF[state];
+  if (gif === 'lie' && !HAS_LIE.has(type)) return 'idle';
+  return gif;
+}
 
 /** Resolve an asset path — uses chrome.runtime.getURL in extension context */
 export function getAssetURL(path: string): string {
@@ -37,6 +63,7 @@ export function createPetView(pet: Pet, container: HTMLElement): PetView {
     `height:${DRAW_W}px`,
     'object-fit:contain',
     'object-position:bottom',
+    'transform-origin:center bottom',
     'image-rendering:pixelated',
     'user-select:none',
   ].join(';');
@@ -46,11 +73,7 @@ export function createPetView(pet: Pet, container: HTMLElement): PetView {
 
 export function updatePetView(view: PetView, pet: Pet): void {
   const d = pet.toData();
-
-  // When chasing but close to ball, show idle GIF instead of run-in-place
-  const effectiveGif = (pet.state === 'chase' && pet.nearBall)
-    ? 'idle'
-    : STATE_TO_GIF[pet.state];
+  const effectiveGif = resolveGifName(d.type, pet.state, pet.nearBall);
 
   if (pet.state !== view._lastState || pet.nearBall !== view._lastNearBall) {
     view.el.src = getAssetURL(`assets/${d.type}/${d.color}_${effectiveGif}_8fps.gif`);
@@ -59,7 +82,9 @@ export function updatePetView(view: PetView, pet: Pet): void {
   }
   view.el.style.left = `${pet.x}px`;
   view.el.style.top = `${pet.y}px`;
-  view.el.style.transform = pet.facingLeft ? 'scaleX(-1)' : 'none';
+  const scale = TYPE_SCALE[d.type] ?? 1;
+  const flip = pet.facingLeft ? ' scaleX(-1)' : '';
+  view.el.style.transform = scale === 1 && !flip ? 'none' : `scale(${scale})${flip}`;
 }
 
 export function removePetView(view: PetView): void {
