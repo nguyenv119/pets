@@ -21,6 +21,13 @@ const HAS_LIE: ReadonlySet<PetType> = new Set([
   'chicken', 'crab', 'dog', 'fox', 'miffy', 'monkey', 'panda', 'snail', 'totoro', 'turtle',
 ]);
 
+// Upstream snake sprite (90x90) fills its bounding box edge-to-edge while other
+// pets have padding, so it renders visibly larger than peers. Scale down so its
+// on-screen footprint roughly matches dog/cockatiel/horse.
+const TYPE_SCALE: Partial<Record<PetType, number>> = {
+  snake: 0.7,
+};
+
 /**
  * Resolves the gif name for a given pet type, state, and nearBall flag.
  * Exported for testing.
@@ -56,6 +63,7 @@ export function createPetView(pet: Pet, container: HTMLElement): PetView {
     `height:${DRAW_W}px`,
     'object-fit:contain',
     'object-position:bottom',
+    'transform-origin:center bottom',
     'image-rendering:pixelated',
     'user-select:none',
   ].join(';');
@@ -74,7 +82,9 @@ export function updatePetView(view: PetView, pet: Pet): void {
   }
   view.el.style.left = `${pet.x}px`;
   view.el.style.top = `${pet.y}px`;
-  view.el.style.transform = pet.facingLeft ? 'scaleX(-1)' : 'none';
+  const scale = TYPE_SCALE[d.type] ?? 1;
+  const flip = pet.facingLeft ? ' scaleX(-1)' : '';
+  view.el.style.transform = scale === 1 && !flip ? 'none' : `scale(${scale})${flip}`;
 }
 
 export function removePetView(view: PetView): void {
