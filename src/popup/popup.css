@@ -218,6 +218,62 @@ h1 {
   cursor: pointer;
 }
 
+/* Type picker grid — spans full width of form */
+#pet-type-grid {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  padding: 4px 0;
+}
+
+.type-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 4px 5px;
+  background: #FFF8E8;
+  border: 2px solid #D9E378;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  color: #6B8030;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.type-cell img {
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+}
+
+.type-cell:hover {
+  background: #F0ECC0;
+  border-color: #B8C853;
+}
+
+.type-cell.selected,
+.type-cell[aria-checked="true"] {
+  background: #D9E378;
+  border-color: #4A5A20;
+  color: #4A5A20;
+  box-shadow: 0 0 0 2px #4A5A2080;
+}
+
+.type-cell:focus {
+  outline: none;
+  border-color: #4A5A20;
+}
+
+/* Offset the label row for the type grid so it aligns to top */
+#pet-type-label {
+  align-self: start;
+  padding-top: 10px;
+}
+
 /* Buttons */
 .btn-primary {
   width: 100%;

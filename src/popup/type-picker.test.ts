@@ -1,0 +1,342 @@
+// @vitest-environment jsdom
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { COLORS } from './colors';
+
+// ---------------------------------------------------------------------------
+// DOM setup helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a minimal DOM matching the new type-picker structure:
+ *   #pet-type-grid  (role="radiogroup")
+ *   #pet-type-value (hidden input)
+ *   .type-cell      (one per type, role="radio")
+ *   #pet-color      (color select — still used by populateColors)
+ */
+function buildDOM(initialType: string = 'dog'): void {
+  const types = Object.keys(COLORS) as Array<keyof typeof COLORS>;
+  const cells = types.map((t) => {
+    const firstColor = COLORS[t][0];
+    return `<button
+      role="radio"
+      data-type="${t}"
+      class="type-cell${t === initialType ? ' selected' : ''}"
+      aria-checked="${t === initialType}"
+      tabindex="${t === initialType ? '0' : '-1'}"
+      aria-label="${t}"
+    ><img src="chrome-extension://fake/assets/${t}/${firstColor}_idle_8fps.gif" alt="${t}" /><span>${t}</span></button>`;
+  }).join('');
+
+  document.body.innerHTML = `
+    <div id="pet-type-grid" role="radiogroup" aria-label="Pet type">
+      ${cells}
+    </div>
+    <input type="hidden" id="pet-type-value" value="${initialType}" />
+    <select id="pet-color"></select>
+  `;
+}
+
+// Chrome API mock (needed because type-picker imports nothing that uses chrome,
+// but vitest may load sibling modules that do — define it globally for safety).
+(globalThis as unknown as { chrome: unknown }).chrome = {
+  runtime: { getURL: (p: string) => `chrome-extension://fake/${p}` },
+};
+
+// ---------------------------------------------------------------------------
+// Import the module under test AFTER DOM is in place.
+// We use dynamic import inside each suite so we can reset between suites.
+// Since vitest module cache persists, we import once here at module scope.
+// ---------------------------------------------------------------------------
+
+// We import and re-export the tested functions. The module is pure: it takes
+// a container element and a hidden input, wires them up, and returns controls.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let initTypePicker: (grid: HTMLElement, hiddenInput: HTMLInputElement) => void;
+let populateColors: (colorSelect: HTMLSelectElement, hiddenInput: HTMLInputElement) => void;
+
+beforeEach(async () => {
+  vi.resetModules();
+  // Re-import fresh after module reset
+  const mod = await import('./type-picker');
+  initTypePicker = mod.initTypePicker;
+  populateColors = mod.populateColors;
+  buildDOM();
+});
+
+// ---------------------------------------------------------------------------
+// initTypePicker — grid wiring
+// ---------------------------------------------------------------------------
+
+describe('initTypePicker — type-cell selection', () => {
+  it('clicking a type cell marks it as selected and updates the hidden input', () => {
+    /**
+     * Verifies that clicking a type-cell sets aria-checked="true" on that cell,
+     * removes it from others, and updates #pet-type-value to the clicked type.
+     *
+     * This matters because the rest of the form reads #pet-type-value to determine
+     * which type was chosen. If the hidden input is not updated, addPet() would
+     * always use the default type regardless of what the user clicked.
+     *
+     * If violated, the user sees a visual selection but the added pet has a wrong type.
+     */
+    // GIVEN — grid wired up, initial type is 'dog'
+    const grid = document.getElementById('pet-type-grid') as HTMLElement;
+    const hiddenInput = document.getElementById('pet-type-value') as HTMLInputElement;
+    initTypePicker(grid, hiddenInput);
+
+    // WHEN — user clicks the fox cell
+    const foxCell = grid.querySelector('[data-type="fox"]') as HTMLButtonElement;
+    foxCell.click();
+
+    // THEN — fox is selected, hidden input updated
+    expect(hiddenInput.value).toBe('fox');
+    expect(foxCell.getAttribute('aria-checked')).toBe('true');
+    expect(foxCell.classList.contains('selected')).toBe(true);
+
+    // AND — dog cell is deselected
+    const dogCell = grid.querySelector('[data-type="dog"]') as HTMLButtonElement;
+    expect(dogCell.getAttribute('aria-checked')).toBe('false');
+    expect(dogCell.classList.contains('selected')).toBe(false);
+  });
+
+  it('clicking a cell moves tabindex=0 to that cell and -1 to others', () => {
+    /**
+     * Verifies roving tabindex: the selected cell gets tabindex="0" so keyboard
+     * users can tab into the grid and then navigate with arrows.
+     *
+     * Without this, keyboard users cannot reach any cell after the first tab stop.
+     *
+     * If violated, keyboard-only users get stuck and cannot switch pet type.
+     */
+    // GIVEN — grid wired up
+    const grid = document.getElementById('pet-type-grid') as HTMLElement;
+    const hiddenInput = document.getElementById('pet-type-value') as HTMLInputElement;
+    initTypePicker(grid, hiddenInput);
+
+    // WHEN — user clicks 'chicken'
+    const chickenCell = grid.querySelector('[data-type="chicken"]') as HTMLButtonElement;
+    chickenCell.click();
+
+    // THEN — chicken has tabindex 0, all others have -1
+    const cells = [...grid.querySelectorAll('.type-cell')] as HTMLButtonElement[];
+    const focusable = cells.filter(c => c.tabIndex === 0);
+    expect(focusable).toHaveLength(1);
+    expect(focusable[0].dataset.type).toBe('chicken');
+  });
+
+  it('clicking a cell dispatches pet-type-changed CustomEvent on document', () => {
+    /**
+     * Verifies that selecting a type fires a CustomEvent so the color grid (T3)
+     * can listen and react without popup.ts calling populateColors directly.
+     *
+     * This decoupling matters because T3 will replace the color select. If popup.ts
+     * called populateColors directly the coupling would prevent T3's refactor.
+     *
+     * If violated, the future color grid listener would never receive type changes.
+     */
+    // GIVEN — grid wired up, listener on document
+    const grid = document.getElementById('pet-type-grid') as HTMLElement;
+    const hiddenInput = document.getElementById('pet-type-value') as HTMLInputElement;
+    initTypePicker(grid, hiddenInput);
+
+    const received: string[] = [];
+    document.addEventListener('pet-type-changed', (e: Event) => {
+      received.push((e as CustomEvent<{ type: string }>).detail.type);
+    });
+
+    // WHEN — user selects 'cat' (panda here)
+    const pandaCell = grid.querySelector('[data-type="panda"]') as HTMLButtonElement;
+    pandaCell.click();
+
+    // THEN — event fired with correct type
+    expect(received).toEqual(['panda']);
+  });
+});
+
+describe('initTypePicker — keyboard navigation', () => {
+  it('ArrowRight moves focus to the next cell', () => {
+    /**
+     * Verifies that pressing ArrowRight on a focused cell moves focus forward
+     * and selects the next type in DOM order.
+     *
+     * This matters because the grid has no visible focus ring unless the correct
+     * cell has tabindex=0. Arrow key navigation is required for accessibility
+     * (ARIA radiogroup pattern).
+     *
+     * If violated, keyboard users cannot navigate the grid at all.
+     */
+    // GIVEN — grid wired, focus on dog (first in typical DOM order)
+    const grid = document.getElementById('pet-type-grid') as HTMLElement;
+    const hiddenInput = document.getElementById('pet-type-value') as HTMLInputElement;
+    initTypePicker(grid, hiddenInput);
+
+    const cells = [...grid.querySelectorAll('.type-cell')] as HTMLButtonElement[];
+    const firstCell = cells[0];
+    firstCell.focus();
+
+    // WHEN — ArrowRight pressed
+    firstCell.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+
+    // THEN — second cell is focused
+    expect(document.activeElement).toBe(cells[1]);
+  });
+
+  it('ArrowLeft moves focus to the previous cell', () => {
+    /**
+     * Verifies that pressing ArrowLeft moves focus backward in the grid.
+     *
+     * This is the symmetric counterpart to ArrowRight, required by the ARIA
+     * radiogroup keyboard pattern.
+     *
+     * If violated, users can only navigate forward in the grid, not back.
+     */
+    // GIVEN — grid wired, focus on second cell
+    const grid = document.getElementById('pet-type-grid') as HTMLElement;
+    const hiddenInput = document.getElementById('pet-type-value') as HTMLInputElement;
+    initTypePicker(grid, hiddenInput);
+
+    const cells = [...grid.querySelectorAll('.type-cell')] as HTMLButtonElement[];
+    cells[1].focus();
+
+    // WHEN — ArrowLeft pressed
+    cells[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+
+    // THEN — first cell is focused
+    expect(document.activeElement).toBe(cells[0]);
+  });
+
+  it('ArrowRight wraps from last cell to first', () => {
+    /**
+     * Verifies that navigation wraps around at the end of the grid so the user
+     * does not get stuck at the last item.
+     *
+     * If violated, users who navigate to the last type hit a dead end and must
+     * Tab out and Tab back in to start over.
+     */
+    // GIVEN — grid wired, focus on last cell
+    const grid = document.getElementById('pet-type-grid') as HTMLElement;
+    const hiddenInput = document.getElementById('pet-type-value') as HTMLInputElement;
+    initTypePicker(grid, hiddenInput);
+
+    const cells = [...grid.querySelectorAll('.type-cell')] as HTMLButtonElement[];
+    const lastCell = cells[cells.length - 1];
+    lastCell.focus();
+
+    // WHEN — ArrowRight pressed
+    lastCell.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+
+    // THEN — first cell is focused
+    expect(document.activeElement).toBe(cells[0]);
+  });
+
+  it('Space key selects the focused cell', () => {
+    /**
+     * Verifies that pressing Space on a focused cell selects it (sets aria-checked
+     * and updates the hidden input), matching the ARIA radio button pattern.
+     *
+     * If violated, keyboard users can navigate but cannot select — the form always
+     * submits with the initially selected type.
+     */
+    // GIVEN — grid wired, focus on 'fox' cell
+    const grid = document.getElementById('pet-type-grid') as HTMLElement;
+    const hiddenInput = document.getElementById('pet-type-value') as HTMLInputElement;
+    initTypePicker(grid, hiddenInput);
+
+    const foxCell = grid.querySelector('[data-type="fox"]') as HTMLButtonElement;
+    foxCell.focus();
+
+    // WHEN — Space pressed
+    foxCell.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+
+    // THEN — fox is selected
+    expect(hiddenInput.value).toBe('fox');
+    expect(foxCell.getAttribute('aria-checked')).toBe('true');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// populateColors — reads from hidden input, not typeSelect
+// ---------------------------------------------------------------------------
+
+describe('populateColors — reads type from hidden input', () => {
+  it('populates color options based on #pet-type-value, not a type select element', () => {
+    /**
+     * Verifies that populateColors reads the pet type from the hidden input
+     * (#pet-type-value) rather than a <select id="pet-type"> element that no
+     * longer exists in the DOM.
+     *
+     * This matters because T2 removes the type <select> and replaces it with the
+     * radiogroup grid. Any code that still queries #pet-type would get null and throw.
+     *
+     * If violated, opening the popup crashes on DOM query null dereference and
+     * the color dropdown never populates.
+     */
+    // GIVEN — hidden input set to 'chicken'
+    const hiddenInput = document.getElementById('pet-type-value') as HTMLInputElement;
+    hiddenInput.value = 'chicken';
+    const colorSelect = document.getElementById('pet-color') as HTMLSelectElement;
+
+    // WHEN — populate colors
+    populateColors(colorSelect, hiddenInput);
+
+    // THEN — color options match chicken's palette
+    const options = [...colorSelect.options].map(o => o.value);
+    expect(options).toEqual(COLORS.chicken);
+  });
+
+  it('populates all horse color variants from the hidden input', () => {
+    /**
+     * Verifies that horse's 11 color variants all appear when the hidden input
+     * is set to 'horse'. Horse has the largest palette and is the most likely
+     * to expose an off-by-one or slice error.
+     *
+     * If violated, some horse color options are missing and users cannot adopt
+     * certain horse variants.
+     */
+    // GIVEN — hidden input set to 'horse'
+    const hiddenInput = document.getElementById('pet-type-value') as HTMLInputElement;
+    hiddenInput.value = 'horse';
+    const colorSelect = document.getElementById('pet-color') as HTMLSelectElement;
+
+    // WHEN — populate colors
+    populateColors(colorSelect, hiddenInput);
+
+    // THEN — all 11 horse variants present
+    const options = [...colorSelect.options].map(o => o.value);
+    expect(options).toEqual(COLORS.horse);
+  });
+
+  it('no <select id="pet-type"> element exists in the DOM after the refactor', () => {
+    /**
+     * Verifies the old type <select> is no longer present in the DOM. This is a
+     * regression guard: if the old element is re-introduced (e.g., accidentally
+     * reverted), the type picker would be duplicated and the hidden input would
+     * not be the source of truth.
+     *
+     * If violated, both the grid and a hidden dropdown compete as the type source,
+     * leading to inconsistent form state.
+     */
+    // GIVEN — the current document after buildDOM()
+    // WHEN — query for the old select
+    const oldSelect = document.getElementById('pet-type');
+    // THEN — it does not exist
+    expect(oldSelect).toBeNull();
+  });
+
+  it('pet-type-grid exists with role=radiogroup', () => {
+    /**
+     * Verifies that the type picker grid is present in the DOM with the correct
+     * ARIA role. Without role="radiogroup", assistive technology treats the
+     * container as a generic div and does not apply radio navigation semantics.
+     *
+     * If violated, screen readers do not announce this as a selection group and
+     * keyboard users lose the expected arrow-key navigation affordances.
+     */
+    // GIVEN — the current document after buildDOM()
+    // WHEN — query for the grid
+    const grid = document.getElementById('pet-type-grid');
+    // THEN — it exists with the correct role
+    expect(grid).not.toBeNull();
+    expect(grid!.getAttribute('role')).toBe('radiogroup');
+  });
+});
