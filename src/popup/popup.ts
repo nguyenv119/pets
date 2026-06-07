@@ -6,6 +6,7 @@ import { renderPetItemHTML } from './render-pet-item';
 import { initTypePicker, buildTypePickerHTML } from './type-picker';
 import { renderColorGrid, initColorPicker } from './color-picker';
 import { applyTheme, loadTheme, toggleTheme } from './theme';
+import { setAddFormExpanded, isAddFormExpanded } from './collapsible-form';
 
 // ---------------------------------------------------------------------------
 // DOM references
@@ -21,6 +22,7 @@ const btnAdd = document.getElementById('btn-add')!;
 const btnThrowBall = document.getElementById('btn-throw-ball') as HTMLButtonElement;
 const btnToggle = document.getElementById('btn-toggle')!;
 const btnTheme = document.getElementById('btn-theme')!;
+const btnAddToggle = document.getElementById('btn-add-toggle')!;
 const specialPageBanner = document.getElementById('special-page-banner')!;
 
 // ---------------------------------------------------------------------------
@@ -96,8 +98,9 @@ async function addPet(): Promise<void> {
   const msg: ExtMessage = { type: 'ADD_PET', pet };
   chrome.runtime.sendMessage(msg);
 
-  // Reset form
+  // Reset form and collapse
   nameInput.value = '';
+  setAddFormExpanded(false);
 }
 
 async function togglePetHidden(id: string): Promise<void> {
@@ -149,6 +152,9 @@ function toggleVisibility(): void {
 // ---------------------------------------------------------------------------
 
 btnAdd.addEventListener('click', addPet);
+btnAddToggle.addEventListener('click', () => {
+  setAddFormExpanded(!isAddFormExpanded());
+});
 btnThrowBall.addEventListener('click', throwBall);
 btnToggle.addEventListener('click', toggleVisibility);
 btnTheme.addEventListener('click', handleThemeToggle);
@@ -188,6 +194,7 @@ async function init(): Promise<void> {
 
   pets = await loadPetData();
   renderPetList();
+  setAddFormExpanded(pets.length === 0);
 
   // Probe whether the content script is alive on the active tab.
   // If not (special browser page), show the banner and disable Throw Ball.
