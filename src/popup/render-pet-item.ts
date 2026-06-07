@@ -19,10 +19,12 @@ export function renderPetItemHTML(pet: PetData): string {
           <div class="pet-meta">${pet.color} ${pet.type}</div>
         </div>
       </div>
-      <button class="btn-hide${dimClass}" data-id="${pet.id}" aria-pressed="${isHidden}" title="${hideTitle}">
-        <span aria-hidden="true">${eyeEmoji}</span>
-      </button>
-      <button class="btn-remove" title="Remove ${pet.name}">&times;</button>
+      <div class="pet-actions">
+        <button class="btn-hide${dimClass}" data-id="${pet.id}" aria-pressed="${isHidden}" title="${hideTitle}">
+          <span aria-hidden="true">${eyeEmoji}</span>
+        </button>
+        <button class="btn-remove" title="Remove ${pet.name}">&times;</button>
+      </div>
     </div>
   `;
 }
