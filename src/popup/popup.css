@@ -272,15 +272,61 @@ h1 {
 }
 
 /* ---------------------------------------------------------------------------
+   Add pet FAB toggle
+   --------------------------------------------------------------------------- */
+
+.fab {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 9px 16px;
+  background: var(--bg-btn-primary);
+  color: var(--text-heading);
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  text-align: center;
+  transition: background 0.15s;
+}
+
+.fab:hover {
+  background: var(--bg-btn-primary-hover);
+}
+
+.fab:active {
+  background: var(--bg-btn-primary-active);
+}
+
+/* ---------------------------------------------------------------------------
    Add pet form
    --------------------------------------------------------------------------- */
 
 #add-pet-form {
   margin-bottom: 16px;
-  padding: 16px;
   background: var(--bg-form);
   border-radius: 12px;
   border: none;
+  overflow: hidden;
+  transition: padding 0.2s;
+  padding: 16px;
+}
+
+#add-pet-body {
+  max-height: 600px;
+  overflow: hidden;
+  transition: max-height 0.2s ease, padding-top 0.2s, padding-bottom 0.2s;
+}
+
+#add-pet-form.collapsed {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+#add-pet-form.collapsed #add-pet-body {
+  max-height: 0;
 }
 
 .form-grid {
