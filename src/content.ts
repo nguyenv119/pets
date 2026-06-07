@@ -1,4 +1,4 @@
-import { Pet } from './pet';
+import { Pet, CATCH_DISTANCE } from './pet';
 import type { Ball } from './pet';
 import {
   DRAW_W,
@@ -220,6 +220,23 @@ function tick(now: number): void {
   updateParticles(particles, dt);
   drawParticles(ctx, particles);
 
+  // Contact detection — first chasing pet that reaches the ball catches it.
+  // Run BEFORE pet.update() so the catch() transition takes effect this frame
+  // rather than being overwritten by the ball-deactivated fallback in update().
+  if (ball) {
+    const catcher = pets.find(p =>
+      p.state === 'chase' &&
+      Math.abs(ball!.x - (p.x + DRAW_W / 2)) <= CATCH_DISTANCE &&
+      ball!.y >= groundY()
+    );
+    if (catcher) {
+      catcher.catch();
+      if (particles.length < MAX_PARTICLES) particles.push(spawnLoveParticle(catcher));
+      for (const p of pets) if (p !== catcher && p.state === 'chase') p.onBallLanded();
+      ball = null; // consume the ball
+    }
+  }
+
   // Update pets — spread them apart when chasing the same ball
   const ballForPet: Ball | null = ball ? { active: ball.active, x: ball.x, y: ball.y } : null;
   const CHASE_SPREAD = 40; // pixels between each pet near the ball
@@ -232,13 +249,7 @@ function tick(now: number): void {
       offset = (chasingIdx - (chasingPets.length - 1) / 2) * CHASE_SPREAD;
       chasingIdx++;
     }
-    const prevState = pet.state;
     pet.update(dt, ballForPet, canvas.width, DRAW_W, offset);
-
-    // Spawn love emoji when a pet catches the ball
-    if (pet.state === 'idleWithBall' && prevState === 'chase' && particles.length < MAX_PARTICLES) {
-      particles.push(spawnLoveParticle(pet));
-    }
 
     const view = views.get(pet);
     if (view) updatePetView(view, pet);
@@ -266,8 +277,13 @@ document.addEventListener('dblclick', (e) => {
 // Message handling (from popup via service worker)
 // ---------------------------------------------------------------------------
 
-chrome.runtime.onMessage.addListener((msg: ExtMessage) => {
+chrome.runtime.onMessage.addListener((msg: ExtMessage, _sender, sendResponse) => {
   switch (msg.type) {
+    case 'PING': {
+      // Reply so the popup knows the content script is alive on this tab.
+      sendResponse({ alive: true });
+      break;
+    }
     case 'ADD_PET': {
       const newPet = makePet(msg.pet);
       pets.push(newPet);

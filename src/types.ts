@@ -16,4 +16,5 @@ export type ExtMessage =
   | { type: 'REMOVE_PET'; id: string }
   | { type: 'THROW_BALL' }
   | { type: 'TOGGLE_VISIBILITY'; visible: boolean }
-  | { type: 'PETS_UPDATED'; pets: PetData[] };
+  | { type: 'PETS_UPDATED'; pets: PetData[] }
+  | { type: 'PING' };
