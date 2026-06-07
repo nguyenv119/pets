@@ -4,7 +4,12 @@
  * Controls the expanded/collapsed state of `#add-pet-form` by toggling the
  * `.collapsed` CSS class and keeping `aria-expanded` on the FAB in sync.
  * Focus management ensures keyboard usability in both directions.
+ *
+ * State is held in a module-level boolean so callers never have to read
+ * `aria-expanded` back from the DOM — that attribute is a pure output.
  */
+
+let expandedState = false;
 
 /**
  * Expand or collapse the add-pet form.
@@ -19,6 +24,8 @@ export function setAddFormExpanded(expanded: boolean): void {
   const fab = document.getElementById('btn-add-toggle') as HTMLButtonElement;
   const nameInput = document.getElementById('pet-name') as HTMLInputElement;
 
+  expandedState = expanded;
+
   if (expanded) {
     form.classList.remove('collapsed');
     fab.setAttribute('aria-expanded', 'true');
@@ -28,4 +35,9 @@ export function setAddFormExpanded(expanded: boolean): void {
     fab.setAttribute('aria-expanded', 'false');
     fab.focus();
   }
+}
+
+/** Returns the current expanded state without reading the DOM. */
+export function isAddFormExpanded(): boolean {
+  return expandedState;
 }

@@ -5,7 +5,7 @@ import { pingTab } from './tab-probe';
 import { renderPetItemHTML } from './render-pet-item';
 import { initTypePicker, populateColors, buildTypePickerHTML } from './type-picker';
 import { applyTheme, loadTheme, toggleTheme } from './theme';
-import { setAddFormExpanded } from './collapsible-form';
+import { setAddFormExpanded, isAddFormExpanded } from './collapsible-form';
 
 // ---------------------------------------------------------------------------
 // DOM references
@@ -156,8 +156,7 @@ function toggleVisibility(): void {
 document.addEventListener('pet-type-changed', refreshColors);
 btnAdd.addEventListener('click', addPet);
 btnAddToggle.addEventListener('click', () => {
-  const expanded = btnAddToggle.getAttribute('aria-expanded') === 'true';
-  setAddFormExpanded(!expanded);
+  setAddFormExpanded(!isAddFormExpanded());
 });
 btnThrowBall.addEventListener('click', throwBall);
 btnToggle.addEventListener('click', toggleVisibility);
