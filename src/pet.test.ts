@@ -1419,3 +1419,88 @@ describe('Chase-spread index — hidden pet does not corrupt offset', () => {
     expect(offsets[1]).toBe(CHASE_SPREAD / 2);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Pet.greeting — ephemeral greeting flag
+// ---------------------------------------------------------------------------
+
+describe('Pet.greeting — ephemeral greeting flag', () => {
+  it('defaults to false on construction', () => {
+    /**
+     * Verifies that the greeting flag starts as false so pets do not wave at
+     * each other before the greet system has evaluated proximity.
+     *
+     * If violated, pets would animate swipe on every fresh page load.
+     */
+    // GIVEN — a freshly constructed pet
+    const pet = makePet();
+
+    // WHEN — no interaction has occurred
+
+    // THEN — greeting is false
+    expect(pet.greeting).toBe(false);
+  });
+
+  it('can be set to true and read back', () => {
+    /**
+     * Verifies that greeting is a writable property so content.ts can toggle
+     * it from the greet loop without needing a setter method.
+     *
+     * If violated, the greeting flag cannot be activated from outside Pet.
+     */
+    // GIVEN — a pet
+    const pet = makePet();
+
+    // WHEN — content sets greeting to true
+    pet.greeting = true;
+
+    // THEN — reads back true
+    expect(pet.greeting).toBe(true);
+  });
+
+  it('update() does NOT early-return when greeting=true (unlike hovered)', () => {
+    /**
+     * Verifies that greeting=true does not freeze the FSM the way hovered does.
+     * Pets should continue walking/idling while the greeting animation plays —
+     * only the gif changes, not the movement.
+     *
+     * If violated, a greeting pet would freeze in place for the 1s duration,
+     * which looks broken compared to a pet that keeps walking while waving.
+     */
+    // GIVEN — a pet in walkRight with greeting=true
+    const pet = makePet({ x: 100 });
+    pet.state = 'walkRight';
+    pet._timer = 99;
+    pet.greeting = true;
+
+    const xBefore = pet.x;
+
+    // WHEN — update is called with dt (no ball, bounded canvas)
+    pet.update(0.1, null, 2000);
+
+    // THEN — x changed (movement not frozen)
+    expect(pet.x).toBeGreaterThan(xBefore);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Pet.id getter
+// ---------------------------------------------------------------------------
+
+describe('Pet.id getter', () => {
+  it('returns the id passed to the constructor', () => {
+    /**
+     * Verifies the id getter exposes the private _id field so content.ts can
+     * use pet.id as a Map key for greet cooldowns without calling toData().
+     *
+     * If violated, the cooldown map would need to call pet.toData().id on every
+     * pair check, adding unnecessary object allocation per frame.
+     */
+    // GIVEN — a pet with a known id
+    const pet = makePet({ id: 'abc-123' });
+
+    // WHEN — reading pet.id
+    // THEN — returns the constructor id
+    expect(pet.id).toBe('abc-123');
+  });
+});
