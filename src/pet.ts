@@ -36,7 +36,7 @@ function nextState(current: PetState): [PetState, number] {
       return ['sitIdle', randBetween(2, 4)];
 
     case 'chase':
-      // chase exits via onBallLanded() called from main.ts when ball deactivates, not via timer
+      // chase exits via catch() (contact), onBallLanded() (loser), or the ball-null fallback in update() — not via timer
       return ['sitIdle', randBetween(2, 4)];
 
     case 'eat':
@@ -180,7 +180,7 @@ export class Pet {
     this._transition('chase', Infinity);
   }
 
-  /** Called when the ball is picked up; all pets return to idle. */
+  /** Called on non-catching chasers when another pet contacts the ball; recipients return to sitIdle. */
   onBallLanded(): void {
     this._transition('sitIdle', 1.5);
   }
