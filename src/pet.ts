@@ -123,7 +123,7 @@ export class Pet {
       const isNight = nightCheck();
       if (isNight) {
         // Force non-interruptible states to sleep
-        if (this.state !== 'chase' && this.state !== 'eat' && this.state !== 'sleep') {
+        if (this.state !== 'chase' && this.state !== 'eat' && this.state !== 'sleep' && this.state !== 'idleWithBall') {
           this._nightSleep = true;
           this._transition('sleep', Infinity);
           return;
@@ -264,4 +264,10 @@ export class Pet {
     this._timer = timer;
     this.onTransition?.();
   }
+}
+
+/** Returns true when the local hour is in the nighttime window (22:00–06:00). */
+export function isNightHour(d = new Date()): boolean {
+  const h = d.getHours();
+  return h >= 22 || h < 6;
 }

@@ -1253,4 +1253,29 @@ describe('Pet FSM — sleep cycle (night mode)', () => {
     // THEN — pet remains in sleep (night keeps it asleep)
     expect(pet.state).toBe('sleep');
   });
+
+  it('does not interrupt idleWithBall state when nightCheck returns true', () => {
+    /**
+     * Verifies that a pet holding the ball (idleWithBall) is NOT forced to
+     * sleep when nighttime begins.
+     *
+     * This matters because yanking the pet out of idleWithBall mid-animation
+     * would break the ball-hold visual and leave the ball in an inconsistent
+     * ownership state.
+     *
+     * If violated, a pet holding the ball instantly falls asleep whenever
+     * nighttime starts, making the ball interaction unreliable.
+     */
+    // GIVEN — a pet in idleWithBall state, nighttime active
+    const pet = makePet();
+    pet.state = 'idleWithBall';
+    pet._timer = 999;
+    const isNight = () => true;
+
+    // WHEN — update with nightCheck returning true
+    pet.update(0.016, null, 800, 32, 0, isNight);
+
+    // THEN — pet remains in idleWithBall (not forced to sleep)
+    expect(pet.state).toBe('idleWithBall');
+  });
 });
