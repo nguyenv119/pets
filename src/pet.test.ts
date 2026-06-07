@@ -1279,3 +1279,143 @@ describe('Pet FSM — sleep cycle (night mode)', () => {
     expect(pet.state).toBe('idleWithBall');
   });
 });
+
+// ---------------------------------------------------------------------------
+// hidden field
+// ---------------------------------------------------------------------------
+
+describe('Pet hidden field', () => {
+  it('initializes hidden=false when PetData.hidden is absent', () => {
+    /**
+     * Verifies that a pet constructed without a hidden flag defaults to visible.
+     *
+     * This matters because all existing saved data lacks a hidden field; if
+     * the default were true, every existing pet would be hidden on upgrade.
+     *
+     * If violated, upgrading users lose all their visible pets.
+     */
+    const pet = makePet();
+    expect(pet.hidden).toBe(false);
+  });
+
+  it('initializes hidden=true when PetData.hidden is true', () => {
+    /**
+     * Verifies that a pet constructed from saved data with hidden=true starts
+     * hidden so the visibility preference is restored on reload.
+     *
+     * This matters because if we ignored the saved flag, a hidden pet would
+     * reappear every time the tab is opened — the feature would be useless.
+     *
+     * If violated, hiding a pet only lasts until the next page load.
+     */
+    const pet = makePet({ hidden: true });
+    expect(pet.hidden).toBe(true);
+  });
+
+  it('toData() includes hidden:true when pet.hidden is true', () => {
+    /**
+     * Verifies that Pet.toData() propagates the hidden flag so debouncedSave
+     * persists it without any external merge step.
+     *
+     * This matters because the old code required a separate hiddenIds merge;
+     * if toData() omits the flag, a crash within the debounce window loses it.
+     *
+     * If violated, hiding a pet is forgotten on crash/reload.
+     */
+    const pet = makePet({ hidden: true });
+    expect(pet.toData().hidden).toBe(true);
+  });
+
+  it('setting pet.hidden=false is reflected immediately in toData()', () => {
+    /**
+     * Verifies that the show-flow (SET_PET_HIDDEN hidden=false) updates the
+     * in-memory flag immediately so the next save includes the correct value
+     * even before the debounce fires.
+     *
+     * This matters because the old code only updated hiddenIds (a separate
+     * Set), and PetData.hidden stayed true until the next debouncedSave
+     * merged it. A tab crash in that window would re-hide the pet on reload.
+     *
+     * If violated, the pet reappears hidden after a crash even though the
+     * user just clicked "show".
+     */
+    // GIVEN — a hidden pet
+    const pet = makePet({ hidden: true });
+    expect(pet.hidden).toBe(true);
+
+    // WHEN — the show-flow sets hidden=false immediately
+    pet.hidden = false;
+
+    // THEN — toData() reflects the change without any save/reload cycle
+    expect(pet.toData().hidden).toBeUndefined(); // omitted when false (falsy)
+    expect(pet.hidden).toBe(false);
+  });
+
+  it('toData() omits the hidden key when pet is visible', () => {
+    /**
+     * Verifies that toData() omits the hidden field for visible pets to keep
+     * the serialized shape clean (no hidden:false noise in storage).
+     *
+     * This matters for backward compatibility — old code that reads PetData
+     * treats absent hidden as visible, matching the new behavior.
+     *
+     * If violated, storage grows with redundant hidden:false entries and
+     * old extension versions may misinterpret the field.
+     */
+    const pet = makePet();
+    expect(Object.prototype.hasOwnProperty.call(pet.toData(), 'hidden')).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Chase-spread index with hidden pet
+// ---------------------------------------------------------------------------
+
+describe('Chase-spread index — hidden pet does not corrupt offset', () => {
+  it('visible chasing pets receive finite, non-NaN offsets when a hidden pet is also in chase state', () => {
+    /**
+     * Verifies that the chasingIdx counter only advances for visible pets,
+     * so a hidden-but-chasing pet does not push the index past the visible
+     * array length and produce NaN offsets for the remaining pets.
+     *
+     * This matters because NaN * CHASE_SPEED = NaN, and pet.x becomes NaN,
+     * causing the sprite to disappear to an undefined position permanently.
+     *
+     * If violated, hiding one chasing pet corrupts the x-position of all
+     * other chasing pets for the rest of the session.
+     */
+    // GIVEN — 3 pets all in chase state; the second one is hidden
+    const CHASE_SPREAD = 40;
+    const petA = makePet({ id: 'a', x: 100 });
+    const petB = makePet({ id: 'b', x: 200 });
+    const petC = makePet({ id: 'c', x: 300 });
+    petA.state = 'chase';
+    petB.state = 'chase';
+    petC.state = 'chase';
+    petB.hidden = true;
+
+    // WHEN — simulate the tick() offset calculation using only visible pets
+    const visiblePets = [petA, petB, petC].filter(p => !p.hidden);
+    const chasingPets = visiblePets.filter(p => p.state === 'chase');
+    let chasingIdx = 0;
+    const offsets: number[] = [];
+    for (const pet of visiblePets) {
+      let offset = 0;
+      if (pet.state === 'chase' && chasingPets.length > 1) {
+        offset = (chasingIdx - (chasingPets.length - 1) / 2) * CHASE_SPREAD;
+        chasingIdx++;
+      }
+      offsets.push(offset);
+    }
+
+    // THEN — both visible chasing pets receive finite offsets; no NaN
+    expect(offsets).toHaveLength(2); // petA and petC (petB hidden)
+    for (const o of offsets) {
+      expect(Number.isFinite(o)).toBe(true);
+      expect(Number.isNaN(o)).toBe(false);
+    }
+    // Spread is symmetric around 0 for 2 pets: -20 and +20
+    expect(offsets[0]).toBe(-CHASE_SPREAD / 2);
+    expect(offsets[1]).toBe(CHASE_SPREAD / 2);
+  });
+});

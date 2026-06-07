@@ -82,7 +82,6 @@ const ctx = canvas.getContext('2d')!;
 
 let pets: Pet[] = [];
 const views = new Map<Pet, PetView>();
-const hiddenIds = new Set<string>();
 const particles: Particle[] = [];
 const MAX_PARTICLES = 50;
 
@@ -97,14 +96,7 @@ let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 function debouncedSave(): void {
   if (saveTimeout) clearTimeout(saveTimeout);
   saveTimeout = setTimeout(() => {
-    // Merge hidden state back into PetData before saving — Pet.toData() does not
-    // track the hidden flag (it is a popup-layer concern), so we re-apply it
-    // from hiddenIds to prevent position-triggered saves from clobbering the flag.
-    savePets(pets.map(p => {
-      const data = p.toData();
-      if (hiddenIds.has(data.id)) data.hidden = true;
-      return data;
-    }));
+    savePets(pets.map(p => p.toData()));
   }, 2000);
 }
 
@@ -192,15 +184,11 @@ async function init(): Promise<void> {
     await savePets(pets.map(p => p.toData()));
   } else {
     pets = savedData.map(makePet);
-    // Populate hiddenIds from saved state
-    for (const data of savedData) {
-      if (data.hidden) hiddenIds.add(data.id);
-    }
   }
 
   // Only add visible pets to the scene; hidden pets exist in pets[] but not in views
   pets.forEach(pet => {
-    if (!hiddenIds.has(pet.toData().id)) addPetToScene(pet);
+    if (!pet.hidden) addPetToScene(pet);
   });
   requestAnimationFrame(tick);
 }
@@ -256,8 +244,8 @@ function tick(now: number): void {
   // rather than being overwritten by the ball-deactivated fallback in update().
   if (ball) {
     const catcher = pets.find(p =>
+      !p.hidden &&
       p.state === 'chase' &&
-      !hiddenIds.has(p.toData().id) &&
       Math.abs(ball!.x - (p.x + DRAW_W / 2)) <= CATCH_DISTANCE &&
       ball!.y >= groundY()
     );
@@ -272,9 +260,10 @@ function tick(now: number): void {
   // Update pets — spread them apart when chasing the same ball
   const ballForPet: Ball | null = ball ? { active: ball.active, x: ball.x, y: ball.y } : null;
   const CHASE_SPREAD = 40; // pixels between each pet near the ball
-  const chasingPets = pets.filter(p => p.state === 'chase' && !hiddenIds.has(p.toData().id));
+  const visiblePets = pets.filter(p => !p.hidden);
+  const chasingPets = visiblePets.filter(p => p.state === 'chase');
   let chasingIdx = 0;
-  for (const pet of pets) {
+  for (const pet of visiblePets) {
     pet.y = groundY();
     let offset = 0;
     if (pet.state === 'chase' && chasingPets.length > 1) {
@@ -326,9 +315,9 @@ chrome.runtime.onMessage.addListener((msg: ExtMessage, _sender, sendResponse) =>
     case 'SET_PET_HIDDEN': {
       const target = pets.find(p => p.toData().id === msg.id);
       if (!target) break;
+      target.hidden = msg.hidden;
       if (msg.hidden) {
         // Hide: remove from scene but keep in pets[]
-        hiddenIds.add(msg.id);
         const view = views.get(target);
         if (view) {
           removePetView(view);
@@ -336,9 +325,9 @@ chrome.runtime.onMessage.addListener((msg: ExtMessage, _sender, sendResponse) =>
         }
       } else {
         // Show: restore to scene
-        hiddenIds.delete(msg.id);
         if (!views.has(target)) addPetToScene(target);
       }
+      debouncedSave();
       break;
     }
     case 'REMOVE_PET': {
