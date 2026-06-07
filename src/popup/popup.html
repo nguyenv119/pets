@@ -18,6 +18,9 @@
       (e.g. localStorage) is not available in service-worker extension contexts.
     -->
     <script>
+      // SYNC: storage key must match KEY in src/settings.ts; field name must
+      // match Settings.theme. No bundler runs over this inline script, so
+      // changes to either side need a manual update here.
       chrome.storage.local.get('pixel-pets-settings-v1', function(r) {
         var s = r['pixel-pets-settings-v1'];
         document.body.dataset.theme = (s && s.theme) ? s.theme : 'light';
