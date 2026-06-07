@@ -72,6 +72,9 @@ export class Pet {
    *  Not persisted: ephemeral interaction state only. */
   hovered = false;
 
+  /** True when this pet is currently hidden from the scene. Persisted via toData(). */
+  hidden: boolean;
+
   /** True when the pet was put to sleep by the nighttime cycle (not by the FSM).
    *  Used to distinguish night-forced sleep from natural sleep so morning can
    *  selectively wake only night-forced sleepers. */
@@ -93,6 +96,7 @@ export class Pet {
     this._color = data.color;
     this.x = data.x;
     this.y = data.y;
+    this.hidden = data.hidden ?? false;
     this.state = 'sitIdle';
     this._timer = randBetween(2, 4);
   }
@@ -256,6 +260,7 @@ export class Pet {
       color: this._color,
       x: this.x,
       y: this.y,
+      ...(this.hidden ? { hidden: true } : {}),
     };
   }
 

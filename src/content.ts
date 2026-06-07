@@ -186,7 +186,10 @@ async function init(): Promise<void> {
     pets = savedData.map(makePet);
   }
 
-  pets.forEach(addPetToScene);
+  // Only add visible pets to the scene; hidden pets exist in pets[] but not in views
+  pets.forEach(pet => {
+    if (!pet.hidden) addPetToScene(pet);
+  });
   requestAnimationFrame(tick);
 }
 
@@ -241,6 +244,7 @@ function tick(now: number): void {
   // rather than being overwritten by the ball-deactivated fallback in update().
   if (ball) {
     const catcher = pets.find(p =>
+      !p.hidden &&
       p.state === 'chase' &&
       Math.abs(ball!.x - (p.x + DRAW_W / 2)) <= CATCH_DISTANCE &&
       ball!.y >= groundY()
@@ -256,9 +260,10 @@ function tick(now: number): void {
   // Update pets — spread them apart when chasing the same ball
   const ballForPet: Ball | null = ball ? { active: ball.active, x: ball.x, y: ball.y } : null;
   const CHASE_SPREAD = 40; // pixels between each pet near the ball
-  const chasingPets = pets.filter(p => p.state === 'chase');
+  const visiblePets = pets.filter(p => !p.hidden);
+  const chasingPets = visiblePets.filter(p => p.state === 'chase');
   let chasingIdx = 0;
-  for (const pet of pets) {
+  for (const pet of visiblePets) {
     pet.y = groundY();
     let offset = 0;
     if (pet.state === 'chase' && chasingPets.length > 1) {
@@ -305,6 +310,24 @@ chrome.runtime.onMessage.addListener((msg: ExtMessage, _sender, sendResponse) =>
       pets.push(newPet);
       addPetToScene(newPet);
       savePets(pets.map(p => p.toData()));
+      break;
+    }
+    case 'SET_PET_HIDDEN': {
+      const target = pets.find(p => p.toData().id === msg.id);
+      if (!target) break;
+      target.hidden = msg.hidden;
+      if (msg.hidden) {
+        // Hide: remove from scene but keep in pets[]
+        const view = views.get(target);
+        if (view) {
+          removePetView(view);
+          views.delete(target);
+        }
+      } else {
+        // Show: restore to scene
+        if (!views.has(target)) addPetToScene(target);
+      }
+      debouncedSave();
       break;
     }
     case 'REMOVE_PET': {
