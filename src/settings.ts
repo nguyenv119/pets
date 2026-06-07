@@ -41,7 +41,7 @@ export function currentTreats(
   s: Settings,
   now = Date.now()
 ): { count: number; nextRechargeMs: number } {
-  const elapsed = now - s.treatsUpdatedAt;
+  const elapsed = Math.max(0, now - s.treatsUpdatedAt);
   const recharged = Math.floor(elapsed / TREAT_RECHARGE_MS);
   const count = Math.min(TREAT_CAP, s.treats + recharged);
 

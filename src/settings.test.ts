@@ -3,7 +3,11 @@ import { loadSettings, saveSettings, currentTreats, TREAT_CAP, TREAT_RECHARGE_MS
 import type { Settings } from './settings';
 
 // ---------------------------------------------------------------------------
-// Mock chrome.storage.local (in-memory — same pattern as store.test.ts)
+// Mock chrome.storage.local — chrome.* APIs are browser-only and have no Node
+// polyfill with matching async semantics in the Vitest runtime. Mirrors the
+// in-memory pattern used in store.test.ts.
+// REVIEW: mocking core dependency — settings persistence is exercised against
+// this in-memory mock; pair with manual extension verification before shipping.
 // ---------------------------------------------------------------------------
 
 let mockStorage: Record<string, unknown> = {};
@@ -203,5 +207,31 @@ describe('currentTreats — recharge math', () => {
     expect(count).toBe(5); // no full interval elapsed
     const expected = TREAT_RECHARGE_MS - elapsed;
     expect(nextRechargeMs).toBeCloseTo(expected, -1); // within 10ms
+  });
+
+  it('does not subtract treats when treatsUpdatedAt is in the future (clock skew)', () => {
+    /**
+     * Verifies that a future treatsUpdatedAt (clock skew, DST shift, or a bad
+     * write from a buggy caller) does not reduce the user's treat count.
+     *
+     * Without clamping, `now - treatsUpdatedAt` is negative and `Math.floor`
+     * of a negative produces -1 or worse, so `treats + recharged` becomes
+     * `treats - 1` — silently stealing treats. Users would see their counter
+     * drop without ever feeding.
+     */
+    // GIVEN — timestamp 5 minutes in the future
+    const now = Date.now();
+    const settings: Settings = {
+      theme: 'light',
+      treats: 3,
+      treatsUpdatedAt: now + 5 * 60 * 1000,
+    };
+
+    // WHEN
+    const { count, nextRechargeMs } = currentTreats(settings, now);
+
+    // THEN — count unchanged, next recharge is one full interval away
+    expect(count).toBe(3);
+    expect(nextRechargeMs).toBe(TREAT_RECHARGE_MS);
   });
 });
