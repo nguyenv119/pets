@@ -72,22 +72,6 @@ export function initTypePicker(grid: HTMLElement, hiddenInput: HTMLInputElement)
 }
 
 // ---------------------------------------------------------------------------
-// populateColors — reads type from hidden input (not a <select>)
-// ---------------------------------------------------------------------------
-
-/**
- * Populate the color <select> based on the current pet type stored in the
- * hidden input. Called on init and whenever the type changes.
- */
-export function populateColors(colorSelect: HTMLSelectElement, hiddenInput: HTMLInputElement): void {
-  const type = hiddenInput.value as PetType;
-  const colors = COLORS[type] ?? [];
-  colorSelect.innerHTML = colors.map(c =>
-    `<option value="${c}">${c.charAt(0).toUpperCase() + c.slice(1)}</option>`
-  ).join('');
-}
-
-// ---------------------------------------------------------------------------
 // buildTypePickerHTML — generates the inner HTML for the radiogroup
 // ---------------------------------------------------------------------------
 
