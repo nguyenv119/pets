@@ -377,6 +377,57 @@ h1 {
   padding-top: 10px;
 }
 
+/* Color picker grid */
+#pet-color-grid {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 5px;
+  padding: 4px 0;
+}
+
+/* Offset the label row for the color grid */
+#pet-color-label {
+  align-self: start;
+  padding-top: 8px;
+}
+
+.color-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  background: var(--bg-input);
+  border: 2px solid var(--border-input);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.color-cell img {
+  width: 28px;
+  height: 28px;
+  image-rendering: pixelated;
+  display: block;
+}
+
+.color-cell:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-btn-icon-hover);
+}
+
+.color-cell.selected,
+.color-cell[aria-checked="true"] {
+  background: var(--bg-card);
+  border-color: var(--text-heading);
+  box-shadow: 0 0 0 2px var(--border-btn-icon-hover);
+}
+
+.color-cell:focus {
+  outline: none;
+  border-color: var(--text-heading);
+}
+
 /* ---------------------------------------------------------------------------
    Buttons
    --------------------------------------------------------------------------- */

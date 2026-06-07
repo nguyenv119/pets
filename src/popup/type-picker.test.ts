@@ -7,11 +7,10 @@ import { COLORS } from './colors';
 // ---------------------------------------------------------------------------
 
 /**
- * Build a minimal DOM matching the new type-picker structure:
+ * Build a minimal DOM matching the type-picker structure:
  *   #pet-type-grid  (role="radiogroup")
  *   #pet-type-value (hidden input)
  *   .type-cell      (one per type, role="radio")
- *   #pet-color      (color select — still used by populateColors)
  */
 function buildDOM(initialType: string = 'dog'): void {
   const types = Object.keys(COLORS) as Array<keyof typeof COLORS>;
@@ -32,7 +31,6 @@ function buildDOM(initialType: string = 'dog'): void {
       ${cells}
     </div>
     <input type="hidden" id="pet-type-value" value="${initialType}" />
-    <select id="pet-color"></select>
   `;
 }
 
@@ -52,14 +50,12 @@ function buildDOM(initialType: string = 'dog'): void {
 // a container element and a hidden input, wires them up, and returns controls.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let initTypePicker: (grid: HTMLElement, hiddenInput: HTMLInputElement) => void;
-let populateColors: (colorSelect: HTMLSelectElement, hiddenInput: HTMLInputElement) => void;
 
 beforeEach(async () => {
   vi.resetModules();
   // Re-import fresh after module reset
   const mod = await import('./type-picker');
   initTypePicker = mod.initTypePicker;
-  populateColors = mod.populateColors;
   buildDOM();
 });
 
@@ -258,58 +254,11 @@ describe('initTypePicker — keyboard navigation', () => {
 });
 
 // ---------------------------------------------------------------------------
-// populateColors — reads from hidden input, not typeSelect
+// Structural regression guards
 // ---------------------------------------------------------------------------
 
-describe('populateColors — reads type from hidden input', () => {
-  it('populates color options based on #pet-type-value, not a type select element', () => {
-    /**
-     * Verifies that populateColors reads the pet type from the hidden input
-     * (#pet-type-value) rather than a <select id="pet-type"> element that no
-     * longer exists in the DOM.
-     *
-     * This matters because T2 removes the type <select> and replaces it with the
-     * radiogroup grid. Any code that still queries #pet-type would get null and throw.
-     *
-     * If violated, opening the popup crashes on DOM query null dereference and
-     * the color dropdown never populates.
-     */
-    // GIVEN — hidden input set to 'chicken'
-    const hiddenInput = document.getElementById('pet-type-value') as HTMLInputElement;
-    hiddenInput.value = 'chicken';
-    const colorSelect = document.getElementById('pet-color') as HTMLSelectElement;
-
-    // WHEN — populate colors
-    populateColors(colorSelect, hiddenInput);
-
-    // THEN — color options match chicken's palette
-    const options = [...colorSelect.options].map(o => o.value);
-    expect(options).toEqual(COLORS.chicken);
-  });
-
-  it('populates all horse color variants from the hidden input', () => {
-    /**
-     * Verifies that horse's 11 color variants all appear when the hidden input
-     * is set to 'horse'. Horse has the largest palette and is the most likely
-     * to expose an off-by-one or slice error.
-     *
-     * If violated, some horse color options are missing and users cannot adopt
-     * certain horse variants.
-     */
-    // GIVEN — hidden input set to 'horse'
-    const hiddenInput = document.getElementById('pet-type-value') as HTMLInputElement;
-    hiddenInput.value = 'horse';
-    const colorSelect = document.getElementById('pet-color') as HTMLSelectElement;
-
-    // WHEN — populate colors
-    populateColors(colorSelect, hiddenInput);
-
-    // THEN — all 11 horse variants present
-    const options = [...colorSelect.options].map(o => o.value);
-    expect(options).toEqual(COLORS.horse);
-  });
-
-  it('no <select id="pet-type"> element exists in the DOM after the refactor', () => {
+describe('DOM structure regression guards', () => {
+  it('no <select id="pet-type"> element exists in the DOM after the T2 refactor', () => {
     /**
      * Verifies the old type <select> is no longer present in the DOM. This is a
      * regression guard: if the old element is re-introduced (e.g., accidentally
@@ -326,6 +275,20 @@ describe('populateColors — reads type from hidden input', () => {
     expect(oldSelect).toBeNull();
   });
 
+  it('no <select id="pet-color"> element exists in the DOM after the T3 refactor', () => {
+    /**
+     * Verifies the old color <select> is no longer present in the DOM. After T3,
+     * the color picker is a radiogroup grid with a hidden input, not a <select>.
+     *
+     * If violated, the old select and new grid both exist and the hidden input is
+     * not the authoritative color source, causing pet color to be wrong.
+     */
+    // GIVEN — the current document after buildDOM()
+    const oldSelect = document.getElementById('pet-color');
+    // THEN — it does not exist
+    expect(oldSelect).toBeNull();
+  });
+
   it('pet-type-grid exists with role=radiogroup', () => {
     /**
      * Verifies that the type picker grid is present in the DOM with the correct
@@ -336,7 +299,6 @@ describe('populateColors — reads type from hidden input', () => {
      * keyboard users lose the expected arrow-key navigation affordances.
      */
     // GIVEN — the current document after buildDOM()
-    // WHEN — query for the grid
     const grid = document.getElementById('pet-type-grid');
     // THEN — it exists with the correct role
     expect(grid).not.toBeNull();
