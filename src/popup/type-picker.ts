@@ -33,10 +33,11 @@ export function initTypePicker(grid: HTMLElement, hiddenInput: HTMLInputElement)
     cell.classList.add('selected');
     cell.tabIndex = 0;
 
-    const type = cell.dataset.type as PetType;
+    const type = cell.dataset.type;
+    if (!type) return;
     hiddenInput.value = type;
 
-    document.dispatchEvent(new CustomEvent<{ type: string }>('pet-type-changed', { detail: { type } }));
+    document.dispatchEvent(new CustomEvent<{ type: PetType }>('pet-type-changed', { detail: { type: type as PetType } }));
   }
 
   grid.addEventListener('click', (e: MouseEvent) => {
@@ -56,14 +57,12 @@ export function initTypePicker(grid: HTMLElement, hiddenInput: HTMLInputElement)
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
       e.preventDefault();
       const next = allCells[(idx + 1) % allCells.length];
-      next.tabIndex = 0;
-      cell.tabIndex = -1;
+      selectCell(next);
       next.focus();
     } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
       e.preventDefault();
       const prev = allCells[(idx - 1 + allCells.length) % allCells.length];
-      prev.tabIndex = 0;
-      cell.tabIndex = -1;
+      selectCell(prev);
       prev.focus();
     } else if (e.key === ' ' || e.key === 'Enter') {
       e.preventDefault();

@@ -177,8 +177,11 @@ describe('initTypePicker — keyboard navigation', () => {
     // WHEN — ArrowRight pressed
     firstCell.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
 
-    // THEN — second cell is focused
+    // THEN — second cell is focused AND selected (focus and selection must stay in sync per ARIA radiogroup)
     expect(document.activeElement).toBe(cells[1]);
+    expect(cells[1].getAttribute('aria-checked')).toBe('true');
+    expect(cells[0].getAttribute('aria-checked')).toBe('false');
+    expect(hiddenInput.value).toBe(cells[1].dataset.type);
   });
 
   it('ArrowLeft moves focus to the previous cell', () => {
