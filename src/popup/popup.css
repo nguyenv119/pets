@@ -234,6 +234,30 @@ h1 {
   opacity: 0.4;
 }
 
+/* ---------------------------------------------------------------------------
+   Drag-and-drop reorder
+   --------------------------------------------------------------------------- */
+
+.pet-item[draggable="true"] {
+  cursor: grab;
+}
+
+.pet-item[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.pet-item.dragging {
+  opacity: 0.5;
+}
+
+.pet-item.drop-before {
+  border-top: 2px solid var(--text-heading);
+}
+
+.pet-item.drop-after {
+  border-bottom: 2px solid var(--text-heading);
+}
+
 .btn-remove {
   background: none;
   border: 1px solid transparent;

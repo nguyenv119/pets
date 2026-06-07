@@ -11,7 +11,7 @@ export function renderPetItemHTML(pet: PetData): string {
   const eyeEmoji = isHidden ? '🙈' : '👁️';
 
   return `
-    <div class="pet-item" data-id="${pet.id}">
+    <div class="pet-item" data-id="${pet.id}" draggable="true">
       <div class="pet-info">
         <img src="${chrome.runtime.getURL(`assets/${pet.type}/${pet.color}_idle_8fps.gif`)}" alt="${pet.name}" />
         <div>
