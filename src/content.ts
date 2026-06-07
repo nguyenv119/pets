@@ -7,9 +7,11 @@ import {
   removePetView,
   spawnFeedParticle,
   spawnLoveParticle,
+  spawnWaveParticle,
   updateParticles,
   drawParticles,
   drawBall,
+  HAS_SWIPE,
 } from './renderer';
 import type { PetView, Particle } from './renderer';
 import { savePets, loadPetData } from './store';
@@ -142,6 +144,20 @@ function addPetToScene(pet: Pet): void {
   // Prevent double-clicks on pets from dropping a ball
   view.el.addEventListener('dblclick', (e) => {
     e.stopPropagation();
+  });
+
+  // Hover: show wave animation and spawn 👋 particle for pets that have a swipe gif.
+  // Tying the wave particle to HAS_SWIPE keeps the gif and particle in lockstep —
+  // adding a new pet without a swipe asset will correctly suppress both.
+  view.el.addEventListener('mouseenter', () => {
+    pet.hovered = true;
+    if (HAS_SWIPE.has(pet.type) && particles.length < MAX_PARTICLES) {
+      particles.push(spawnWaveParticle(pet));
+    }
+  });
+
+  view.el.addEventListener('mouseleave', () => {
+    pet.hovered = false;
   });
 }
 

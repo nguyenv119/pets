@@ -68,6 +68,10 @@ export class Pet {
   /** True when the pet is moving or facing left (used for sprite flip). */
   facingLeft = false;
 
+  /** True while the cursor is over the pet's sprite — set by content.ts mouseenter/mouseleave.
+   *  Not persisted: ephemeral interaction state only. */
+  hovered = false;
+
   // Immutable identity fields
   private readonly _id: string;
   private readonly _name: string;
@@ -88,6 +92,9 @@ export class Pet {
     this._timer = randBetween(2, 4);
   }
 
+  /** Read-only accessor for the pet's type (used by renderer/content for per-type logic). */
+  get type(): import('./types').PetType { return this._type; }
+
   /**
    * Advance the pet by dt seconds.
    * @param dt  Delta time in seconds (capped by caller to max 0.05 per frame).
@@ -99,6 +106,9 @@ export class Pet {
    *                     multiple pets chase the same ball.
    */
   update(dt: number, ball: Ball | null, canvasW?: number, imgW = 32, chaseOffset = 0): void {
+    // While hovered, freeze FSM and movement so the pet stays in frame
+    if (this.hovered) return;
+
     const effectiveCanvasW: number | undefined =
       canvasW ?? (typeof window !== 'undefined' ? window.innerWidth : undefined);
 

@@ -21,6 +21,14 @@ const HAS_LIE: ReadonlySet<PetType> = new Set([
   'chicken', 'crab', 'dog', 'fox', 'miffy', 'monkey', 'panda', 'snail', 'totoro', 'turtle',
 ]);
 
+/**
+ * Pet types that have a "swipe" gif (wave animation shown on hover).
+ * Miffy is excluded — she has no swipe asset.
+ */
+export const HAS_SWIPE: ReadonlySet<PetType> = new Set([
+  'chicken', 'cockatiel', 'crab', 'dog', 'fox', 'horse', 'monkey', 'panda', 'rat', 'snail', 'snake', 'totoro', 'turtle',
+]);
+
 // Upstream snake sprite (90x90) fills its bounding box edge-to-edge while other
 // pets have padding, so it renders visibly larger than peers. Scale down so its
 // on-screen footprint roughly matches dog/cockatiel/horse.
@@ -29,10 +37,12 @@ const TYPE_SCALE: Partial<Record<PetType, number>> = {
 };
 
 /**
- * Resolves the gif name for a given pet type, state, and nearBall flag.
+ * Resolves the gif name for a given pet type, state, nearBall flag, and hovered flag.
+ * When hovered is true and the type has a swipe gif, returns "swipe" regardless of state.
  * Exported for testing.
  */
-export function resolveGifName(type: PetType, state: PetState, nearBall: boolean): string {
+export function resolveGifName(type: PetType, state: PetState, nearBall: boolean, hovered = false): string {
+  if (hovered && HAS_SWIPE.has(type)) return 'swipe';
   if (state === 'chase' && nearBall) return 'idle';
   const gif = STATE_TO_GIF[state];
   if (gif === 'lie' && !HAS_LIE.has(type)) return 'idle';
@@ -51,6 +61,7 @@ export interface PetView {
   el: HTMLImageElement;
   _lastState: PetState;
   _lastNearBall: boolean;
+  _lastHovered: boolean;
 }
 
 export function createPetView(pet: Pet, container: HTMLElement): PetView {
@@ -68,17 +79,18 @@ export function createPetView(pet: Pet, container: HTMLElement): PetView {
     'user-select:none',
   ].join(';');
   container.appendChild(el);
-  return { el, _lastState: 'sitIdle', _lastNearBall: false };
+  return { el, _lastState: 'sitIdle', _lastNearBall: false, _lastHovered: false };
 }
 
 export function updatePetView(view: PetView, pet: Pet): void {
   const d = pet.toData();
-  const effectiveGif = resolveGifName(d.type, pet.state, pet.nearBall);
+  const effectiveGif = resolveGifName(d.type, pet.state, pet.nearBall, pet.hovered);
 
-  if (pet.state !== view._lastState || pet.nearBall !== view._lastNearBall) {
+  if (pet.state !== view._lastState || pet.nearBall !== view._lastNearBall || pet.hovered !== view._lastHovered) {
     view.el.src = getAssetURL(`assets/${d.type}/${d.color}_${effectiveGif}_8fps.gif`);
     view._lastState = pet.state;
     view._lastNearBall = pet.nearBall;
+    view._lastHovered = pet.hovered;
   }
   view.el.style.left = `${pet.x}px`;
   view.el.style.top = `${pet.y}px`;
@@ -113,6 +125,10 @@ export function spawnFeedParticle(pet: Pet): Particle[] {
     { x: cx,      y: pet.y,      vy: -50, alpha: 1,   emoji: '🍖' }, // food shoots up first
     { x: cx + 8,  y: pet.y + 10, vy: -28, alpha: 0.6, emoji: '❤️' }, // heart trails behind
   ];
+}
+
+export function spawnWaveParticle(pet: Pet): Particle {
+  return { x: pet.x + DRAW_W / 2, y: pet.y - 8, vy: -30, alpha: 1, emoji: '👋' };
 }
 
 export function spawnLoveParticle(pet: Pet): Particle {

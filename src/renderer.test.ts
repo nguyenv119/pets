@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import { spawnFeedParticle, updateParticles, drawParticles, resolveGifName } from './renderer';
+import { spawnFeedParticle, updateParticles, drawParticles, resolveGifName, spawnWaveParticle, createPetView, updatePetView } from './renderer';
 import type { Particle } from './renderer';
 import { Pet } from './pet';
 import type { PetData } from './types';
@@ -498,5 +498,194 @@ describe('drawParticles', () => {
     // THEN — no fillText calls
     const calls = (ctx as unknown as { _calls: string[] })._calls;
     expect(calls.filter(c => c === 'fillText')).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveGifName — hovered swipe override
+// ---------------------------------------------------------------------------
+
+describe('resolveGifName — hovered swipe override', () => {
+  it('returns "swipe" for a non-Miffy type when hovered is true', () => {
+    /**
+     * Verifies that hovered=true overrides the normal gif resolution with "swipe"
+     * for pet types that have a swipe gif asset (all non-Miffy types).
+     *
+     * This matters because the wave interaction is the core hover feedback —
+     * without this override the pet plays its regular idle/walk gif while hovered,
+     * which gives no visual acknowledgement of the user.
+     *
+     * If violated, hovering over a dog/cat/etc shows no wave animation.
+     */
+    // GIVEN — a non-Miffy type in sitIdle state with hovered=true
+    // WHEN — resolving gif name
+    const result = resolveGifName('dog', 'sitIdle', false, true);
+
+    // THEN — returns "swipe" (wave animation)
+    expect(result).toBe('swipe');
+  });
+
+  it('does NOT return "swipe" for miffy when hovered is true', () => {
+    /**
+     * Verifies that miffy is excluded from the swipe gif override because she
+     * has no swipe gif asset — requesting it would produce a broken image.
+     *
+     * This matters because including miffy would cause a 404 on the gif src and
+     * render a broken image icon while the user hovers over her.
+     *
+     * If violated, hovering over Miffy shows a broken image instead of her
+     * normal animation.
+     */
+    // GIVEN — miffy in sitIdle with hovered=true
+    // WHEN — resolving gif name
+    const result = resolveGifName('miffy', 'sitIdle', false, true);
+
+    // THEN — does NOT return swipe (miffy has no swipe gif)
+    expect(result).not.toBe('swipe');
+  });
+
+  it('returns normal gif when hovered is false', () => {
+    /**
+     * Verifies that hovered=false does not trigger the swipe override, preserving
+     * normal gif resolution for all non-hovered pets.
+     *
+     * This matters because unhovered pets must play their regular animations —
+     * a stale hovered=true flag should not persist to affect other pets.
+     *
+     * If violated, pets wave permanently even when not being hovered.
+     */
+    // GIVEN — dog in sitIdle with hovered=false
+    // WHEN — resolving gif name
+    const result = resolveGifName('dog', 'sitIdle', false, false);
+
+    // THEN — returns normal idle gif, not swipe
+    expect(result).toBe('idle');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// spawnWaveParticle
+// ---------------------------------------------------------------------------
+
+describe('spawnWaveParticle', () => {
+  it('returns a particle with the wave emoji', () => {
+    /**
+     * Verifies that spawnWaveParticle() produces a 👋 particle so the user
+     * receives visual feedback that the pet is waving back.
+     *
+     * This matters because without the emoji the hover feels unresponsive —
+     * the pet changes gif but gives no clear emoji signal.
+     *
+     * If violated, no 👋 appears when the user hovers over a pet.
+     */
+    // GIVEN — a pet at a known position
+    const pet = makePet({ x: 100, y: 200 });
+
+    // WHEN — spawn a wave particle
+    const p = spawnWaveParticle(pet);
+
+    // THEN — emoji is the wave hand
+    expect(p.emoji).toBe('👋');
+  });
+
+  it('returns a particle with upward velocity', () => {
+    /**
+     * Verifies that the wave particle floats upward after spawning so it rises
+     * above the pet and is clearly visible.
+     *
+     * This matters because a stationary or downward-falling emoji would overlap
+     * the pet sprite and look visually incorrect.
+     *
+     * If violated, the 👋 stays stuck at the pet's position or falls downward.
+     */
+    // GIVEN — any pet
+    const pet = makePet();
+
+    // WHEN — spawn a wave particle
+    const p = spawnWaveParticle(pet);
+
+    // THEN — vy is negative (upward)
+    expect(p.vy).toBeLessThan(0);
+  });
+
+  it('spawns near the horizontal center of the pet', () => {
+    /**
+     * Verifies that the wave particle x coordinate is near the pet's horizontal
+     * center so the emoji appears above the pet, not at the edge.
+     *
+     * This matters because an off-center emoji looks detached from the pet and
+     * may be hard to associate with the hover interaction.
+     *
+     * If violated, the 👋 appears to the side of the pet instead of above it.
+     */
+    // GIVEN — a pet at a known x position
+    const pet = makePet({ x: 100, y: 200 });
+
+    // WHEN — spawn a wave particle
+    const p = spawnWaveParticle(pet);
+
+    // THEN — x is within pet bounds (100 to 164, DRAW_W=64)
+    expect(p.x).toBeGreaterThanOrEqual(100);
+    expect(p.x).toBeLessThanOrEqual(164);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// updatePetView — _lastHovered change detection
+// ---------------------------------------------------------------------------
+
+describe('updatePetView — hovered change detection', () => {
+  it('updates img src when hovered changes from false to true', () => {
+    /**
+     * Verifies that updatePetView() detects a change in the hovered flag and
+     * updates the img.src to reflect the swipe gif override.
+     *
+     * This matters because without detecting the hovered change, the pet's
+     * sprite stays on the idle gif even though the hover state changed —
+     * the wave animation never plays.
+     *
+     * If violated, hovering over a pet never switches it to the swipe animation.
+     */
+    // GIVEN — a view and pet in sync, then hovered toggled to true
+    const container = document.createElement('div');
+    const pet = makePet();
+    const view = createPetView(pet, container);
+
+    // sync view state so _lastHovered matches
+    updatePetView(view, pet);
+    const srcBeforeHover = view.el.src;
+
+    // WHEN — toggle hovered and update view
+    pet.hovered = true;
+    updatePetView(view, pet);
+
+    // THEN — src changed (swipe gif loaded)
+    expect(view.el.src).not.toBe(srcBeforeHover);
+  });
+
+  it('does not update img src when hovered remains unchanged', () => {
+    /**
+     * Verifies that updatePetView() skips the src assignment when neither state,
+     * nearBall, nor hovered changed — avoiding unnecessary DOM mutations.
+     *
+     * This matters because unnecessary src reassignments cause gif resets on
+     * every tick, making animations stutter rather than play smoothly.
+     *
+     * If violated, the swipe gif resets to frame 1 on every animation tick,
+     * producing a flickering effect instead of a smooth wave.
+     */
+    // GIVEN — a view and pet already in sync with hovered=true
+    const container = document.createElement('div');
+    const pet = makePet();
+    const view = createPetView(pet, container);
+    pet.hovered = true;
+    updatePetView(view, pet); // sync _lastHovered = true
+    const srcAfterFirstUpdate = view.el.src;
+
+    // WHEN — update again with no state change
+    updatePetView(view, pet);
+
+    // THEN — src unchanged (no unnecessary DOM write)
+    expect(view.el.src).toBe(srcAfterFirstUpdate);
   });
 });
