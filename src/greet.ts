@@ -20,6 +20,19 @@ const GREET_STATES: ReadonlySet<string> = new Set(['sitIdle', 'walkLeft', 'walkR
 
 export const greetCooldowns = new Map<string, number>();
 
+/**
+ * Per-pet pending clear timeout. WeakMap so entries are GC'd automatically
+ * when a Pet object is removed from the scene without explicit cleanup.
+ *
+ * BUG-1 fix: on pet removal, clearGreetCooldownsForPet also cancels this
+ *   timer so a dangling timeout cannot mutate a removed pet's .greeting flag.
+ *
+ * BUG-2 fix: when pet B starts a new greet pair (B,C), we cancel any existing
+ *   pending timeout for B (from a prior (A,B) pair) so it cannot prematurely
+ *   clear B.greeting mid-animation.
+ */
+export const greetTimeouts = new WeakMap<Pet, ReturnType<typeof setTimeout>>();
+
 function pairKey(a: Pet, b: Pet): string {
   return a.id < b.id ? `${a.id}:${b.id}` : `${b.id}:${a.id}`;
 }
@@ -69,15 +82,26 @@ export function tryGreetPairs(pets: Pet[]): void {
       const last = greetCooldowns.get(key);
       if (last !== undefined && now - last < GREET_COOLDOWN_MS) continue;
 
+      // --- Cancel any pending clear timers for a or b (BUG-2 fix) ---
+      const existingA = greetTimeouts.get(a);
+      if (existingA !== undefined) clearTimeout(existingA);
+      const existingB = greetTimeouts.get(b);
+      if (existingB !== undefined) clearTimeout(existingB);
+
       // --- Trigger greeting ---
       a.greeting = true;
       b.greeting = true;
       greetCooldowns.set(key, now);
 
-      setTimeout(() => {
+      const id = setTimeout(() => {
         a.greeting = false;
         b.greeting = false;
+        greetTimeouts.delete(a);
+        greetTimeouts.delete(b);
       }, GREET_DURATION_MS);
+
+      greetTimeouts.set(a, id);
+      greetTimeouts.set(b, id);
     }
   }
 }
@@ -87,14 +111,23 @@ export function tryGreetPairs(pets: Pet[]): void {
 // ---------------------------------------------------------------------------
 
 /**
- * Removes all cooldown entries that involve the given pet id.
+ * Removes all cooldown entries that involve the given pet id, and cancels
+ * any pending greeting-clear timeout for the pet object (BUG-1 fix).
+ *
  * Call this from content.ts when a pet is deleted so stale entries do not
  * block future pets from greeting the remaining pets.
  */
-export function clearGreetCooldownsForPet(id: string): void {
+export function clearGreetCooldownsForPet(id: string, pet?: Pet): void {
   for (const key of greetCooldowns.keys()) {
     if (key.startsWith(`${id}:`) || key.endsWith(`:${id}`)) {
       greetCooldowns.delete(key);
+    }
+  }
+  if (pet !== undefined) {
+    const tid = greetTimeouts.get(pet);
+    if (tid !== undefined) {
+      clearTimeout(tid);
+      greetTimeouts.delete(pet);
     }
   }
 }

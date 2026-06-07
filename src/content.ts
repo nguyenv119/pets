@@ -343,7 +343,7 @@ chrome.runtime.onMessage.addListener((msg: ExtMessage, _sender, sendResponse) =>
           removePetView(view);
           views.delete(removed);
         }
-        clearGreetCooldownsForPet(removed.id);
+        clearGreetCooldownsForPet(removed.id, removed);
         savePets(pets.map(p => p.toData()));
       }
       break;
