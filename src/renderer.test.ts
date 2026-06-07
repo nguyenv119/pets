@@ -104,7 +104,13 @@ describe('resolveGifName', () => {
 
   it('returns "idle" for snake in sleep state', () => {
     /**
-     * Verifies the lie fallback applies to snake.
+     * Verifies the sleep→idle fallback applies to snake.
+     *
+     * Snake has no `green_lie_8fps.gif` upstream (vscode-pets), so requesting
+     * the lie gif would 404 and the sprite would render as a broken-image
+     * icon mid-sleep. The fallback keeps it on its idle gif instead.
+     *
+     * If violated, sleeping snakes flash a broken-image placeholder.
      */
     // GIVEN — snake is a new type without a lie gif
     // WHEN — resolving gif name for sleep
@@ -116,7 +122,13 @@ describe('resolveGifName', () => {
 
   it('returns "idle" for horse in sleep state', () => {
     /**
-     * Verifies the lie fallback applies to horse.
+     * Verifies the sleep→idle fallback applies to horse.
+     *
+     * Horse has no `<color>_lie_8fps.gif` upstream for any of its 11 variants;
+     * without the fallback every sleeping horse (any color/paint/socks variant)
+     * would render as a broken-image icon.
+     *
+     * If violated, sleeping horses flash a broken-image placeholder.
      */
     // GIVEN — horse is a new type without a lie gif
     // WHEN — resolving gif name for sleep
