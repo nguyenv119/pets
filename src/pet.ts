@@ -92,6 +92,9 @@ export class Pet {
     this._timer = randBetween(2, 4);
   }
 
+  /** Read-only accessor for the pet's type (used by renderer/content for per-type logic). */
+  get type(): import('./types').PetType { return this._type; }
+
   /**
    * Advance the pet by dt seconds.
    * @param dt  Delta time in seconds (capped by caller to max 0.05 per frame).
@@ -102,9 +105,6 @@ export class Pet {
    * @param chaseOffset  Horizontal offset from ball center — spreads pets apart when
    *                     multiple pets chase the same ball.
    */
-  /** Read-only accessor for the pet's type (used by renderer/content for per-type logic). */
-  get type(): import('./types').PetType { return this._type; }
-
   update(dt: number, ball: Ball | null, canvasW?: number, imgW = 32, chaseOffset = 0): void {
     // While hovered, freeze FSM and movement so the pet stays in frame
     if (this.hovered) return;

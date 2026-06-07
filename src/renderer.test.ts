@@ -476,6 +476,31 @@ describe('drawParticles', () => {
     expect(calls[calls.length - 1]).toBe('restore');
   });
 
+  it('does nothing when particle array is empty', () => {
+    /**
+     * Verifies that drawParticles() is a no-op (only save/restore) when there
+     * are no particles to draw.
+     *
+     * This matters because drawParticles() is called every tick even when no
+     * feeding has occurred. Any side effects on an empty list would be wasteful
+     * or incorrect.
+     *
+     * If violated, each tick draws invisible garbage to the canvas even when
+     * there are no active particles.
+     */
+    // GIVEN — empty particle array
+    const ctx = makeCtxStub();
+    const particles: Particle[] = [];
+
+    // WHEN — draw empty list
+    drawParticles(ctx, particles);
+
+    // THEN — no fillText calls
+    const calls = (ctx as unknown as { _calls: string[] })._calls;
+    expect(calls.filter(c => c === 'fillText')).toHaveLength(0);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // resolveGifName — hovered swipe override
 // ---------------------------------------------------------------------------
@@ -662,30 +687,5 @@ describe('updatePetView — hovered change detection', () => {
 
     // THEN — src unchanged (no unnecessary DOM write)
     expect(view.el.src).toBe(srcAfterFirstUpdate);
-  });
-});
-
-  it('does nothing when particle array is empty', () => {
-    /**
-     * Verifies that drawParticles() is a no-op (only save/restore) when there
-     * are no particles to draw.
-     *
-     * This matters because drawParticles() is called every tick even when no
-     * feeding has occurred. Any side effects on an empty list would be wasteful
-     * or incorrect.
-     *
-     * If violated, each tick draws invisible garbage to the canvas even when
-     * there are no active particles.
-     */
-    // GIVEN — empty particle array
-    const ctx = makeCtxStub();
-    const particles: Particle[] = [];
-
-    // WHEN — draw empty list
-    drawParticles(ctx, particles);
-
-    // THEN — no fillText calls
-    const calls = (ctx as unknown as { _calls: string[] })._calls;
-    expect(calls.filter(c => c === 'fillText')).toHaveLength(0);
   });
 });

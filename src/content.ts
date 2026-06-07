@@ -11,6 +11,7 @@ import {
   updateParticles,
   drawParticles,
   drawBall,
+  HAS_SWIPE,
 } from './renderer';
 import type { PetView, Particle } from './renderer';
 import { savePets, loadPetData } from './store';
@@ -145,10 +146,12 @@ function addPetToScene(pet: Pet): void {
     e.stopPropagation();
   });
 
-  // Hover: show wave animation and spawn 👋 particle (Miffy excluded — no swipe gif)
+  // Hover: show wave animation and spawn 👋 particle for pets that have a swipe gif.
+  // Tying the wave particle to HAS_SWIPE keeps the gif and particle in lockstep —
+  // adding a new pet without a swipe asset will correctly suppress both.
   view.el.addEventListener('mouseenter', () => {
     pet.hovered = true;
-    if (pet.type !== 'miffy' && particles.length < MAX_PARTICLES) {
+    if (HAS_SWIPE.has(pet.type) && particles.length < MAX_PARTICLES) {
       particles.push(spawnWaveParticle(pet));
     }
   });

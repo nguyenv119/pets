@@ -25,7 +25,7 @@ const HAS_LIE: ReadonlySet<PetType> = new Set([
  * Pet types that have a "swipe" gif (wave animation shown on hover).
  * Miffy is excluded — she has no swipe asset.
  */
-const HAS_SWIPE: ReadonlySet<PetType> = new Set([
+export const HAS_SWIPE: ReadonlySet<PetType> = new Set([
   'chicken', 'cockatiel', 'crab', 'dog', 'fox', 'horse', 'monkey', 'panda', 'rat', 'snail', 'snake', 'totoro', 'turtle',
 ]);
 
