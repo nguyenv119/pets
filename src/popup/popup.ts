@@ -3,7 +3,8 @@ import type { Theme } from '../settings';
 import { loadPetData, savePets } from '../store';
 import { pingTab } from './tab-probe';
 import { renderPetItemHTML } from './render-pet-item';
-import { initTypePicker, populateColors, buildTypePickerHTML } from './type-picker';
+import { initTypePicker, buildTypePickerHTML } from './type-picker';
+import { renderColorGrid, initColorPicker } from './color-picker';
 import { applyTheme, loadTheme, toggleTheme } from './theme';
 
 // ---------------------------------------------------------------------------
@@ -14,7 +15,8 @@ const petsList = document.getElementById('pets-list')!;
 const nameInput = document.getElementById('pet-name') as HTMLInputElement;
 const typeGrid = document.getElementById('pet-type-grid') as HTMLElement;
 const typeHidden = document.getElementById('pet-type-value') as HTMLInputElement;
-const colorSelect = document.getElementById('pet-color') as HTMLSelectElement;
+const colorGrid = document.getElementById('pet-color-grid') as HTMLElement;
+const colorHidden = document.getElementById('pet-color-value') as HTMLInputElement;
 const btnAdd = document.getElementById('btn-add')!;
 const btnThrowBall = document.getElementById('btn-throw-ball') as HTMLButtonElement;
 const btnToggle = document.getElementById('btn-toggle')!;
@@ -66,10 +68,6 @@ function renderPetList(): void {
   });
 }
 
-function refreshColors(): void {
-  populateColors(colorSelect, typeHidden);
-}
-
 // ---------------------------------------------------------------------------
 // Actions
 // ---------------------------------------------------------------------------
@@ -77,7 +75,7 @@ function refreshColors(): void {
 async function addPet(): Promise<void> {
   const name = nameInput.value.trim() || 'Pet';
   const type = typeHidden.value as PetType;
-  const color = colorSelect.value;
+  const color = colorHidden.value;
 
   if (!color) return; // guard against empty color
 
@@ -150,7 +148,6 @@ function toggleVisibility(): void {
 // Event listeners
 // ---------------------------------------------------------------------------
 
-document.addEventListener('pet-type-changed', refreshColors);
 btnAdd.addEventListener('click', addPet);
 btnThrowBall.addEventListener('click', throwBall);
 btnToggle.addEventListener('click', toggleVisibility);
@@ -173,7 +170,8 @@ async function init(): Promise<void> {
   // Render type picker grid before any await so it appears immediately
   typeGrid.innerHTML = buildTypePickerHTML(typeHidden.value as PetType, chrome.runtime.getURL);
   initTypePicker(typeGrid, typeHidden);
-  refreshColors(); // populate colors for the default type immediately
+  renderColorGrid(typeHidden.value, colorGrid, colorHidden, chrome.runtime.getURL);
+  initColorPicker(colorGrid, colorHidden, chrome.runtime.getURL);
 
   // Load and apply persisted theme (inline <head> script also does this
   // but may lose the race against the first paint; this ensures correctness)

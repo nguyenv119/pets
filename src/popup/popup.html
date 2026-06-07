@@ -67,10 +67,11 @@
           </div>
           <input type="hidden" id="pet-type-value" value="dog" />
 
-          <label for="pet-color">Color</label>
-          <select id="pet-color">
-            <!-- Options populated dynamically based on type -->
-          </select>
+          <label id="pet-color-label">Color</label>
+          <div id="pet-color-grid" role="radiogroup" aria-labelledby="pet-color-label">
+            <!-- Populated by popup.ts via renderColorGrid() -->
+          </div>
+          <input type="hidden" id="pet-color-value" value="" />
         </div>
 
         <button id="btn-add" class="btn-primary">Add Pet</button>
