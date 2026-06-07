@@ -21,6 +21,7 @@ const chromeMock = {
       get: vi.fn(async (_key: string) => ({})),
       set: vi.fn(async () => {}),
     },
+    onChanged: { addListener: vi.fn() },
   },
   tabs: {
     sendMessage: vi.fn((_tabId: number, _msg: unknown, cb: (r?: { alive: boolean }) => void) => cb(undefined)),

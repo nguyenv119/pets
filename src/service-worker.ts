@@ -99,6 +99,8 @@ chrome.runtime.onMessage.addListener(
     if (msg.type === 'CONSUME_TREAT') {
       // Chain via mutex so concurrent requests are serialized:
       // each handler waits for the prior one to finish before reading storage.
+      // `.catch` is required so a single failure (e.g. storage error) doesn't
+      // poison `busy` and skip every subsequent CONSUME_TREAT silently.
       busy = (busy ?? Promise.resolve()).then(async () => {
         const now = Date.now();
         const s = await loadSettings();
@@ -118,6 +120,11 @@ chrome.runtime.onMessage.addListener(
 
         await saveSettings(s);
         sendResponse({ ok: true, count: s.treats });
+      }).catch((err) => {
+        // Keep the chain alive after a failure; surface as ok:false to the caller
+        // so the UI doesn't hang forever waiting for sendResponse.
+        console.error('CONSUME_TREAT failed:', err);
+        try { sendResponse({ ok: false, count: 0 }); } catch { /* response already sent */ }
       });
 
       return true; // keep sendResponse callable after async work
