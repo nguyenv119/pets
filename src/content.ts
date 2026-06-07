@@ -134,12 +134,18 @@ function addPetToScene(pet: Pet): void {
   const view = createPetView(pet, petsLayer);
   views.set(pet, view);
 
-  // Click to feed
+  // Click to feed — gate on treat availability via service worker
   view.el.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (pet.feed() && particles.length < MAX_PARTICLES) {
-      particles.push(...spawnFeedParticle(pet));
-    }
+    chrome.runtime.sendMessage({ type: 'CONSUME_TREAT' }, (resp: { ok: boolean; count?: number } | undefined) => {
+      if (resp?.ok) {
+        pet.feed();
+        if (particles.length < MAX_PARTICLES) {
+          particles.push(...spawnFeedParticle(pet));
+        }
+      }
+      // If ok=false, silently skip — no treats available
+    });
   });
 
   // Prevent double-clicks on pets from dropping a ball
