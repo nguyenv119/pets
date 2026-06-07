@@ -1073,3 +1073,209 @@ describe('Pet.hovered flag', () => {
     expect(pet.x).toBeGreaterThan(100);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Sleep cycle (night mode)
+// ---------------------------------------------------------------------------
+
+describe('Pet FSM — sleep cycle (night mode)', () => {
+  it('transitions to sleep when nightCheck returns true and pet is in sitIdle', () => {
+    /**
+     * Verifies that a pet in sitIdle immediately enters sleep state when the
+     * nightCheck callback signals nighttime.
+     *
+     * This matters because pets should visually reflect real-world time by
+     * sleeping at night — without this, pets wander all night regardless of
+     * the clock.
+     *
+     * If violated, pets remain active at night and do not display the sleep
+     * animation during off hours.
+     */
+    // GIVEN — a pet in sitIdle, nighttime active
+    const pet = makePet();
+    pet.state = 'sitIdle';
+    pet._timer = 10;
+    const isNight = () => true;
+
+    // WHEN — update with nightCheck returning true
+    pet.update(0.016, null, 800, 32, 0, isNight);
+
+    // THEN — pet entered sleep
+    expect(pet.state).toBe('sleep');
+  });
+
+  it('transitions to sleep when nightCheck returns true and pet is walking', () => {
+    /**
+     * Verifies that a walking pet is put to sleep when nighttime begins, rather
+     * than continuing to walk through the night.
+     *
+     * This matters because walk states should not persist through night hours —
+     * a pet walking forever at night looks broken.
+     *
+     * If violated, pets that were walking when night began continue walking
+     * instead of switching to the sleep animation.
+     */
+    // GIVEN — a pet in walkRight state, nighttime active
+    const pet = makePet({ x: 100 });
+    pet.state = 'walkRight';
+    pet._timer = 10;
+    const isNight = () => true;
+
+    // WHEN — update with nightCheck returning true
+    pet.update(0.016, null, 800, 32, 0, isNight);
+
+    // THEN — pet entered sleep
+    expect(pet.state).toBe('sleep');
+  });
+
+  it('does not interrupt eat state when nightCheck returns true', () => {
+    /**
+     * Verifies that a pet being fed (eat state) is not interrupted by nighttime
+     * so the eat animation completes naturally.
+     *
+     * This matters because abruptly cutting off the eat animation when night
+     * begins would make feeding feel broken and could confuse users.
+     *
+     * If violated, the eat emoji burst and animation are cut short whenever
+     * nighttime begins mid-feed.
+     */
+    // GIVEN — a pet in eat state, nighttime active
+    const pet = makePet();
+    pet.state = 'eat';
+    pet._timer = 1;
+    const isNight = () => true;
+
+    // WHEN — update with nightCheck returning true
+    pet.update(0.016, null, 800, 32, 0, isNight);
+
+    // THEN — pet remains in eat (not interrupted)
+    expect(pet.state).toBe('eat');
+  });
+
+  it('does not interrupt chase state when nightCheck returns true', () => {
+    /**
+     * Verifies that a chasing pet is not put to sleep mid-chase when night
+     * begins — the chase resolves naturally before sleep can apply.
+     *
+     * This matters because immediately sleeping during a chase would leave the
+     * ball uncollected and break the ball interaction flow.
+     *
+     * If violated, pets stop chasing and fall asleep whenever nighttime starts,
+     * making the ball interaction unreliable.
+     */
+    // GIVEN — a pet in chase state, nighttime active
+    const pet = makePet();
+    pet.state = 'chase';
+    pet._timer = 999;
+    const ball: Ball = { active: true, x: 500, y: 0 };
+    const isNight = () => true;
+
+    // WHEN — update with nightCheck returning true
+    pet.update(0.016, ball, 800, 32, 0, isNight);
+
+    // THEN — pet remains in chase
+    expect(pet.state).toBe('chase');
+  });
+
+  it('wakes from night-sleep when nightCheck returns false (morning)', () => {
+    /**
+     * Verifies that a pet sleeping due to nighttime wakes up (transitions to
+     * sitIdle) when the nightCheck callback returns false, indicating morning.
+     *
+     * This matters because pets should resume autonomous behavior after night
+     * ends — a pet that sleeps indefinitely is indistinguishable from a bug.
+     *
+     * If violated, pets that were put to sleep by nighttime never wake up,
+     * appearing frozen on screen all day.
+     */
+    // GIVEN — a pet in night-induced sleep, now daytime
+    const pet = makePet();
+    pet.state = 'sitIdle';
+    pet._timer = 10;
+    // First, put it to sleep via night
+    pet.update(0.016, null, 800, 32, 0, () => true);
+    expect(pet.state).toBe('sleep');
+
+    // WHEN — update with nightCheck returning false (daytime)
+    pet.update(0.016, null, 800, 32, 0, () => false);
+
+    // THEN — pet woke up to sitIdle
+    expect(pet.state).toBe('sitIdle');
+  });
+
+  it('does not wake FSM-natural sleep early when nightCheck returns false', () => {
+    /**
+     * Verifies that a pet naturally sleeping (via FSM timer, not night-forced)
+     * is not woken up early when daytime begins.
+     *
+     * This matters because nightCheck should only control night-forced sleep;
+     * normal FSM sleep must still respect its own timer to preserve variety.
+     *
+     * If violated, any pet that falls asleep naturally during the day would be
+     * immediately woken when the next update fires with a daytime nightCheck.
+     */
+    // GIVEN — a pet in FSM-natural sleep (not night-forced)
+    const pet = makePet();
+    pet.state = 'sleep';
+    pet._timer = 5; // mid-sleep, timer not expired
+
+    // WHEN — update with nightCheck returning false (daytime)
+    pet.update(0.016, null, 800, 32, 0, () => false);
+
+    // THEN — pet remains asleep (FSM timer drives wake, not nightCheck)
+    expect(pet.state).toBe('sleep');
+  });
+
+  it('keeps pet sleeping across multiple updates while nightCheck returns true', () => {
+    /**
+     * Verifies that a night-forced sleeping pet stays asleep for the entire
+     * night, even if the FSM sleep timer expires, as long as nightCheck
+     * continues to return true.
+     *
+     * This matters because a pet that wakes up mid-night (due to timer expiry)
+     * would break the sleep-all-night invariant and could resume walking.
+     *
+     * If violated, pets wake up and resume wandering mid-night whenever their
+     * FSM sleep timer expires.
+     */
+    // GIVEN — a pet put to sleep by night with a very short FSM timer
+    const pet = makePet();
+    pet.state = 'sitIdle';
+    pet._timer = 10;
+    pet.update(0.016, null, 800, 32, 0, () => true);
+    expect(pet.state).toBe('sleep');
+    // Force the sleep timer to expire
+    pet._timer = 0;
+
+    // WHEN — advance past timer while still nighttime
+    pet.update(1, null, 800, 32, 0, () => true);
+
+    // THEN — pet remains in sleep (night keeps it asleep)
+    expect(pet.state).toBe('sleep');
+  });
+
+  it('does not interrupt idleWithBall state when nightCheck returns true', () => {
+    /**
+     * Verifies that a pet holding the ball (idleWithBall) is NOT forced to
+     * sleep when nighttime begins.
+     *
+     * This matters because yanking the pet out of idleWithBall mid-animation
+     * would break the ball-hold visual and leave the ball in an inconsistent
+     * ownership state.
+     *
+     * If violated, a pet holding the ball instantly falls asleep whenever
+     * nighttime starts, making the ball interaction unreliable.
+     */
+    // GIVEN — a pet in idleWithBall state, nighttime active
+    const pet = makePet();
+    pet.state = 'idleWithBall';
+    pet._timer = 999;
+    const isNight = () => true;
+
+    // WHEN — update with nightCheck returning true
+    pet.update(0.016, null, 800, 32, 0, isNight);
+
+    // THEN — pet remains in idleWithBall (not forced to sleep)
+    expect(pet.state).toBe('idleWithBall');
+  });
+});

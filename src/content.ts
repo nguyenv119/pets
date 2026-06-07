@@ -1,4 +1,4 @@
-import { Pet, CATCH_DISTANCE } from './pet';
+import { Pet, CATCH_DISTANCE, isNightHour } from './pet';
 import type { Ball } from './pet';
 import {
   DRAW_W,
@@ -265,7 +265,7 @@ function tick(now: number): void {
       offset = (chasingIdx - (chasingPets.length - 1) / 2) * CHASE_SPREAD;
       chasingIdx++;
     }
-    pet.update(dt, ballForPet, canvas.width, DRAW_W, offset);
+    pet.update(dt, ballForPet, canvas.width, DRAW_W, offset, isNightHour);
 
     const view = views.get(pet);
     if (view) updatePetView(view, pet);
