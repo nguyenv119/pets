@@ -205,6 +205,12 @@ h1 {
   font-weight: 400;
 }
 
+.pet-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .btn-hide {
   background: none;
   border: 1px solid transparent;
