@@ -7,6 +7,7 @@ import { initTypePicker, buildTypePickerHTML } from './type-picker';
 import { renderColorGrid, initColorPicker } from './color-picker';
 import { applyTheme, loadTheme, toggleTheme } from './theme';
 import { setAddFormExpanded, isAddFormExpanded } from './collapsible-form';
+import { showToast } from './toast';
 
 // ---------------------------------------------------------------------------
 // DOM references
@@ -205,12 +206,30 @@ async function togglePetHidden(id: string): Promise<void> {
 }
 
 async function removePet(id: string): Promise<void> {
+  const originalIndex = pets.findIndex(p => p.id === id);
+  if (originalIndex === -1) return;
+
+  const pet = pets[originalIndex];
+
+  // Optimistically remove from local state and re-render immediately.
   pets = pets.filter(p => p.id !== id);
-  await savePets(pets);
   renderPetList();
 
-  const msg: ExtMessage = { type: 'REMOVE_PET', id };
-  chrome.runtime.sendMessage(msg);
+  // Tell SW to schedule the deferred removal (storage write + broadcast).
+  const pendingMsg: ExtMessage = { type: 'PENDING_REMOVE_PET', id, delayMs: 5000 };
+  chrome.runtime.sendMessage(pendingMsg);
+
+  // Show undo toast; await result to know if user clicked Undo.
+  const undone = await showToast({ message: `${pet.name} removed`, actionLabel: 'Undo', duration: 5000 });
+
+  if (undone) {
+    // Re-insert at original position and tell SW to cancel.
+    pets.splice(originalIndex, 0, pet);
+    renderPetList();
+    const cancelMsg: ExtMessage = { type: 'CANCEL_PENDING_REMOVE', id };
+    chrome.runtime.sendMessage(cancelMsg);
+  }
+  // If not undone, SW already handles storage + REMOVE_PET broadcast on timeout.
 }
 
 function throwBall(): void {

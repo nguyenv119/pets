@@ -20,4 +20,6 @@ export type ExtMessage =
   | { type: 'TOGGLE_VISIBILITY'; visible: boolean }
   | { type: 'PETS_UPDATED'; pets: PetData[] }
   | { type: 'PETS_REORDERED'; pets: PetData[] }
+  | { type: 'PENDING_REMOVE_PET'; id: string; delayMs: number }
+  | { type: 'CANCEL_PENDING_REMOVE'; id: string }
   | { type: 'PING' };

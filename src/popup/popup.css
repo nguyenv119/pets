@@ -584,3 +584,56 @@ footer p {
   cursor: not-allowed;
   pointer-events: none;
 }
+
+/* ---------------------------------------------------------------------------
+   Toast notification
+   --------------------------------------------------------------------------- */
+
+#toast-region {
+  position: sticky;
+  bottom: 0;
+  padding: 0 12px 8px;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--bg-toast, #323232);
+  color: var(--text-toast, #fff);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  animation: toast-in 0.18s ease;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.toast-message {
+  flex: 1;
+}
+
+.toast-action {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.5);
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.toast-action:hover {
+  background: rgba(255,255,255,0.15);
+}
+
+[data-theme="dark"] .toast {
+  background: var(--bg-toast-dark, #484848);
+}
