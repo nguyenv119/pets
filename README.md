@@ -44,6 +44,12 @@ Tiny pixel companions that live in your browser. They walk, sleep, chase balls, 
 | Show/hide | Eye button in the popup |
 | Remove a pet | Hit the **x** on their card |
 
+## Asset attribution
+
+Sprite gifs for chicken/crab/dog/fox/monkey/panda/snail/totoro/turtle are from
+[tonybaloney/vscode-pets](https://github.com/tonybaloney/vscode-pets), licensed
+under CC BY-ND 4.0. Used verbatim with attribution.
+
 ## Credits
 
 Pet sprite GIFs are from [vscode-pets](https://github.com/tonybaloney/vscode-pets) by Anthony Shaw, used under the MIT License. See [LICENSE](LICENSE) for full text.
