@@ -37,7 +37,7 @@ const chromeMock = {
 function buildDOM(): void {
   document.body.innerHTML = `
     <div id="app">
-      <button id="btn-add-toggle" class="fab" aria-expanded="false">+ Add pet</button>
+      <button id="btn-add-toggle" class="fab" aria-expanded="false">Visit Shelter</button>
       <section id="add-pet-form">
         <div id="add-pet-body">
           <div class="form-grid">
@@ -69,7 +69,7 @@ describe('setAddFormExpanded — collapsible add-pet form', () => {
      * on `#add-pet-body`. Without removing it, the form stays hidden even
      * when the user clicks the FAB to open it.
      *
-     * If violated, users click "+ Add pet" and the form never appears.
+     * If violated, users click "Visit Shelter" and the form never appears.
      */
     // GIVEN — form starts collapsed
     const form = document.getElementById('add-pet-form')!;
