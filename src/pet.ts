@@ -72,6 +72,11 @@ export class Pet {
    *  Not persisted: ephemeral interaction state only. */
   hovered = false;
 
+  /** True when the pet was put to sleep by the nighttime cycle (not by the FSM).
+   *  Used to distinguish night-forced sleep from natural sleep so morning can
+   *  selectively wake only night-forced sleepers. */
+  private _nightSleep = false;
+
   // Immutable identity fields
   private readonly _id: string;
   private readonly _name: string;
@@ -104,10 +109,39 @@ export class Pet {
    * @param imgW  Sprite width used for right-edge clamping. Defaults to 32.
    * @param chaseOffset  Horizontal offset from ball center — spreads pets apart when
    *                     multiple pets chase the same ball.
+   * @param nightCheck  Optional callback returning true when it is nighttime.
+   *                    When true, idle/walk states are forced into sleep and kept
+   *                    there until nightCheck returns false. Chase and eat states
+   *                    are never interrupted.
    */
-  update(dt: number, ball: Ball | null, canvasW?: number, imgW = 32, chaseOffset = 0): void {
+  update(dt: number, ball: Ball | null, canvasW?: number, imgW = 32, chaseOffset = 0, nightCheck?: () => boolean): void {
     // While hovered, freeze FSM and movement so the pet stays in frame
     if (this.hovered) return;
+
+    // --- Night cycle ---
+    if (nightCheck) {
+      const isNight = nightCheck();
+      if (isNight) {
+        // Force non-interruptible states to sleep
+        if (this.state !== 'chase' && this.state !== 'eat' && this.state !== 'sleep' && this.state !== 'idleWithBall') {
+          this._nightSleep = true;
+          this._transition('sleep', Infinity);
+          return;
+        }
+        // Already night-sleeping: keep the pet asleep (reset timer to prevent FSM wake)
+        if (this.state === 'sleep' && this._nightSleep) {
+          this._timer = Infinity;
+          return;
+        }
+      } else {
+        // Daytime: wake night-forced sleepers
+        if (this.state === 'sleep' && this._nightSleep) {
+          this._nightSleep = false;
+          this._transition('sitIdle', randBetween(2, 4));
+          return;
+        }
+      }
+    }
 
     const effectiveCanvasW: number | undefined =
       canvasW ?? (typeof window !== 'undefined' ? window.innerWidth : undefined);
@@ -230,4 +264,10 @@ export class Pet {
     this._timer = timer;
     this.onTransition?.();
   }
+}
+
+/** Returns true when the local hour is in the nighttime window (22:00–06:00). */
+export function isNightHour(d = new Date()): boolean {
+  const h = d.getHours();
+  return h >= 22 || h < 6;
 }
