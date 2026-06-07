@@ -13,6 +13,11 @@ let sendMessageImpl: (
   callback: SendMessageCallback
 ) => void = (_tabId, _msg, cb) => cb(undefined);
 
+// REVIEW: mocking core dependency — chrome.tabs.sendMessage is the entire
+// behavioral surface pingTab wraps. The chrome.* APIs are browser-only and
+// cannot be exercised under Vitest/jsdom, so we stub the callback contract
+// (callback shape, lastError mechanism, response value) by hand. If Chrome's
+// MV3 messaging contract changes, these tests can pass while production breaks.
 const chromeMock = {
   tabs: {
     sendMessage: vi.fn((tabId: number, msg: { type: string }, cb: SendMessageCallback) => {
@@ -115,6 +120,27 @@ describe('pingTab — PING probe to content script', () => {
 
     // WHEN — popup probes the tab
     const result = await pingTab(7);
+
+    // THEN — the probe returns false
+    expect(result).toBe(false);
+  });
+
+  it('returns false when response is truthy but alive is false', async () => {
+    /**
+     * Verifies that pingTab gates on `resp.alive === true`, not on the mere
+     * presence of a response object. If a future content-script version
+     * (or an unrelated extension on the same channel) replies with
+     * `{ alive: false }` to signal it's shutting down or not ready, pingTab
+     * must treat that as not-alive.
+     *
+     * If violated, a "{ alive: false }" response would still hide the banner
+     * and enable Throw Ball, even though pets are not actually running.
+     */
+    // GIVEN — response received but explicitly not alive
+    sendMessageImpl = (_tabId, _msg, cb) => cb({ alive: false });
+
+    // WHEN — popup probes the tab
+    const result = await pingTab(11);
 
     // THEN — the probe returns false
     expect(result).toBe(false);

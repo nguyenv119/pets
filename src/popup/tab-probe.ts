@@ -7,8 +7,8 @@
  */
 export function pingTab(tabId: number): Promise<boolean> {
   return new Promise(resolve => {
-    chrome.tabs.sendMessage(tabId, { type: 'PING' }, (resp) => {
-      if (chrome.runtime.lastError || !resp) return resolve(false);
+    chrome.tabs.sendMessage(tabId, { type: 'PING' }, (resp?: { alive?: boolean }) => {
+      if (chrome.runtime.lastError || !resp?.alive) return resolve(false);
       resolve(true);
     });
   });
