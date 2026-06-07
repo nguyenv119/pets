@@ -1,8 +1,8 @@
 import type { PetData, PetType, ExtMessage } from '../types';
 import { loadPetData, savePets } from '../store';
-import { COLORS } from './colors';
 import { pingTab } from './tab-probe';
 import { renderPetItemHTML } from './render-pet-item';
+import { initTypePicker, populateColors, buildTypePickerHTML } from './type-picker';
 
 // ---------------------------------------------------------------------------
 // DOM references
@@ -10,7 +10,8 @@ import { renderPetItemHTML } from './render-pet-item';
 
 const petsList = document.getElementById('pets-list')!;
 const nameInput = document.getElementById('pet-name') as HTMLInputElement;
-const typeSelect = document.getElementById('pet-type') as HTMLSelectElement;
+const typeGrid = document.getElementById('pet-type-grid') as HTMLElement;
+const typeHidden = document.getElementById('pet-type-value') as HTMLInputElement;
 const colorSelect = document.getElementById('pet-color') as HTMLSelectElement;
 const btnAdd = document.getElementById('btn-add')!;
 const btnThrowBall = document.getElementById('btn-throw-ball') as HTMLButtonElement;
@@ -61,12 +62,8 @@ function renderPetList(): void {
   });
 }
 
-function populateColors(): void {
-  const type = typeSelect.value as PetType;
-  const colors = COLORS[type] ?? [];
-  colorSelect.innerHTML = colors.map(c =>
-    `<option value="${c}">${c.charAt(0).toUpperCase() + c.slice(1)}</option>`
-  ).join('');
+function refreshColors(): void {
+  populateColors(colorSelect, typeHidden);
 }
 
 // ---------------------------------------------------------------------------
@@ -75,7 +72,7 @@ function populateColors(): void {
 
 async function addPet(): Promise<void> {
   const name = nameInput.value.trim() || 'Pet';
-  const type = typeSelect.value as PetType;
+  const type = typeHidden.value as PetType;
   const color = colorSelect.value;
 
   if (!color) return; // guard against empty color
@@ -145,7 +142,7 @@ function toggleVisibility(): void {
 // Event listeners
 // ---------------------------------------------------------------------------
 
-typeSelect.addEventListener('change', populateColors);
+document.addEventListener('pet-type-changed', refreshColors);
 btnAdd.addEventListener('click', addPet);
 btnThrowBall.addEventListener('click', throwBall);
 btnToggle.addEventListener('click', toggleVisibility);
@@ -164,7 +161,10 @@ function showSpecialPageBanner(): void {
 // ---------------------------------------------------------------------------
 
 async function init(): Promise<void> {
-  populateColors(); // must run before any await so colors appear immediately
+  // Render type picker grid before any await so it appears immediately
+  typeGrid.innerHTML = buildTypePickerHTML(typeHidden.value as PetType, chrome.runtime.getURL);
+  initTypePicker(typeGrid, typeHidden);
+  refreshColors(); // populate colors for the default type immediately
 
   // Load visibility preference
   const visResult = await chrome.storage.local.get('pixel-pets-visible');
