@@ -18,12 +18,12 @@ import { COLORS } from './colors';
  * @param getURL     chrome.runtime.getURL (or any path resolver).
  */
 export function renderColorGrid(
-  type: string,
+  type: PetType,
   grid: HTMLElement,
   hiddenInput: HTMLInputElement,
   getURL: (path: string) => string,
 ): void {
-  const colors = (COLORS as Record<string, string[]>)[type] ?? [];
+  const colors = COLORS[type] ?? [];
   grid.innerHTML = colors.map((color, i) => {
     const src = getURL(`assets/${type}/${color}_idle_8fps.gif`);
     const selected = i === 0;
@@ -61,7 +61,7 @@ export function renderColorGrid(
 export function initColorPicker(
   grid: HTMLElement,
   hiddenInput: HTMLInputElement,
-  getURL?: (path: string) => string,
+  getURL: (path: string) => string,
 ): void {
   function cells(): HTMLButtonElement[] {
     return [...grid.querySelectorAll<HTMLButtonElement>('.color-cell')];
@@ -111,10 +111,8 @@ export function initColorPicker(
   });
 
   // Re-render color grid when the type changes
-  if (getURL) {
-    document.addEventListener('pet-type-changed', (e: Event) => {
-      const type = (e as CustomEvent<{ type: PetType }>).detail.type;
-      renderColorGrid(type, grid, hiddenInput, getURL);
-    });
-  }
+  document.addEventListener('pet-type-changed', (e: Event) => {
+    const type = (e as CustomEvent<{ type: PetType }>).detail.type;
+    renderColorGrid(type, grid, hiddenInput, getURL);
+  });
 }

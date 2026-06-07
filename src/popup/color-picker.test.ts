@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { COLORS } from './colors';
+import type { PetType } from '../types';
 
 // ---------------------------------------------------------------------------
 // Chrome API mock (required because jsdom has no chrome global)
@@ -25,8 +26,9 @@ function buildDOM(): void {
 // Module under test
 // ---------------------------------------------------------------------------
 
-let initColorPicker: (grid: HTMLElement, hiddenInput: HTMLInputElement, getURL?: (path: string) => string) => void;
-let renderColorGrid: (type: string, grid: HTMLElement, hiddenInput: HTMLInputElement, getURL: (path: string) => string) => void;
+let initColorPicker: (grid: HTMLElement, hiddenInput: HTMLInputElement, getURL: (path: string) => string) => void;
+const fakeGetURL = (p: string) => `chrome-extension://fake/${p}`;
+let renderColorGrid: (type: PetType, grid: HTMLElement, hiddenInput: HTMLInputElement, getURL: (path: string) => string) => void;
 
 beforeEach(async () => {
   vi.resetModules();
@@ -190,7 +192,7 @@ describe('initColorPicker — click selects a color', () => {
     const grid = document.getElementById('pet-color-grid') as HTMLElement;
     const hidden = document.getElementById('pet-color-value') as HTMLInputElement;
     renderColorGrid('dog', grid, hidden, (p) => `chrome-extension://fake/${p}`);
-    initColorPicker(grid, hidden);
+    initColorPicker(grid, hidden, fakeGetURL);
 
     const buttons = [...grid.querySelectorAll('button[role="radio"]')] as HTMLButtonElement[];
     const secondBtn = buttons[1];
@@ -222,7 +224,7 @@ describe('initColorPicker — click selects a color', () => {
     const grid = document.getElementById('pet-color-grid') as HTMLElement;
     const hidden = document.getElementById('pet-color-value') as HTMLInputElement;
     renderColorGrid('dog', grid, hidden, (p) => `chrome-extension://fake/${p}`);
-    initColorPicker(grid, hidden);
+    initColorPicker(grid, hidden, fakeGetURL);
 
     const buttons = [...grid.querySelectorAll('button[role="radio"]')] as HTMLButtonElement[];
 
@@ -250,7 +252,7 @@ describe('initColorPicker — keyboard navigation', () => {
     const grid = document.getElementById('pet-color-grid') as HTMLElement;
     const hidden = document.getElementById('pet-color-value') as HTMLInputElement;
     renderColorGrid('dog', grid, hidden, (p) => `chrome-extension://fake/${p}`);
-    initColorPicker(grid, hidden);
+    initColorPicker(grid, hidden, fakeGetURL);
 
     const buttons = [...grid.querySelectorAll('button[role="radio"]')] as HTMLButtonElement[];
     buttons[0].focus();
@@ -275,7 +277,7 @@ describe('initColorPicker — keyboard navigation', () => {
     const grid = document.getElementById('pet-color-grid') as HTMLElement;
     const hidden = document.getElementById('pet-color-value') as HTMLInputElement;
     renderColorGrid('dog', grid, hidden, (p) => `chrome-extension://fake/${p}`);
-    initColorPicker(grid, hidden);
+    initColorPicker(grid, hidden, fakeGetURL);
 
     const buttons = [...grid.querySelectorAll('button[role="radio"]')] as HTMLButtonElement[];
     buttons[1].focus();
@@ -300,7 +302,7 @@ describe('initColorPicker — keyboard navigation', () => {
     const grid = document.getElementById('pet-color-grid') as HTMLElement;
     const hidden = document.getElementById('pet-color-value') as HTMLInputElement;
     renderColorGrid('dog', grid, hidden, (p) => `chrome-extension://fake/${p}`);
-    initColorPicker(grid, hidden);
+    initColorPicker(grid, hidden, fakeGetURL);
 
     const buttons = [...grid.querySelectorAll('button[role="radio"]')] as HTMLButtonElement[];
     const lastBtn = buttons[buttons.length - 1];
@@ -326,7 +328,7 @@ describe('initColorPicker — keyboard navigation', () => {
     const grid = document.getElementById('pet-color-grid') as HTMLElement;
     const hidden = document.getElementById('pet-color-value') as HTMLInputElement;
     renderColorGrid('dog', grid, hidden, (p) => `chrome-extension://fake/${p}`);
-    initColorPicker(grid, hidden);
+    initColorPicker(grid, hidden, fakeGetURL);
 
     const buttons = [...grid.querySelectorAll('button[role="radio"]')] as HTMLButtonElement[];
     buttons[2].focus();

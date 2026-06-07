@@ -170,7 +170,7 @@ async function init(): Promise<void> {
   // Render type picker grid before any await so it appears immediately
   typeGrid.innerHTML = buildTypePickerHTML(typeHidden.value as PetType, chrome.runtime.getURL);
   initTypePicker(typeGrid, typeHidden);
-  renderColorGrid(typeHidden.value, colorGrid, colorHidden, chrome.runtime.getURL);
+  renderColorGrid(typeHidden.value as PetType, colorGrid, colorHidden, chrome.runtime.getURL);
   initColorPicker(colorGrid, colorHidden, chrome.runtime.getURL);
 
   // Load and apply persisted theme (inline <head> script also does this
