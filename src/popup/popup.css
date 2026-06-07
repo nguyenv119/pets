@@ -205,6 +205,12 @@ h1 {
   font-weight: 400;
 }
 
+.pet-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .btn-hide {
   background: none;
   border: 1px solid transparent;
@@ -302,7 +308,10 @@ h1 {
    --------------------------------------------------------------------------- */
 
 .fab {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   width: 100%;
   margin-bottom: 8px;
   padding: 9px 16px;
@@ -324,6 +333,14 @@ h1 {
 
 .fab:active {
   background: var(--bg-btn-primary-active);
+}
+
+.fab-chevron {
+  transition: transform 0.2s ease;
+}
+
+.fab[aria-expanded="true"] .fab-chevron {
+  transform: rotate(180deg);
 }
 
 /* ---------------------------------------------------------------------------
