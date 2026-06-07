@@ -8,6 +8,7 @@ export interface PetData {
   color: string;
   x: number;
   y: number;
+  hidden?: boolean;
 }
 
 // Extension messaging types (popup ↔ service worker ↔ content script)
