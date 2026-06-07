@@ -15,6 +15,7 @@ export interface PetData {
 export type ExtMessage =
   | { type: 'ADD_PET'; pet: PetData }
   | { type: 'REMOVE_PET'; id: string }
+  | { type: 'SET_PET_HIDDEN'; id: string; hidden: boolean }
   | { type: 'THROW_BALL' }
   | { type: 'TOGGLE_VISIBILITY'; visible: boolean }
   | { type: 'PETS_UPDATED'; pets: PetData[] }

@@ -2,6 +2,7 @@ import type { PetData, PetType, ExtMessage } from '../types';
 import { loadPetData, savePets } from '../store';
 import { COLORS } from './colors';
 import { pingTab } from './tab-probe';
+import { renderPetItemHTML } from './render-pet-item';
 
 // ---------------------------------------------------------------------------
 // DOM references
@@ -39,18 +40,16 @@ function renderPetList(): void {
     return;
   }
 
-  petsList.innerHTML = pets.map(pet => `
-    <div class="pet-item" data-id="${pet.id}">
-      <div class="pet-info">
-        <img src="${chrome.runtime.getURL(`assets/${pet.type}/${pet.color}_idle_8fps.gif`)}" alt="${pet.name}" />
-        <div>
-          <div class="pet-name">${pet.name}</div>
-          <div class="pet-meta">${pet.color} ${pet.type}</div>
-        </div>
-      </div>
-      <button class="btn-remove" title="Remove ${pet.name}">&times;</button>
-    </div>
-  `).join('');
+  petsList.innerHTML = pets.map(pet => renderPetItemHTML(pet)).join('');
+
+  // Wire hide buttons
+  petsList.querySelectorAll('.btn-hide').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const item = (e.target as HTMLElement).closest('.pet-item') as HTMLElement;
+      const id = item.dataset.id!;
+      togglePetHidden(id);
+    });
+  });
 
   // Wire remove buttons
   petsList.querySelectorAll('.btn-remove').forEach(btn => {
@@ -100,6 +99,17 @@ async function addPet(): Promise<void> {
 
   // Reset form
   nameInput.value = '';
+}
+
+async function togglePetHidden(id: string): Promise<void> {
+  const pet = pets.find(p => p.id === id);
+  if (!pet) return;
+  pet.hidden = !pet.hidden;
+  await savePets(pets);
+  renderPetList();
+
+  const msg: ExtMessage = { type: 'SET_PET_HIDDEN', id, hidden: pet.hidden };
+  chrome.runtime.sendMessage(msg);
 }
 
 async function removePet(id: string): Promise<void> {

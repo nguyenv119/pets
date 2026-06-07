@@ -107,6 +107,27 @@ h1 {
   font-weight: 400;
 }
 
+.btn-hide {
+  background: none;
+  border: 1px solid transparent;
+  color: #4A5A20;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+}
+
+.btn-hide:hover {
+  background: rgba(74, 90, 32, 0.08);
+  border-color: rgba(74, 90, 32, 0.2);
+}
+
+.btn-hide--dimmed {
+  opacity: 0.4;
+}
+
 .btn-remove {
   background: none;
   border: 1px solid transparent;
