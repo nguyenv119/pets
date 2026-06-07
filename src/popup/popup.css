@@ -214,6 +214,8 @@ h1 {
   border-radius: 6px;
   display: flex;
   align-items: center;
+  font-size: 16px;
+  line-height: 1;
   transition: background 0.15s, border-color 0.15s, opacity 0.15s;
 }
 
