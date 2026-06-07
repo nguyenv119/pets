@@ -25,7 +25,7 @@ const HAS_LIE: ReadonlySet<PetType> = new Set([
 // pets have padding, so it renders visibly larger than peers. Scale down so its
 // on-screen footprint roughly matches dog/cockatiel/horse.
 const TYPE_SCALE: Partial<Record<PetType, number>> = {
-  snake: 0.7,
+  snake: 0.5,
 };
 
 /**
