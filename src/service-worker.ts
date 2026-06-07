@@ -1,5 +1,6 @@
 import type { ExtMessage } from './types';
 import { loadPetData, savePets } from './store';
+import { loadSettings, saveSettings, currentTreats, TREAT_RECHARGE_MS } from './settings';
 
 // ---------------------------------------------------------------------------
 // On install / update — inject content script into all existing tabs.
@@ -55,18 +56,24 @@ async function commitRemoval(id: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Message relay — popup → all content scripts (and pending removal handling)
+// Treat mutex — single-writer Promise chain prevents concurrent-read/write races
+// when multiple content scripts (multiple tabs) send CONSUME_TREAT at once.
+// ---------------------------------------------------------------------------
+
+let busy: Promise<unknown> | null = null;
+
+// ---------------------------------------------------------------------------
+// Message relay
 // ---------------------------------------------------------------------------
 
 chrome.runtime.onMessage.addListener(
-  (msg: ExtMessage, _sender, _sendResponse) => {
-    if (msg.type === 'ADD_PET' || msg.type === 'THROW_BALL' || msg.type === 'TOGGLE_VISIBILITY') {
+  (msg: ExtMessage, _sender, sendResponse) => {
+    if (msg.type === 'ADD_PET' || msg.type === 'THROW_BALL' || msg.type === 'TOGGLE_VISIBILITY' || msg.type === 'SET_PET_HIDDEN' || msg.type === 'REMOVE_PET' || msg.type === 'PETS_REORDERED') {
       broadcastToTabs(msg);
-    } else if (msg.type === 'SET_PET_HIDDEN') {
-      broadcastToTabs(msg);
-    } else if (msg.type === 'REMOVE_PET') {
-      broadcastToTabs(msg);
-    } else if (msg.type === 'PENDING_REMOVE_PET') {
+      return false;
+    }
+
+    if (msg.type === 'PENDING_REMOVE_PET') {
       // Cancel any existing timer for this id (e.g. double-click edge case).
       const existing = pendingRemovals.get(msg.id);
       if (existing != null) clearTimeout(existing);
@@ -77,13 +84,45 @@ chrome.runtime.onMessage.addListener(
         });
       }, msg.delayMs);
       pendingRemovals.set(msg.id, timer);
-    } else if (msg.type === 'CANCEL_PENDING_REMOVE') {
+      return false;
+    }
+
+    if (msg.type === 'CANCEL_PENDING_REMOVE') {
       const timer = pendingRemovals.get(msg.id);
       if (timer != null) {
         clearTimeout(timer);
         pendingRemovals.delete(msg.id);
       }
+      return false;
     }
-    return false; // no async sendResponse needed
+
+    if (msg.type === 'CONSUME_TREAT') {
+      // Chain via mutex so concurrent requests are serialized:
+      // each handler waits for the prior one to finish before reading storage.
+      busy = (busy ?? Promise.resolve()).then(async () => {
+        const now = Date.now();
+        const s = await loadSettings();
+        const { count } = currentTreats(s, now);
+
+        if (count <= 0) {
+          sendResponse({ ok: false, count: 0 });
+          return;
+        }
+
+        // Materialize: advance treatsUpdatedAt to preserve sub-interval remainder
+        // so the next recharge still fires at the right time.
+        const remainder = (now - s.treatsUpdatedAt) % TREAT_RECHARGE_MS;
+        s.treats = count;
+        s.treatsUpdatedAt = now - remainder;
+        s.treats -= 1;
+
+        await saveSettings(s);
+        sendResponse({ ok: true, count: s.treats });
+      });
+
+      return true; // keep sendResponse callable after async work
+    }
+
+    return false;
   },
 );

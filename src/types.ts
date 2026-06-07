@@ -22,4 +22,5 @@ export type ExtMessage =
   | { type: 'PETS_REORDERED'; pets: PetData[] }
   | { type: 'PENDING_REMOVE_PET'; id: string; delayMs: number }
   | { type: 'CANCEL_PENDING_REMOVE'; id: string }
+  | { type: 'CONSUME_TREAT' }
   | { type: 'PING' };

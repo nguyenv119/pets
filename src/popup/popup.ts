@@ -8,12 +8,15 @@ import { renderColorGrid, initColorPicker } from './color-picker';
 import { applyTheme, loadTheme, toggleTheme } from './theme';
 import { setAddFormExpanded, isAddFormExpanded } from './collapsible-form';
 import { showToast } from './toast';
+import { renderTreatCounter } from './treat-counter';
 
 // ---------------------------------------------------------------------------
 // DOM references
 // ---------------------------------------------------------------------------
 
 const petsList = document.getElementById('pets-list')!;
+const treatCountEl = document.getElementById('treat-count');
+const treatNextEl = document.getElementById('treat-next');
 const nameInput = document.getElementById('pet-name') as HTMLInputElement;
 const typeGrid = document.getElementById('pet-type-grid') as HTMLElement;
 const typeHidden = document.getElementById('pet-type-value') as HTMLInputElement;
@@ -25,6 +28,22 @@ const btnToggle = document.getElementById('btn-toggle')!;
 const btnTheme = document.getElementById('btn-theme')!;
 const btnAddToggle = document.getElementById('btn-add-toggle')!;
 const specialPageBanner = document.getElementById('special-page-banner')!;
+
+// ---------------------------------------------------------------------------
+// Treat counter — wired to DOM elements; logic lives in treat-counter.ts
+// ---------------------------------------------------------------------------
+
+function renderTreatCounterInPopup(): Promise<void> {
+  return renderTreatCounter(treatCountEl, treatNextEl);
+}
+
+// Listen for storage changes so the counter updates when a treat is consumed
+// from any content script without requiring a popup close/reopen.
+chrome.storage.onChanged.addListener((changes) => {
+  if ('pixel-pets-settings-v1' in changes) {
+    renderTreatCounterInPopup();
+  }
+});
 
 // ---------------------------------------------------------------------------
 // State
@@ -305,6 +324,8 @@ async function init(): Promise<void> {
   renderPetList();
   initDragAndDrop();
   setAddFormExpanded(pets.length === 0);
+
+  await renderTreatCounterInPopup();
 
   // Probe whether the content script is alive on the active tab.
   // If not (special browser page), show the banner and disable Throw Ball.
