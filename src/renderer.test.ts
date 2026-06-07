@@ -173,6 +173,57 @@ describe('resolveGifName', () => {
     // THEN — idle (nearBall override takes priority)
     expect(result).toBe('idle');
   });
+
+  it('returns "swipe" when greeting=true for a HAS_SWIPE type', () => {
+    /**
+     * Verifies that resolveGifName returns "swipe" when the greeting flag is
+     * true for a pet type that has a swipe gif.
+     *
+     * This matters because the greeting animation is the visual cue that two
+     * pets are acknowledging each other. Without this, greeting triggers silently
+     * with no animation change.
+     *
+     * If violated, greeting pets play their normal idle/walk animation instead
+     * of waving.
+     */
+    // GIVEN — a dog (HAS_SWIPE) with greeting=true
+    // WHEN — resolving gif name
+    const result = resolveGifName('dog', 'sitIdle', false, false, true);
+
+    // THEN — swipe is returned
+    expect(result).toBe('swipe');
+  });
+
+  it('returns "swipe" when both hovered=true and greeting=true', () => {
+    /**
+     * Verifies that when both hovered and greeting are true, "swipe" is still
+     * returned — the two flags are compatible and the result is the same gif.
+     *
+     * If violated, the condition would need overly complex precedence logic.
+     */
+    // GIVEN — hovered AND greeting both true on a HAS_SWIPE type
+    // WHEN — resolving gif name
+    const result = resolveGifName('dog', 'walkLeft', false, true, true);
+
+    // THEN — still returns swipe
+    expect(result).toBe('swipe');
+  });
+
+  it('does NOT return "swipe" for greeting=true on a type without swipe (miffy)', () => {
+    /**
+     * Verifies that the greeting flag only triggers the swipe animation for
+     * types that actually have a swipe gif asset. Miffy has no swipe asset.
+     *
+     * If violated, miffy would request a missing gif file and show a broken
+     * image during greetings.
+     */
+    // GIVEN — miffy (no swipe) with greeting=true
+    // WHEN — resolving gif name in sitIdle
+    const result = resolveGifName('miffy', 'sitIdle', false, false, true);
+
+    // THEN — normal sitIdle resolution (idle)
+    expect(result).toBe('idle');
+  });
 });
 
 // ---------------------------------------------------------------------------

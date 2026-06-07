@@ -16,6 +16,7 @@ import {
 import type { PetView, Particle } from './renderer';
 import { savePets, loadPetData } from './store';
 import type { PetData, ExtMessage } from './types';
+import { tryGreetPairs, clearGreetCooldownsForPet } from './greet';
 
 // ---------------------------------------------------------------------------
 // Guard against double-injection (manifest + scripting API both inject)
@@ -276,6 +277,9 @@ function tick(now: number): void {
     if (view) updatePetView(view, pet);
   }
 
+  // Greet check — must run AFTER pet.update() so states are current
+  tryGreetPairs(visiblePets);
+
   requestAnimationFrame(tick);
 }
 
@@ -339,6 +343,7 @@ chrome.runtime.onMessage.addListener((msg: ExtMessage, _sender, sendResponse) =>
           removePetView(view);
           views.delete(removed);
         }
+        clearGreetCooldownsForPet(removed.id, removed);
         savePets(pets.map(p => p.toData()));
       }
       break;

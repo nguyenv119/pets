@@ -75,6 +75,9 @@ export class Pet {
   /** True when this pet is currently hidden from the scene. Persisted via toData(). */
   hidden: boolean;
 
+  /** True for ~1s when two nearby pets acknowledge each other. Ephemeral — not persisted. */
+  greeting = false;
+
   /** True when the pet was put to sleep by the nighttime cycle (not by the FSM).
    *  Used to distinguish night-forced sleep from natural sleep so morning can
    *  selectively wake only night-forced sleepers. */
@@ -100,6 +103,9 @@ export class Pet {
     this.state = 'sitIdle';
     this._timer = randBetween(2, 4);
   }
+
+  /** Read-only accessor for the pet's unique id (used by content.ts for cooldown map keys). */
+  get id(): string { return this._id; }
 
   /** Read-only accessor for the pet's type (used by renderer/content for per-type logic). */
   get type(): import('./types').PetType { return this._type; }
