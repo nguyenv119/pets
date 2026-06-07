@@ -1,8 +1,10 @@
 import type { PetData, PetType, ExtMessage } from '../types';
+import type { Theme } from '../settings';
 import { loadPetData, savePets } from '../store';
 import { pingTab } from './tab-probe';
 import { renderPetItemHTML } from './render-pet-item';
 import { initTypePicker, populateColors, buildTypePickerHTML } from './type-picker';
+import { applyTheme, loadTheme, toggleTheme } from './theme';
 
 // ---------------------------------------------------------------------------
 // DOM references
@@ -16,6 +18,7 @@ const colorSelect = document.getElementById('pet-color') as HTMLSelectElement;
 const btnAdd = document.getElementById('btn-add')!;
 const btnThrowBall = document.getElementById('btn-throw-ball') as HTMLButtonElement;
 const btnToggle = document.getElementById('btn-toggle')!;
+const btnTheme = document.getElementById('btn-theme')!;
 const specialPageBanner = document.getElementById('special-page-banner')!;
 
 // ---------------------------------------------------------------------------
@@ -24,6 +27,7 @@ const specialPageBanner = document.getElementById('special-page-banner')!;
 
 let pets: PetData[] = [];
 let petsVisible = true;
+let currentTheme: Theme = 'light';
 
 // ---------------------------------------------------------------------------
 // Render
@@ -123,6 +127,10 @@ function throwBall(): void {
   chrome.runtime.sendMessage(msg);
 }
 
+async function handleThemeToggle(): Promise<void> {
+  currentTheme = await toggleTheme(currentTheme);
+}
+
 function toggleVisibility(): void {
   petsVisible = !petsVisible;
   const msg: ExtMessage = { type: 'TOGGLE_VISIBILITY', visible: petsVisible };
@@ -146,6 +154,7 @@ document.addEventListener('pet-type-changed', refreshColors);
 btnAdd.addEventListener('click', addPet);
 btnThrowBall.addEventListener('click', throwBall);
 btnToggle.addEventListener('click', toggleVisibility);
+btnTheme.addEventListener('click', handleThemeToggle);
 
 // ---------------------------------------------------------------------------
 // Special-page detection
@@ -165,6 +174,11 @@ async function init(): Promise<void> {
   typeGrid.innerHTML = buildTypePickerHTML(typeHidden.value as PetType, chrome.runtime.getURL);
   initTypePicker(typeGrid, typeHidden);
   refreshColors(); // populate colors for the default type immediately
+
+  // Load and apply persisted theme (inline <head> script also does this
+  // but may lose the race against the first paint; this ensures correctness)
+  currentTheme = await loadTheme();
+  applyTheme(currentTheme);
 
   // Load visibility preference
   const visResult = await chrome.storage.local.get('pixel-pets-visible');

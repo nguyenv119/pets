@@ -4,16 +4,92 @@
   box-sizing: border-box;
 }
 
+/* ---------------------------------------------------------------------------
+   Design tokens — light mode (default)
+   --------------------------------------------------------------------------- */
+
+:root {
+  --bg: #FFE3B0;
+  --bg-card: #D9E378;
+  --bg-card-hover: #D0DC68;
+  --bg-form: #F5F08F;
+  --bg-input: #FFF8E8;
+  --bg-btn-icon: #EEF4C8;
+  --bg-btn-icon-hover: #E4EDC0;
+  --bg-btn-primary: #B8C853;
+  --bg-btn-primary-hover: #A8B848;
+  --bg-btn-primary-active: #98A838;
+  --bg-banner: #FFF3CD;
+
+  --text: #484848;
+  --text-heading: #4A5A20;
+  --text-muted: #6B8030;
+  --text-banner: #7A5C00;
+
+  --border-card: #C8D268;
+  --border-btn-icon: #D9E378;
+  --border-btn-icon-hover: #B8C853;
+  --border-input: #D9E378;
+  --border-input-focus: #B8C853;
+  --border-banner: #F5C842;
+  --border-empty: #C8D268;
+
+  --shadow-btn-remove-hover-bg: rgba(74, 90, 32, 0.08);
+  --shadow-btn-remove-hover-border: rgba(74, 90, 32, 0.2);
+}
+
+/* ---------------------------------------------------------------------------
+   Design tokens — dark mode overrides
+   --------------------------------------------------------------------------- */
+
+[data-theme="dark"] {
+  --bg: #1E1E2E;
+  --bg-card: #2A2A3E;
+  --bg-card-hover: #333350;
+  --bg-form: #252538;
+  --bg-input: #1A1A2E;
+  --bg-btn-icon: #2A2A3E;
+  --bg-btn-icon-hover: #333350;
+  --bg-btn-primary: #5A7A20;
+  --bg-btn-primary-hover: #4A6A18;
+  --bg-btn-primary-active: #3A5A10;
+  --bg-banner: #3A3010;
+
+  --text: #E0D8C8;
+  --text-heading: #C8D878;
+  --text-muted: #A0B860;
+  --text-banner: #E8C840;
+
+  --border-card: #3A3A58;
+  --border-btn-icon: #3A3A58;
+  --border-btn-icon-hover: #5A7A30;
+  --border-input: #3A3A58;
+  --border-input-focus: #5A7A30;
+  --border-banner: #7A6010;
+  --border-empty: #3A3A58;
+
+  --shadow-btn-remove-hover-bg: rgba(200, 216, 120, 0.10);
+  --shadow-btn-remove-hover-border: rgba(200, 216, 120, 0.25);
+}
+
+/* ---------------------------------------------------------------------------
+   Base
+   --------------------------------------------------------------------------- */
+
 body {
   width: 420px;
   min-height: 400px;
   font-family: 'Nunito', system-ui, -apple-system, sans-serif;
   padding: 20px;
-  background: #FFE3B0;
-  color: #484848;
+  background: var(--bg);
+  color: var(--text);
+  transition: background 0.2s, color 0.2s;
 }
 
-/* Header */
+/* ---------------------------------------------------------------------------
+   Header
+   --------------------------------------------------------------------------- */
+
 header {
   margin-bottom: 16px;
   padding-bottom: 10px;
@@ -29,7 +105,7 @@ h1 {
   font-size: 22px;
   font-weight: 800;
   letter-spacing: -0.5px;
-  color: #4A5A20;
+  color: var(--text-heading);
 }
 
 .header-actions {
@@ -41,9 +117,9 @@ h1 {
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  border: 1px solid #D9E378;
-  background: #EEF4C8;
-  color: #6B8030;
+  border: 1px solid var(--border-btn-icon);
+  background: var(--bg-btn-icon);
+  color: var(--text-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -52,15 +128,37 @@ h1 {
 }
 
 .btn-icon:hover {
-  background: #E4EDC0;
-  border-color: #B8C853;
+  background: var(--bg-btn-icon-hover);
+  border-color: var(--border-btn-icon-hover);
 }
 
 .btn-icon.hidden-state {
   opacity: 0.4;
 }
 
-/* Pet list */
+.btn-icon--emoji {
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* Sun/moon icon visibility controlled by theme attribute on body */
+.icon-sun {
+  display: none;
+}
+.icon-moon {
+  display: block;
+}
+[data-theme="dark"] .icon-sun {
+  display: block;
+}
+[data-theme="dark"] .icon-moon {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Pet list
+   --------------------------------------------------------------------------- */
+
 #pets-list {
   margin-bottom: 14px;
 }
@@ -71,15 +169,15 @@ h1 {
   justify-content: space-between;
   padding: 12px 14px;
   margin-bottom: 5px;
-  background: #D9E378;
+  background: var(--bg-card);
   border-radius: 10px;
-  border: 1px solid #C8D268;
+  border: 1px solid var(--border-card);
   transition: border-color 0.15s, background 0.15s;
 }
 
 .pet-item:hover {
-  background: #D0DC68;
-  border-color: #B8C853;
+  background: var(--bg-card-hover);
+  border-color: var(--border-btn-icon-hover);
 }
 
 .pet-info {
@@ -97,12 +195,12 @@ h1 {
 .pet-name {
   font-size: 14px;
   font-weight: 700;
-  color: #4A5A20;
+  color: var(--text-heading);
 }
 
 .pet-meta {
   font-size: 13px;
-  color: #6B8030;
+  color: var(--text-muted);
   margin-top: 2px;
   font-weight: 400;
 }
@@ -131,7 +229,7 @@ h1 {
 .btn-remove {
   background: none;
   border: 1px solid transparent;
-  color: #4A5A20;
+  color: var(--text-heading);
   cursor: pointer;
   font-size: 18px;
   padding: 4px 10px;
@@ -140,16 +238,16 @@ h1 {
 }
 
 .btn-remove:hover {
-  background: rgba(74, 90, 32, 0.08);
-  border-color: rgba(74, 90, 32, 0.2);
+  background: var(--shadow-btn-remove-hover-bg);
+  border-color: var(--shadow-btn-remove-hover-border);
 }
 
 .empty-state {
   text-align: center;
   padding: 18px 16px 16px;
-  background: #D9E378;
+  background: var(--bg-card);
   border-radius: 10px;
-  border: 1px dashed #C8D268;
+  border: 1px dashed var(--border-empty);
 }
 
 .empty-pet {
@@ -162,22 +260,25 @@ h1 {
 
 .empty-title {
   font-size: 15px;
-  color: #484848;
+  color: var(--text);
   margin-bottom: 4px;
   font-weight: 600;
 }
 
 .empty-cta {
   font-size: 12px;
-  color: #6B8030;
+  color: var(--text-muted);
   font-weight: 600;
 }
 
-/* Add pet form */
+/* ---------------------------------------------------------------------------
+   Add pet form
+   --------------------------------------------------------------------------- */
+
 #add-pet-form {
   margin-bottom: 16px;
   padding: 16px;
-  background: #F5F08F;
+  background: var(--bg-form);
   border-radius: 12px;
   border: none;
 }
@@ -192,17 +293,17 @@ h1 {
 
 .form-grid label {
   font-size: 12px;
-  color: #6B8030;
+  color: var(--text-muted);
   font-weight: 600;
 }
 
 .form-grid input,
 .form-grid select {
   padding: 8px 10px;
-  background: #FFF8E8;
-  border: 1px solid #D9E378;
+  background: var(--bg-input);
+  border: 1px solid var(--border-input);
   border-radius: 8px;
-  color: #484848;
+  color: var(--text);
   font-size: 13px;
   font-family: inherit;
   transition: border-color 0.15s;
@@ -211,7 +312,7 @@ h1 {
 .form-grid input:focus,
 .form-grid select:focus {
   outline: none;
-  border-color: #B8C853;
+  border-color: var(--border-input-focus);
 }
 
 .form-grid select {
@@ -233,14 +334,14 @@ h1 {
   align-items: center;
   gap: 3px;
   padding: 6px 4px 5px;
-  background: #FFF8E8;
-  border: 2px solid #D9E378;
+  background: var(--bg-input);
+  border: 2px solid var(--border-input);
   border-radius: 8px;
   cursor: pointer;
   font-family: inherit;
   font-size: 10px;
   font-weight: 600;
-  color: #6B8030;
+  color: var(--text-muted);
   transition: border-color 0.12s, background 0.12s;
 }
 
@@ -251,21 +352,21 @@ h1 {
 }
 
 .type-cell:hover {
-  background: #F0ECC0;
-  border-color: #B8C853;
+  background: var(--bg-card-hover);
+  border-color: var(--border-btn-icon-hover);
 }
 
 .type-cell.selected,
 .type-cell[aria-checked="true"] {
-  background: #D9E378;
-  border-color: #4A5A20;
-  color: #4A5A20;
-  box-shadow: 0 0 0 2px #4A5A2080;
+  background: var(--bg-card);
+  border-color: var(--text-heading);
+  color: var(--text-heading);
+  box-shadow: 0 0 0 2px var(--border-btn-icon-hover);
 }
 
 .type-cell:focus {
   outline: none;
-  border-color: #4A5A20;
+  border-color: var(--text-heading);
 }
 
 /* Offset the label row for the type grid so it aligns to top */
@@ -274,12 +375,16 @@ h1 {
   padding-top: 10px;
 }
 
-/* Buttons */
+/* ---------------------------------------------------------------------------
+   Buttons
+   --------------------------------------------------------------------------- */
+
+
 .btn-primary {
   width: 100%;
   padding: 10px 16px;
-  background: #B8C853;
-  color: #3D4A1A;
+  background: var(--bg-btn-primary);
+  color: var(--text-heading);
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -290,14 +395,17 @@ h1 {
 }
 
 .btn-primary:hover {
-  background: #A8B848;
+  background: var(--bg-btn-primary-hover);
 }
 
 .btn-primary:active {
-  background: #98A838;
+  background: var(--bg-btn-primary-active);
 }
 
-/* Footer */
+/* ---------------------------------------------------------------------------
+   Footer
+   --------------------------------------------------------------------------- */
+
 footer {
   text-align: center;
   margin-top: 16px;
@@ -306,25 +414,31 @@ footer {
 
 footer p {
   font-size: 11px;
-  color: #6B8030;
+  color: var(--text-muted);
   font-weight: 400;
 }
 
-/* Special-page banner */
+/* ---------------------------------------------------------------------------
+   Special-page banner
+   --------------------------------------------------------------------------- */
+
 #special-page-banner {
   margin-bottom: 12px;
   padding: 8px 12px;
-  background: #FFF3CD;
-  border: 1px solid #F5C842;
+  background: var(--bg-banner);
+  border: 1px solid var(--border-banner);
   border-radius: 8px;
   font-size: 12px;
-  color: #7A5C00;
+  color: var(--text-banner);
   font-weight: 600;
   line-height: 1.4;
   text-align: center;
 }
 
-/* Disabled Throw Ball button */
+/* ---------------------------------------------------------------------------
+   Disabled Throw Ball button
+   --------------------------------------------------------------------------- */
+
 #btn-throw-ball:disabled {
   opacity: 0.35;
   cursor: not-allowed;
