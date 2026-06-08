@@ -6,7 +6,8 @@ export interface Settings {
   treatsUpdatedAt: number;
 }
 
-const KEY = 'pixel-pets-settings-v1';
+export const SETTINGS_KEY = 'pixel-pets-settings-v1';
+const KEY = SETTINGS_KEY;
 
 export const TREAT_CAP = 10;
 export const TREAT_RECHARGE_MS = 10 * 60 * 1000;

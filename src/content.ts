@@ -14,7 +14,9 @@ import {
   HAS_SWIPE,
 } from './renderer';
 import type { PetView, Particle } from './renderer';
-import { savePets, loadPetData } from './store';
+import { savePets, savePositions, loadPetData } from './store';
+import type { RosterEntry } from './store';
+import { reconcileRoster } from './content-reconcile';
 import type { PetData, ExtMessage } from './types';
 import { tryGreetPairs, clearGreetCooldownsForPet } from './greet';
 
@@ -92,12 +94,19 @@ const BALL_RADIUS = 8;
 const GRAVITY = 800;
 const BOUNCE_DAMPING = 0.6;
 
-// Persistence debounce
+// Persistence debounce — writes positions only (not roster).
+// Writing to pixel-pets-positions-v1 does NOT trigger the cross-tab roster
+// listener, preventing every position update from causing a reconcile in all tabs.
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 function debouncedSave(): void {
   if (saveTimeout) clearTimeout(saveTimeout);
   saveTimeout = setTimeout(() => {
-    savePets(pets.map(p => p.toData()));
+    const positions: Record<string, { x: number; y: number }> = {};
+    for (const p of pets) {
+      const data = p.toData();
+      positions[data.id] = { x: data.x, y: data.y };
+    }
+    savePositions(positions);
   }, 2000);
 }
 
@@ -189,6 +198,10 @@ async function init(): Promise<void> {
     };
     pets = [makePet(defaultPet)];
     await savePets(pets.map(p => p.toData()));
+    // Save initial position too
+    const initPos: Record<string, { x: number; y: number }> = {};
+    for (const p of pets) { const d = p.toData(); initPos[d.id] = { x: d.x, y: d.y }; }
+    await savePositions(initPos);
   } else {
     pets = savedData.map(makePet);
   }
@@ -319,7 +332,15 @@ chrome.runtime.onMessage.addListener((msg: ExtMessage, _sender, sendResponse) =>
       const newPet = makePet(msg.pet);
       pets.push(newPet);
       addPetToScene(newPet);
+      // Save roster (without positions) then save positions separately.
+      // This keeps the roster key clean and avoids flooding cross-tab listeners.
       savePets(pets.map(p => p.toData()));
+      const positions: Record<string, { x: number; y: number }> = {};
+      for (const p of pets) {
+        const d = p.toData();
+        positions[d.id] = { x: d.x, y: d.y };
+      }
+      savePositions(positions);
       break;
     }
     case 'SET_PET_HIDDEN': {
@@ -350,6 +371,7 @@ chrome.runtime.onMessage.addListener((msg: ExtMessage, _sender, sendResponse) =>
           views.delete(removed);
         }
         clearGreetCooldownsForPet(removed.id, removed);
+        // Roster write only — positions for removed pet can stay stale, no cross-tab effect
         savePets(pets.map(p => p.toData()));
       }
       break;
@@ -389,6 +411,35 @@ chrome.runtime.onMessage.addListener((msg: ExtMessage, _sender, sendResponse) =>
       break;
     }
   }
+});
+
+// ---------------------------------------------------------------------------
+// Cross-tab roster sync
+// ---------------------------------------------------------------------------
+//
+// Self-echo suppression: content.ts never writes to the roster key
+// (pixel-pets-v1). All roster writes go through popup.ts or the service
+// worker. Therefore, every roster change event originates from another tab
+// and we always reconcile without needing a nonce.
+
+chrome.storage.onChanged.addListener((changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+  if (area !== 'local') return;
+  const change = changes['pixel-pets-v1'];
+  if (!change || !change.newValue) return;
+
+  const newData = change.newValue as { roster?: RosterEntry[] };
+  if (!Array.isArray(newData.roster)) return;
+
+  reconcileRoster(
+    newData.roster,
+    pets as unknown as import('./content-reconcile').ReconcilablePet[],
+    views as Map<unknown, unknown>,
+    (data) => makePet(data as PetData) as unknown as import('./content-reconcile').ReconcilablePet,
+    (pet) => addPetToScene(pet as unknown as Pet),
+    (view) => { removePetView(view as PetView); },
+    (id, pet) => clearGreetCooldownsForPet(id, pet as unknown as Pet),
+    () => Math.random() * Math.max(0, window.innerWidth - DRAW_W),
+  );
 });
 
 // ---------------------------------------------------------------------------

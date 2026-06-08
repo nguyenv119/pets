@@ -9,6 +9,7 @@ import { applyTheme, loadTheme, toggleTheme } from './theme';
 import { setAddFormExpanded, isAddFormExpanded } from './collapsible-form';
 import { showToast } from './toast';
 import { renderTreatCounter } from './treat-counter';
+import { handleStorageChange } from './popup-cross-tab';
 
 // ---------------------------------------------------------------------------
 // DOM references
@@ -37,12 +38,26 @@ function renderTreatCounterInPopup(): Promise<void> {
   return renderTreatCounter(treatCountEl, treatNextEl);
 }
 
-// Listen for storage changes so the counter updates when a treat is consumed
-// from any content script without requiring a popup close/reopen.
-chrome.storage.onChanged.addListener((changes) => {
-  if ('pixel-pets-settings-v1' in changes) {
-    renderTreatCounterInPopup();
-  }
+// Listen for storage changes from other tabs:
+// - Roster change (pixel-pets-v1): re-render pet list to reflect add/remove/reorder from another tab
+// - Settings change (pixel-pets-settings-v1): refresh treat counter and theme
+//
+// Self-echo note: popup writes roster then immediately updates its own pets[] and re-renders.
+// If the storage event fires for our own write, re-rendering is idempotent (same data → same DOM),
+// so no nonce suppression is needed.
+chrome.storage.onChanged.addListener((changes, area) => {
+  handleStorageChange(
+    changes as Record<string, unknown>,
+    area,
+    async () => {
+      pets = await loadPetData();
+      renderPetList();
+    },
+    () => {
+      renderTreatCounterInPopup();
+      applyTheme(currentTheme);
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------
