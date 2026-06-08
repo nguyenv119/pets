@@ -93,6 +93,17 @@ function makeStoredPets() {
   ];
 }
 
+/** Returns the new split-storage mock value expected by loadPetData(). */
+function makeStorageValue() {
+  const pets = makeStoredPets();
+  return {
+    'pixel-pets-v1': {
+      roster: pets.map(({ id, name, type, color }) => ({ id, name, type, color })),
+    },
+    'pixel-pets-positions-v1': Object.fromEntries(pets.map(p => [p.id, { x: p.x, y: p.y }])),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -121,9 +132,8 @@ describe('removePet — optimistic UI', () => {
      * If violated, the pet row remains visible after the delete click until
      * the async storage write completes, making the UI feel sluggish.
      */
-    // GIVEN — two pets in storage
-    const pets = makeStoredPets();
-    chromeMock.storage.local.get.mockResolvedValue({ 'pixel-pets-v1': pets });
+    // GIVEN — two pets in storage (new split-storage shape)
+    chromeMock.storage.local.get.mockResolvedValue(makeStorageValue());
     chromeMock.tabs.query.mockResolvedValue([]);
 
     await loadPopupModule();
@@ -158,9 +168,11 @@ describe('removePet — sends PENDING_REMOVE_PET message', () => {
      * If violated, the pet disappears from tabs immediately — clicking Undo
      * in the popup re-inserts locally but tabs still have no pet.
      */
-    // GIVEN — one pet in storage
-    const pets = [{ id: 'pet-1', name: 'Buddy', type: 'dog', color: 'brown', x: 100, y: 0 }];
-    chromeMock.storage.local.get.mockResolvedValue({ 'pixel-pets-v1': pets });
+    // GIVEN — one pet in storage (new split-storage shape)
+    chromeMock.storage.local.get.mockResolvedValue({
+      'pixel-pets-v1': { roster: [{ id: 'pet-1', name: 'Buddy', type: 'dog', color: 'brown' }] },
+      'pixel-pets-positions-v1': { 'pet-1': { x: 100, y: 0 } },
+    });
     chromeMock.tabs.query.mockResolvedValue([]);
 
     await loadPopupModule();
@@ -201,9 +213,11 @@ describe('removePet — toast shown', () => {
      * If violated, there is no undo mechanism and accidental deletions are
      * permanent with no user feedback.
      */
-    // GIVEN — one pet in storage
-    const pets = [{ id: 'pet-1', name: 'Buddy', type: 'dog', color: 'brown', x: 100, y: 0 }];
-    chromeMock.storage.local.get.mockResolvedValue({ 'pixel-pets-v1': pets });
+    // GIVEN — one pet in storage (new split-storage shape)
+    chromeMock.storage.local.get.mockResolvedValue({
+      'pixel-pets-v1': { roster: [{ id: 'pet-1', name: 'Buddy', type: 'dog', color: 'brown' }] },
+      'pixel-pets-positions-v1': { 'pet-1': { x: 100, y: 0 } },
+    });
     chromeMock.tabs.query.mockResolvedValue([]);
 
     await loadPopupModule();
@@ -233,9 +247,8 @@ describe('removePet — undo clicked', () => {
      * If violated, "Undo" restores the pet visually in the popup but pets on
      * tabs still get removed — an inconsistent state.
      */
-    // GIVEN — two pets in storage; we remove the first one
-    const pets = makeStoredPets();
-    chromeMock.storage.local.get.mockResolvedValue({ 'pixel-pets-v1': pets });
+    // GIVEN — two pets in storage; we remove the first one (new split-storage shape)
+    chromeMock.storage.local.get.mockResolvedValue(makeStorageValue());
     chromeMock.tabs.query.mockResolvedValue([]);
 
     await loadPopupModule();
