@@ -438,6 +438,7 @@ chrome.storage.onChanged.addListener((changes: Record<string, chrome.storage.Sto
     (pet) => addPetToScene(pet as unknown as Pet),
     (view) => { removePetView(view as PetView); },
     (id, pet) => clearGreetCooldownsForPet(id, pet as unknown as Pet),
+    () => Math.random() * Math.max(0, window.innerWidth - DRAW_W),
   );
 });
 

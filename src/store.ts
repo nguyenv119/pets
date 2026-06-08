@@ -1,7 +1,7 @@
 import type { PetData, PetType } from './types';
 
-const ROSTER_KEY = 'pixel-pets-v1';
-const POSITIONS_KEY = 'pixel-pets-positions-v1';
+export const ROSTER_KEY = 'pixel-pets-v1';
+export const POSITIONS_KEY = 'pixel-pets-positions-v1';
 
 /**
  * Roster entry — identity fields only, no positional data.

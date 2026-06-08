@@ -9,8 +9,8 @@
  * - pixel-pets-settings-v1 changes → onSettingsChange (refresh treat counter + theme)
  */
 
-const ROSTER_KEY = 'pixel-pets-v1';
-const SETTINGS_KEY = 'pixel-pets-settings-v1';
+import { ROSTER_KEY } from '../store';
+import { SETTINGS_KEY } from '../settings';
 
 /**
  * Route a chrome.storage.onChanged event to the appropriate popup callbacks.

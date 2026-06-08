@@ -5,9 +5,11 @@
  * Reconciles the local pets[] and views map against the incoming roster from
  * another tab, without resetting position or FSM state of unchanged pets.
  *
- * Self-echo suppression note: content.ts never writes to the roster key
- * (all roster writes go through popup.ts or the service worker), so every
- * roster change event originates from another tab. No nonce needed.
+ * Self-echo note: content.ts DOES write the roster key (on ADD_PET, REMOVE_PET,
+ * first-install default pet). Those writes echo back through the same onChanged
+ * listener. Reconcile is idempotent for an unchanged roster — applying the same
+ * shape produces no view churn, no pets[] mutation, no greet cooldown clears.
+ * A nonce would suppress the noise but isn't needed for correctness.
  *
  * Extracted as a pure module so it can be unit-tested without the full
  * content script environment (Shadow DOM, requestAnimationFrame, etc.).
@@ -44,6 +46,7 @@ export function reconcileRoster(
   addPetToScene: (pet: ReconcilablePet) => void,
   removePetView: (view: unknown) => void,
   clearGreetCooldownsForPet: (id: string, pet: ReconcilablePet) => void,
+  newPetX: () => number = () => 0,
 ): void {
   const rosterById = new Map(newRoster.map(e => [e.id, e]));
   const localById = new Map(pets.map(p => [p.id, p]));
@@ -105,8 +108,9 @@ export function reconcileRoster(
         (existing as unknown as Record<string, unknown>)['name'] = entry.name;
       }
     } else {
-      // New pet — create with default position and add to scene
-      const newPet = makePet({ ...entry, x: 0, y: 0 });
+      // New pet — create with a randomized x so cross-tab-added pets don't
+      // pile up at the left edge. y is overridden by makePet to groundY.
+      const newPet = makePet({ ...entry, x: newPetX(), y: 0 });
       pets.push(newPet);
       if (!newPet.hidden) addPetToScene(newPet);
     }
