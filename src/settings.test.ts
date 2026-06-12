@@ -475,6 +475,29 @@ describe('currentCapacity — petCount clamp and honest countdown', () => {
     expect(isFull).toBe(false);
   });
 
+  it('clamped user partway through an interval: nextSlotMs subtracts elapsed, not just whole intervals', () => {
+    /**
+     * Verifies the `needed - elapsed` term of the honest countdown with a NON-ZERO
+     * elapsed. The day-0 case reduces to `needed - 0`, so it never proves the
+     * subtraction actually uses elapsed. Here a 4-pet user is 2.5 days into the ramp:
+     * capacity stays clamped at 4, the next free slot is at 4 intervals, so the
+     * remaining time must be (4 * GROWTH) minus the 2.5 days already elapsed.
+     *
+     * If this breaks, the countdown ignores partial progress and overstates the
+     * wait, so the meter/button never reflect time already served.
+     */
+    // GIVEN — 4 pets, 2.5 days elapsed (mid first interval, still clamped to 4)
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const now = ANCHOR + 2.5 * DAY_MS;
+
+    // WHEN
+    const { capacity, nextSlotMs } = currentCapacity(ANCHOR, 4, now);
+
+    // THEN
+    expect(capacity).toBe(4);
+    expect(nextSlotMs).toBe(4 * CAPACITY_GROWTH_MS - 2.5 * DAY_MS);
+  });
+
   it('isFull is true when capacity === petCount', () => {
     /**
      * Verifies that isFull is true when the user has filled every available
@@ -617,6 +640,31 @@ describe('loadSettings — homeAnchorAt field handling', () => {
      */
     // GIVEN — stored data from before the capacity feature (no homeAnchorAt key)
     mockStorage['pixel-pets-settings-v1'] = { theme: 'dark', treats: 5, treatsUpdatedAt: 12345 };
+
+    // WHEN
+    const settings = await loadSettings();
+
+    // THEN
+    expect(settings.homeAnchorAt).toBe(null);
+  });
+
+  it('returns homeAnchorAt = null when stored value is explicitly null', async () => {
+    /**
+     * Verifies that an explicitly-stored null (a fresh install that saved settings
+     * before its first adoption) round-trips to null. Production deliberately
+     * collapses absent-key and stored-null to the same null result; this proves
+     * the stored-null branch, which the absent-key test does not exercise.
+     *
+     * If this breaks, a post-feature user who saved settings (e.g. toggled theme)
+     * before adopting could read back undefined and fail currentCapacity's null check.
+     */
+    // GIVEN — stored data with homeAnchorAt explicitly null
+    mockStorage['pixel-pets-settings-v1'] = {
+      theme: 'dark',
+      treats: 8,
+      treatsUpdatedAt: 999,
+      homeAnchorAt: null,
+    };
 
     // WHEN
     const settings = await loadSettings();

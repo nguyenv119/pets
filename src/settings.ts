@@ -38,7 +38,7 @@ export async function loadSettings(): Promise<Settings> {
     theme: stored.theme ?? DEFAULTS.theme,
     treats: stored.treats ?? TREAT_CAP,
     treatsUpdatedAt: stored.treatsUpdatedAt ?? Date.now(),
-    homeAnchorAt: stored && 'homeAnchorAt' in stored ? (stored.homeAnchorAt ?? null) : null,
+    homeAnchorAt: stored.homeAnchorAt ?? null,
   };
 }
 
