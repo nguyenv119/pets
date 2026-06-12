@@ -811,18 +811,19 @@ describe('updateSettings — merges patch over stored settings', () => {
 describe('updateSettings — awaited sequential writes compose without field loss', () => {
   it('treat-consume write followed by homeAnchorAt stamp preserves both fields', async () => {
     /**
-     * Verifies the primary race-condition fix: when a treat-consume write and
-     * a homeAnchorAt stamp are applied sequentially (each awaiting the prior),
-     * both fields survive in the final stored settings.
+     * Verifies that back-to-back awaited patches to DIFFERENT fields compose:
+     * a treat-consume write then a homeAnchorAt stamp both survive because
+     * updateSettings re-reads immediately before each write, so the second
+     * patch merges onto the first's result rather than a stale snapshot.
      *
-     * The old full-object pattern (loadSettings → mutate field → saveSettings)
-     * would clobber one field if both reads happened before either write
-     * completed. updateSettings re-reads immediately before each write, so
-     * sequential awaited calls always compose.
+     * Scope note: this exercises the SEQUENTIAL awaited path the production code
+     * actually takes (each writer awaits its own load→write). It does NOT — and
+     * cannot, with a synchronous in-memory store — reproduce a true cross-context
+     * concurrent clobber (popup and service worker both reading before either
+     * writes); updateSettings only narrows that window, it does not eliminate it.
      *
-     * If this breaks, the first adoption stamps the anchor but the service
-     * worker's next treat write wipes it (or vice versa), resetting the
-     * capacity ramp to zero.
+     * If this breaks, a sequence of single-field updates would drop earlier
+     * fields, e.g. a treat write silently wiping a freshly-stamped homeAnchorAt.
      */
     // GIVEN — initial settings with both treats and homeAnchorAt already set
     const initialSettings: Settings = {
@@ -846,9 +847,10 @@ describe('updateSettings — awaited sequential writes compose without field los
 
   it('homeAnchorAt stamp followed by treat-consume preserves both fields', async () => {
     /**
-     * Verifies the same composition guarantee in the reverse order: anchor
-     * stamp first, then treat decrement. Neither direction should lose fields
-     * when the writes are awaited sequentially.
+     * Verifies the same sequential-composition property in reverse order: anchor
+     * stamp first, then treat decrement. Neither direction drops fields when the
+     * writes are awaited in sequence (the re-read-before-write merge). As above,
+     * this covers the sequential path only, not true concurrency.
      *
      * If this breaks, the treat write after first adoption clobbers homeAnchorAt,
      * resetting the capacity ramp silently.
