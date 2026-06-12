@@ -58,9 +58,12 @@ export function capacityReason(
  * Grandfather back-date formula for upgrading users who have pets but
  * no homeAnchorAt yet.
  *
- * Sets anchorAt = now - min(petCount, CAPACITY_CAP) * GROWTH_MS so that:
- *   - capacity starts at petCount (they keep all their existing pets)
- *   - the next slot opens exactly one growth interval from now
+ * Grandfather +1: sets anchorAt = now - min(petCount, CAPACITY_CAP) * GROWTH_MS
+ * so that timeCapacity = petCount + 1 immediately. That means:
+ *   - they keep all their existing pets, AND
+ *   - one free slot is already waiting on upgrade (capacity = petCount + 1)
+ *   - the slot after that opens one growth interval later, resuming the cadence
+ * (For petCount >= CAPACITY_CAP the clamp leaves them at the cap with no free slot.)
  *
  * @param petCount  number of existing pets
  * @param now       current timestamp (injectable for testing)

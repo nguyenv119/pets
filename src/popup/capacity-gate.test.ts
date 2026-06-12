@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CAPACITY_CAP, CAPACITY_GROWTH_MS } from '../settings';
+import { CAPACITY_CAP, CAPACITY_GROWTH_MS, currentCapacity } from '../settings';
 import {
   canAddPet,
   capacityReason,
@@ -180,19 +180,19 @@ describe('capacityReason — below capacity', () => {
 // ---------------------------------------------------------------------------
 
 describe('migrationAnchor — existing user with pets', () => {
-  it('back-dates anchor so existing users unlock next slot gradually, not immediately', () => {
+  it('back-dates anchor by petCount intervals (grandfather +1)', () => {
     /**
-     * Verifies the grandfather formula: migrationAnchor = now - min(petCount,7)*GROWTH_MS.
-     * This gives an upgrading user credit for pets they already have, placing
-     * their anchor in the past so they start with capacity = petCount and the
-     * next slot is exactly one growth interval away.
+     * Verifies the grandfather +1 formula: migrationAnchor = now - min(petCount,7)*GROWTH_MS.
+     * Back-dating by petCount whole intervals places the anchor far enough in the
+     * past that timeCapacity = petCount + 1 right now — keeping all existing pets
+     * AND leaving one free slot waiting on upgrade.
      *
-     * Without this, a user upgrading from v1 with 3 pets would start at
-     * capacity 1 and see all their pets blocked; OR they'd start with instant
-     * access to all slots, defeating the time-gating mechanic entirely.
+     * Without this, a user upgrading from v1 with 3 pets would start at capacity 1
+     * and see their pets blocked. The chosen design instead welcomes them with one
+     * ready slot, then resumes the normal cadence for the slot after that.
      *
-     * If violated, upgraders either can't see their pets or can add unlimited
-     * pets immediately after upgrade.
+     * If violated, upgraders either can't see their pets (under-credit) or jump
+     * straight to the cap (over-credit).
      */
     // GIVEN — user has 3 pets, upgrading now
     const now = 1_000_000;
@@ -201,9 +201,33 @@ describe('migrationAnchor — existing user with pets', () => {
     // WHEN
     const anchor = migrationAnchor(petCount, now);
 
-    // THEN — anchor should be now - 3*GROWTH so they start at capacity=3, next slot in 3d
+    // THEN — anchor is now - 3*GROWTH (so timeCapacity = 4, i.e. petCount+1)
     const expected = now - Math.min(petCount, CAPACITY_CAP) * CAPACITY_GROWTH_MS;
     expect(anchor).toBe(expected);
+  });
+
+  it('composed with currentCapacity, leaves exactly one free slot on upgrade', () => {
+    /**
+     * Locks the END-TO-END grandfather +1 behavior, not just the anchor value:
+     * feeding migrationAnchor's result into currentCapacity must yield
+     * capacity = petCount + 1 with isFull = false — one slot ready to adopt into.
+     *
+     * This is the contract the anchor-only test cannot prove (it asserts the
+     * timestamp, not the resulting capacity). If migrationAnchor's interval count
+     * drifts by one, this test catches it where the anchor-value test would not:
+     * an off-by-one would strand pets (capacity = petCount, isFull) or hand out
+     * two free slots (capacity = petCount + 2).
+     */
+    // GIVEN — upgrader with 2 pets, anchor back-dated by the grandfather formula
+    const now = 1_000_000;
+    const petCount = 2;
+
+    // WHEN — compose migration → capacity
+    const { capacity, isFull } = currentCapacity(migrationAnchor(petCount, now), petCount, now);
+
+    // THEN — capacity is petCount+1 and a slot is free right now
+    expect(capacity).toBe(petCount + 1);
+    expect(isFull).toBe(false);
   });
 });
 

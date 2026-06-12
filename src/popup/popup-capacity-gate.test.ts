@@ -215,8 +215,8 @@ describe('capacity gate — migration sets homeAnchorAt for users without anchor
      * start at capacity=1, see all their pets but cannot add more, and have
      * no countdown — completely broken UX.
      *
-     * The grandfather formula sets anchorAt = now - min(petCount,7)*GROWTH so
-     * capacity starts at petCount and new slots open gradually.
+     * The grandfather +1 formula sets anchorAt = now - min(petCount,7)*GROWTH so
+     * capacity = petCount + 1 (all pets kept, one free slot waiting on upgrade).
      *
      * If violated, existing users upgrade and immediately see "full" with no
      * countdown, or capacity 1 even though they have 3 pets.
@@ -244,6 +244,41 @@ describe('capacity gate — migration sets homeAnchorAt for users without anchor
     const saved = saveArg['pixel-pets-settings-v1'];
     expect(typeof saved.homeAnchorAt).toBe('number');
     expect(saved.homeAnchorAt).not.toBeNull();
+  });
+
+  it('does NOT re-stamp homeAnchorAt on a second init when an anchor already exists', async () => {
+    /**
+     * Verifies migration is idempotent: once homeAnchorAt is a number, init()
+     * must never overwrite it. This is the single most dangerous regression in
+     * the feature — re-stamping on every popup open would reset the growth clock
+     * each time, so a user's capacity could never climb past its starting value.
+     *
+     * If violated, the time-gating silently never progresses: every popup open
+     * restarts the 3-day cadence from zero.
+     */
+    const now = Date.now();
+    // GIVEN — 3 pets with an anchor ALREADY set (back-dated for capacity 4)
+    const original = makeSettingsAnchoredFor3(now)['pixel-pets-settings-v1'].homeAnchorAt;
+    chromeMock.storage.local.get.mockImplementation(async (key: unknown) => {
+      if (key === 'pixel-pets-settings-v1') return makeSettingsAnchoredFor3(now);
+      return { ...makePetsStorageWith(3), ...makeSettingsAnchoredFor3(now) };
+    });
+
+    // WHEN — popup initializes
+    await loadPopupModule();
+    await new Promise(r => setTimeout(r, 0));
+
+    // THEN — no settings write changed homeAnchorAt away from its original value
+    const settingsSaves = chromeMock.storage.local.set.mock.calls.filter(
+      (call: unknown[]) =>
+        typeof call[0] === 'object' &&
+        call[0] !== null &&
+        'pixel-pets-settings-v1' in (call[0] as object)
+    );
+    for (const call of settingsSaves) {
+      const saveArg = (call as unknown[])[0] as Record<string, { homeAnchorAt?: number | null }>;
+      expect(saveArg['pixel-pets-settings-v1'].homeAnchorAt).toBe(original);
+    }
   });
 });
 
