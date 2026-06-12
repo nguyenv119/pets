@@ -1,5 +1,5 @@
 import type { Theme } from '../settings';
-import { loadSettings, saveSettings } from '../settings';
+import { loadSettings, updateSettings } from '../settings';
 
 /**
  * Applies a theme to document.body by setting the data-theme attribute.
@@ -20,18 +20,17 @@ export async function loadTheme(): Promise<Theme> {
 
 /**
  * Flips the current theme (light → dark or dark → light), applies it to
- * document.body, persists it via saveSettings, and returns the new theme.
- *
- * Loads the full current settings before writing so that other fields
- * (treats, treatsUpdatedAt) are preserved — only the theme field changes.
+ * document.body, persists it via updateSettings (field-merge), and returns
+ * the new theme. Only the theme field is patched so concurrent writes to
+ * treats or homeAnchorAt are not clobbered.
  */
 export async function toggleTheme(current: Theme): Promise<Theme> {
   const next: Theme = current === 'light' ? 'dark' : 'light';
   applyTheme(next);
 
-  // Load full settings to avoid overwriting treats/treatsUpdatedAt
-  const settings = await loadSettings();
-  await saveSettings({ ...settings, theme: next });
+  // Field-merge: only patch the theme field to avoid clobbering treats or
+  // homeAnchorAt written by concurrent service-worker or popup writers.
+  await updateSettings({ theme: next });
 
   return next;
 }

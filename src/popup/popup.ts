@@ -1,6 +1,6 @@
 import type { PetData, PetType, ExtMessage } from '../types';
 import type { Theme } from '../settings';
-import { loadSettings, saveSettings } from '../settings';
+import { loadSettings, updateSettings } from '../settings';
 import { loadPetData, savePets } from '../store';
 import { pingTab } from './tab-probe';
 import { renderPetItemHTML } from './render-pet-item';
@@ -256,8 +256,8 @@ async function addPet(): Promise<void> {
   if (!canAddPet(settings.homeAnchorAt ?? null, pets.length, now)) return;
 
   // Stamp the home anchor on first adoption (never overwrite existing anchor)
-  settings.homeAnchorAt = adoptionAnchor(settings.homeAnchorAt ?? null, now);
-  await saveSettings(settings);
+  // Use field-merge to avoid clobbering concurrent treat writes.
+  await updateSettings({ homeAnchorAt: adoptionAnchor(settings.homeAnchorAt ?? null, now) });
 
   const pet: PetData = {
     id: crypto.randomUUID(),
@@ -405,11 +405,11 @@ async function init(): Promise<void> {
   initDragAndDrop();
   setAddFormExpanded(pets.length === 0);
 
-  // Migration: back-fill homeAnchorAt for existing users who never had one
+  // Migration: back-fill homeAnchorAt for existing users who never had one.
+  // Use field-merge to avoid clobbering any concurrent treat writes during startup.
   const settingsForMigration = await loadSettings();
   if (settingsForMigration.homeAnchorAt == null && pets.length > 0) {
-    settingsForMigration.homeAnchorAt = migrationAnchor(pets.length);
-    await saveSettings(settingsForMigration);
+    await updateSettings({ homeAnchorAt: migrationAnchor(pets.length) });
   }
 
   await refreshAddButtonState();

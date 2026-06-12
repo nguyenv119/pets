@@ -46,6 +46,19 @@ export async function saveSettings(s: Settings): Promise<void> {
   await chrome.storage.local.set({ [KEY]: s });
 }
 
+/**
+ * Field-merge helper: re-reads the current settings immediately before writing
+ * so that only the patched fields change. This minimises the read-modify-write
+ * race window: a full-object saveSettings call can clobber fields written by a
+ * concurrent writer between the original read and the write; re-reading late
+ * ensures the latest persisted state is the merge base.
+ */
+export async function updateSettings(patch: Partial<Settings>): Promise<Settings> {
+  const merged = { ...(await loadSettings()), ...patch };
+  await saveSettings(merged);
+  return merged;
+}
+
 export function currentCapacity(
   anchorAt: number | null,
   petCount: number,

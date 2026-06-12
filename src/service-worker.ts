@@ -1,6 +1,6 @@
 import type { ExtMessage } from './types';
 import { loadPetData, savePets } from './store';
-import { loadSettings, saveSettings, currentTreats, TREAT_RECHARGE_MS } from './settings';
+import { loadSettings, updateSettings, currentTreats, TREAT_RECHARGE_MS } from './settings';
 
 // ---------------------------------------------------------------------------
 // On install / update — inject content script into all existing tabs.
@@ -114,12 +114,13 @@ chrome.runtime.onMessage.addListener(
         // Materialize: advance treatsUpdatedAt to preserve sub-interval remainder
         // so the next recharge still fires at the right time.
         const remainder = (now - s.treatsUpdatedAt) % TREAT_RECHARGE_MS;
-        s.treats = count;
-        s.treatsUpdatedAt = now - remainder;
-        s.treats -= 1;
+        const newTreats = count - 1;
+        const newTreatsUpdatedAt = now - remainder;
 
-        await saveSettings(s);
-        sendResponse({ ok: true, count: s.treats });
+        // Field-merge: only patch treats fields to avoid clobbering homeAnchorAt
+        // or other fields written by concurrent popup writers (e.g. first-adoption stamp).
+        await updateSettings({ treats: newTreats, treatsUpdatedAt: newTreatsUpdatedAt });
+        sendResponse({ ok: true, count: newTreats });
       }).catch((err) => {
         // Keep the chain alive after a failure; surface as ok:false to the caller
         // so the UI doesn't hang forever waiting for sendResponse.

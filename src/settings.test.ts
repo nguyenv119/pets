@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   loadSettings,
   saveSettings,
+  updateSettings,
   currentTreats,
   currentCapacity,
   formatCapacityCountdown,
@@ -713,5 +714,164 @@ describe('loadSettings — homeAnchorAt field handling', () => {
 
     // THEN
     expect(settings.homeAnchorAt).toBe(null);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// updateSettings — field-merge helper
+// ---------------------------------------------------------------------------
+
+describe('updateSettings — merges patch over stored settings', () => {
+  it('merges partial patch and persists the merged result', async () => {
+    /**
+     * Verifies that updateSettings applies the patch fields over the current
+     * stored settings rather than replacing the whole object. This is the
+     * core contract that prevents hot writers from clobbering each other's fields.
+     *
+     * If this breaks, a treats write also zeroes homeAnchorAt (or vice versa),
+     * causing silent data loss whenever two features write settings at the same time.
+     */
+    // GIVEN — storage has both treats and homeAnchorAt set
+    mockStorage['pixel-pets-settings-v1'] = {
+      theme: 'light',
+      treats: 5,
+      treatsUpdatedAt: 1000,
+      homeAnchorAt: 99999,
+    };
+
+    // WHEN — only patch the treats field
+    const result = await updateSettings({ treats: 3 });
+
+    // THEN — treats updated, homeAnchorAt preserved
+    expect(result.treats).toBe(3);
+    expect(result.homeAnchorAt).toBe(99999);
+
+    const stored = mockStorage['pixel-pets-settings-v1'] as Settings;
+    expect(stored.treats).toBe(3);
+    expect(stored.homeAnchorAt).toBe(99999);
+  });
+
+  it('leaves fields not in the patch unchanged', async () => {
+    /**
+     * Verifies that a patch with only { theme } leaves treats, treatsUpdatedAt,
+     * and homeAnchorAt untouched — confirming that the merge is additive, not
+     * a replacement.
+     *
+     * If this breaks, a theme toggle would zero out the treat count, and the
+     * user would lose all their treats silently.
+     */
+    // GIVEN — full settings stored
+    mockStorage['pixel-pets-settings-v1'] = {
+      theme: 'light',
+      treats: 7,
+      treatsUpdatedAt: 5000,
+      homeAnchorAt: 12345,
+    };
+
+    // WHEN — only patch the theme
+    await updateSettings({ theme: 'dark' });
+
+    // THEN — all other fields preserved
+    const stored = mockStorage['pixel-pets-settings-v1'] as Settings;
+    expect(stored.theme).toBe('dark');
+    expect(stored.treats).toBe(7);
+    expect(stored.treatsUpdatedAt).toBe(5000);
+    expect(stored.homeAnchorAt).toBe(12345);
+  });
+
+  it('returns the merged settings object', async () => {
+    /**
+     * Verifies that updateSettings returns the final merged object so callers
+     * can use the merged state immediately without an extra loadSettings call.
+     *
+     * If this breaks, callers must re-read storage after every updateSettings
+     * call, adding latency and an extra race window.
+     */
+    // GIVEN — storage has theme=light
+    mockStorage['pixel-pets-settings-v1'] = {
+      theme: 'light',
+      treats: 10,
+      treatsUpdatedAt: 0,
+      homeAnchorAt: null,
+    };
+
+    // WHEN
+    const result = await updateSettings({ theme: 'dark' });
+
+    // THEN — returned object reflects the merge
+    expect(result.theme).toBe('dark');
+    expect(result.treats).toBe(10);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// updateSettings — interleaved-writers composition
+// ---------------------------------------------------------------------------
+
+describe('updateSettings — awaited sequential writes compose without field loss', () => {
+  it('treat-consume write followed by homeAnchorAt stamp preserves both fields', async () => {
+    /**
+     * Verifies that back-to-back awaited patches to DIFFERENT fields compose:
+     * a treat-consume write then a homeAnchorAt stamp both survive because
+     * updateSettings re-reads immediately before each write, so the second
+     * patch merges onto the first's result rather than a stale snapshot.
+     *
+     * Scope note: this exercises the SEQUENTIAL awaited path the production code
+     * actually takes (each writer awaits its own load→write). It does NOT — and
+     * cannot, with a synchronous in-memory store — reproduce a true cross-context
+     * concurrent clobber (popup and service worker both reading before either
+     * writes); updateSettings only narrows that window, it does not eliminate it.
+     *
+     * If this breaks, a sequence of single-field updates would drop earlier
+     * fields, e.g. a treat write silently wiping a freshly-stamped homeAnchorAt.
+     */
+    // GIVEN — initial settings with both treats and homeAnchorAt already set
+    const initialSettings: Settings = {
+      theme: 'light',
+      treats: 5,
+      treatsUpdatedAt: 1000,
+      homeAnchorAt: 88888,
+    };
+    mockStorage['pixel-pets-settings-v1'] = { ...initialSettings };
+
+    // WHEN — simulate treat consume followed by anchor stamp (sequential awaits)
+    await updateSettings({ treats: 4, treatsUpdatedAt: 2000 });
+    await updateSettings({ homeAnchorAt: 99999 });
+
+    // THEN — both changes are present in the final stored settings
+    const stored = mockStorage['pixel-pets-settings-v1'] as Settings;
+    expect(stored.treats).toBe(4);
+    expect(stored.treatsUpdatedAt).toBe(2000);
+    expect(stored.homeAnchorAt).toBe(99999);
+  });
+
+  it('homeAnchorAt stamp followed by treat-consume preserves both fields', async () => {
+    /**
+     * Verifies the same sequential-composition property in reverse order: anchor
+     * stamp first, then treat decrement. Neither direction drops fields when the
+     * writes are awaited in sequence (the re-read-before-write merge). As above,
+     * this covers the sequential path only, not true concurrency.
+     *
+     * If this breaks, the treat write after first adoption clobbers homeAnchorAt,
+     * resetting the capacity ramp silently.
+     */
+    // GIVEN — initial settings
+    const initialSettings: Settings = {
+      theme: 'light',
+      treats: 8,
+      treatsUpdatedAt: 0,
+      homeAnchorAt: null,
+    };
+    mockStorage['pixel-pets-settings-v1'] = { ...initialSettings };
+
+    // WHEN — anchor stamp, then treat consume
+    await updateSettings({ homeAnchorAt: 77777 });
+    await updateSettings({ treats: 7, treatsUpdatedAt: 3000 });
+
+    // THEN
+    const stored = mockStorage['pixel-pets-settings-v1'] as Settings;
+    expect(stored.homeAnchorAt).toBe(77777);
+    expect(stored.treats).toBe(7);
+    expect(stored.treatsUpdatedAt).toBe(3000);
   });
 });
