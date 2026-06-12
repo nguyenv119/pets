@@ -9,6 +9,7 @@ import { applyTheme, loadTheme, toggleTheme } from './theme';
 import { setAddFormExpanded, isAddFormExpanded } from './collapsible-form';
 import { showToast } from './toast';
 import { renderTreatCounter } from './treat-counter';
+import { renderCapacityCounter } from './capacity-counter';
 import { handleStorageChange } from './popup-cross-tab';
 
 // ---------------------------------------------------------------------------
@@ -18,6 +19,9 @@ import { handleStorageChange } from './popup-cross-tab';
 const petsList = document.getElementById('pets-list')!;
 const treatCountEl = document.getElementById('treat-count');
 const treatNextEl = document.getElementById('treat-next');
+const capacityCountEl = document.getElementById('capacity-count');
+const capacityMaxEl = document.getElementById('capacity-max');
+const capacityNextEl = document.getElementById('capacity-next');
 const nameInput = document.getElementById('pet-name') as HTMLInputElement;
 const typeGrid = document.getElementById('pet-type-grid') as HTMLElement;
 const typeHidden = document.getElementById('pet-type-value') as HTMLInputElement;
@@ -38,9 +42,22 @@ function renderTreatCounterInPopup(): Promise<void> {
   return renderTreatCounter(treatCountEl, treatNextEl);
 }
 
+// ---------------------------------------------------------------------------
+// Capacity counter — wired to DOM elements; logic lives in capacity-counter.ts
+// ---------------------------------------------------------------------------
+
+function renderCapacityCounterInPopup(): Promise<void> {
+  return renderCapacityCounter(
+    capacityCountEl as HTMLElement | null,
+    capacityMaxEl as HTMLElement | null,
+    capacityNextEl as HTMLElement | null,
+    pets.length
+  );
+}
+
 // Listen for storage changes from other tabs:
 // - Roster change (pixel-pets-v1): re-render pet list to reflect add/remove/reorder from another tab
-// - Settings change (pixel-pets-settings-v1): refresh treat counter and theme
+// - Settings change (pixel-pets-settings-v1): refresh treat counter, capacity meter, and theme
 //
 // Self-echo note: popup writes roster then immediately updates its own pets[] and re-renders.
 // If the storage event fires for our own write, re-rendering is idempotent (same data → same DOM),
@@ -52,9 +69,11 @@ chrome.storage.onChanged.addListener((changes, area) => {
     async () => {
       pets = await loadPetData();
       renderPetList();
+      renderCapacityCounterInPopup();
     },
     () => {
       renderTreatCounterInPopup();
+      renderCapacityCounterInPopup();
       applyTheme(currentTheme);
     },
   );
@@ -218,6 +237,7 @@ async function addPet(): Promise<void> {
   pets.push(pet);
   await savePets(pets);
   renderPetList();
+  renderCapacityCounterInPopup();
 
   // Notify content scripts via service worker
   const msg: ExtMessage = { type: 'ADD_PET', pet };
@@ -248,6 +268,10 @@ async function removePet(id: string): Promise<void> {
   // Optimistically remove from local state and re-render immediately.
   pets = pets.filter(p => p.id !== id);
   renderPetList();
+  // Refresh the meter too: for an over-capacity (migrated) user the displayed
+  // count is petCount-derived, so it must drop now rather than waiting for the
+  // SW's deferred-removal storage event. The undo path below re-renders to restore.
+  renderCapacityCounterInPopup();
 
   // Tell SW to schedule the deferred removal (storage write + broadcast).
   const pendingMsg: ExtMessage = { type: 'PENDING_REMOVE_PET', id, delayMs: 5000 };
@@ -260,6 +284,7 @@ async function removePet(id: string): Promise<void> {
     // Re-insert at original position and tell SW to cancel.
     pets.splice(originalIndex, 0, pet);
     renderPetList();
+    renderCapacityCounterInPopup();
     const cancelMsg: ExtMessage = { type: 'CANCEL_PENDING_REMOVE', id };
     chrome.runtime.sendMessage(cancelMsg);
   }
@@ -341,6 +366,7 @@ async function init(): Promise<void> {
   setAddFormExpanded(pets.length === 0);
 
   await renderTreatCounterInPopup();
+  await renderCapacityCounterInPopup();
 
   // Probe whether the content script is alive on the active tab.
   // If not (special browser page), show the banner and disable Throw Ball.
