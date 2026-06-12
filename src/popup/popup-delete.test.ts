@@ -60,6 +60,7 @@ function setupDOM(): void {
             <div id="pet-color-grid"></div>
             <input type="hidden" id="pet-color-value" value="brown" />
           </div>
+          <p id="capacity-reason" hidden></p>
           <button id="btn-add"></button>
         </div>
       </section>

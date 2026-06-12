@@ -1,5 +1,6 @@
 import type { PetData, PetType, ExtMessage } from '../types';
 import type { Theme } from '../settings';
+import { loadSettings, saveSettings } from '../settings';
 import { loadPetData, savePets } from '../store';
 import { pingTab } from './tab-probe';
 import { renderPetItemHTML } from './render-pet-item';
@@ -11,6 +12,7 @@ import { showToast } from './toast';
 import { renderTreatCounter } from './treat-counter';
 import { renderCapacityCounter } from './capacity-counter';
 import { handleStorageChange } from './popup-cross-tab';
+import { canAddPet, adoptionAnchor, migrationAnchor, capacityReason } from './capacity-gate';
 
 // ---------------------------------------------------------------------------
 // DOM references
@@ -27,7 +29,8 @@ const typeGrid = document.getElementById('pet-type-grid') as HTMLElement;
 const typeHidden = document.getElementById('pet-type-value') as HTMLInputElement;
 const colorGrid = document.getElementById('pet-color-grid') as HTMLElement;
 const colorHidden = document.getElementById('pet-color-value') as HTMLInputElement;
-const btnAdd = document.getElementById('btn-add')!;
+const btnAdd = document.getElementById('btn-add') as HTMLButtonElement;
+const capacityReasonEl = document.getElementById('capacity-reason')!;
 const btnThrowBall = document.getElementById('btn-throw-ball') as HTMLButtonElement;
 const btnToggle = document.getElementById('btn-toggle')!;
 const btnTheme = document.getElementById('btn-theme')!;
@@ -42,7 +45,6 @@ function renderTreatCounterInPopup(): Promise<void> {
   return renderTreatCounter(treatCountEl, treatNextEl);
 }
 
-// ---------------------------------------------------------------------------
 // Capacity counter — wired to DOM elements; logic lives in capacity-counter.ts
 // ---------------------------------------------------------------------------
 
@@ -53,6 +55,27 @@ function renderCapacityCounterInPopup(): Promise<void> {
     capacityNextEl as HTMLElement | null,
     pets.length
   );
+}
+
+// ---------------------------------------------------------------------------
+// Capacity gate UI
+// ---------------------------------------------------------------------------
+
+async function refreshAddButtonState(): Promise<void> {
+  const settings = await loadSettings();
+  const anchorAt = settings.homeAnchorAt ?? null;
+  const petCount = pets.length;
+  const now = Date.now();
+
+  if (canAddPet(anchorAt, petCount, now)) {
+    btnAdd.disabled = false;
+    capacityReasonEl.setAttribute('hidden', '');
+    capacityReasonEl.textContent = '';
+  } else {
+    btnAdd.disabled = true;
+    capacityReasonEl.removeAttribute('hidden');
+    capacityReasonEl.textContent = capacityReason(anchorAt, petCount, now);
+  }
 }
 
 // Listen for storage changes from other tabs:
@@ -70,11 +93,13 @@ chrome.storage.onChanged.addListener((changes, area) => {
       pets = await loadPetData();
       renderPetList();
       renderCapacityCounterInPopup();
+      await refreshAddButtonState();
     },
     () => {
       renderTreatCounterInPopup();
       renderCapacityCounterInPopup();
       applyTheme(currentTheme);
+      refreshAddButtonState();
     },
   );
 });
@@ -225,6 +250,15 @@ async function addPet(): Promise<void> {
 
   if (!color) return; // guard against empty color
 
+  // Capacity gate — load fresh settings and re-check before adding
+  const settings = await loadSettings();
+  const now = Date.now();
+  if (!canAddPet(settings.homeAnchorAt ?? null, pets.length, now)) return;
+
+  // Stamp the home anchor on first adoption (never overwrite existing anchor)
+  settings.homeAnchorAt = adoptionAnchor(settings.homeAnchorAt ?? null, now);
+  await saveSettings(settings);
+
   const pet: PetData = {
     id: crypto.randomUUID(),
     name,
@@ -242,6 +276,9 @@ async function addPet(): Promise<void> {
   // Notify content scripts via service worker
   const msg: ExtMessage = { type: 'ADD_PET', pet };
   chrome.runtime.sendMessage(msg);
+
+  // Refresh gate state after adding
+  await refreshAddButtonState();
 
   // Reset form and collapse
   nameInput.value = '';
@@ -289,6 +326,9 @@ async function removePet(id: string): Promise<void> {
     chrome.runtime.sendMessage(cancelMsg);
   }
   // If not undone, SW already handles storage + REMOVE_PET broadcast on timeout.
+
+  // Refresh gate state after remove/undo (roster size may have changed)
+  await refreshAddButtonState();
 }
 
 function throwBall(): void {
@@ -364,6 +404,15 @@ async function init(): Promise<void> {
   renderPetList();
   initDragAndDrop();
   setAddFormExpanded(pets.length === 0);
+
+  // Migration: back-fill homeAnchorAt for existing users who never had one
+  const settingsForMigration = await loadSettings();
+  if (settingsForMigration.homeAnchorAt == null && pets.length > 0) {
+    settingsForMigration.homeAnchorAt = migrationAnchor(pets.length);
+    await saveSettings(settingsForMigration);
+  }
+
+  await refreshAddButtonState();
 
   await renderTreatCounterInPopup();
   await renderCapacityCounterInPopup();
