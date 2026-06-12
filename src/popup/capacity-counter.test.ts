@@ -101,12 +101,12 @@ describe('renderCapacityCounter — mid state', () => {
      * If this contract breaks, the meter shows wrong slot counts or missing
      * countdown, leaving users guessing about housing availability.
      */
-    // GIVEN — anchor exactly 3 days ago → timeCapacity = 2, petCount = 0
+    // GIVEN — anchor 3 growth-intervals (9 days) ago → timeCapacity = 4, petCount = 0
     const now = Date.now();
     vi.useFakeTimers();
     vi.setSystemTime(now);
 
-    const anchorAt = now - 3 * CAPACITY_GROWTH_MS; // exactly day 3 → capacity 2
+    const anchorAt = now - 3 * CAPACITY_GROWTH_MS; // 3 intervals → capacity 4
     mockStorage['pixel-pets-settings-v1'] = {
       theme: 'light',
       treats: 10,
@@ -168,7 +168,7 @@ describe('renderCapacityCounter — petCount clamp reflects honest countdown', (
     expect(nextEl.textContent).toMatch(/next slot in \d+d \d+h/);
   });
 
-  it('shows capacity 4 at day 12 when anchor was day 0 with petCount 4 (slot 5 just unlocked)', async () => {
+  it('shows capacity 5 at day 12 when anchor was day 0 with petCount 4 (slot 5 just unlocked)', async () => {
     /**
      * Verifies that after 12 days with petCount=4, the capacity shows 5
      * (timeCapacity = 1 + floor(12G/G) = 5, which beats petCount=4).

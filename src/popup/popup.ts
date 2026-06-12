@@ -57,7 +57,7 @@ function renderCapacityCounterInPopup(): Promise<void> {
 
 // Listen for storage changes from other tabs:
 // - Roster change (pixel-pets-v1): re-render pet list to reflect add/remove/reorder from another tab
-// - Settings change (pixel-pets-settings-v1): refresh treat counter and theme
+// - Settings change (pixel-pets-settings-v1): refresh treat counter, capacity meter, and theme
 //
 // Self-echo note: popup writes roster then immediately updates its own pets[] and re-renders.
 // If the storage event fires for our own write, re-rendering is idempotent (same data → same DOM),
@@ -268,6 +268,10 @@ async function removePet(id: string): Promise<void> {
   // Optimistically remove from local state and re-render immediately.
   pets = pets.filter(p => p.id !== id);
   renderPetList();
+  // Refresh the meter too: for an over-capacity (migrated) user the displayed
+  // count is petCount-derived, so it must drop now rather than waiting for the
+  // SW's deferred-removal storage event. The undo path below re-renders to restore.
+  renderCapacityCounterInPopup();
 
   // Tell SW to schedule the deferred removal (storage write + broadcast).
   const pendingMsg: ExtMessage = { type: 'PENDING_REMOVE_PET', id, delayMs: 5000 };
