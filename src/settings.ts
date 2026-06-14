@@ -89,9 +89,9 @@ export function formatCapacityCountdown(ms: number): string {
   const d = Math.floor(totalMin / 1440);
   const h = Math.floor((totalMin % 1440) / 60);
   const m = totalMin % 60;
-  if (d > 0) return 'next slot in ' + d + 'd ' + h + 'h';
-  if (h > 0) return 'next slot in ' + h + 'h ' + m + 'm';
-  return 'next slot in ' + m + 'm';
+  if (d > 0) return 'next home in ' + d + 'd ' + h + 'h';
+  if (h > 0) return 'next home in ' + h + 'h ' + m + 'm';
+  return 'next home in ' + m + 'm';
 }
 
 export function currentTreats(

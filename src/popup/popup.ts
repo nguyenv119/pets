@@ -22,7 +22,6 @@ const petsList = document.getElementById('pets-list')!;
 const treatCountEl = document.getElementById('treat-count');
 const treatNextEl = document.getElementById('treat-next');
 const capacityCountEl = document.getElementById('capacity-count');
-const capacityMaxEl = document.getElementById('capacity-max');
 const capacityNextEl = document.getElementById('capacity-next');
 const nameInput = document.getElementById('pet-name') as HTMLInputElement;
 const typeGrid = document.getElementById('pet-type-grid') as HTMLElement;
@@ -51,7 +50,6 @@ function renderTreatCounterInPopup(): Promise<void> {
 function renderCapacityCounterInPopup(): Promise<void> {
   return renderCapacityCounter(
     capacityCountEl as HTMLElement | null,
-    capacityMaxEl as HTMLElement | null,
     capacityNextEl as HTMLElement | null,
     pets.length
   );
