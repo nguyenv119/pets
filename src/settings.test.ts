@@ -365,7 +365,7 @@ describe('currentCapacity — time-based slot boundaries', () => {
   it('returns nextSlotMs = 0 when at cap', () => {
     /**
      * Verifies nextSlotMs is 0 when capacity is at CAPACITY_CAP so the
-     * countdown UI is suppressed — there is no "next slot" to count to.
+     * countdown UI is suppressed — there is no "next home" to count to.
      *
      * If this breaks, the popup shows a countdown for a slot that will never
      * arrive, misleading the user.
@@ -554,7 +554,7 @@ describe('formatCapacityCountdown', () => {
     const result = formatCapacityCountdown(ms);
 
     // THEN
-    expect(result).toBe('next slot in 2d 4h');
+    expect(result).toBe('next home in 2d 4h');
   });
 
   it('formats hours and minutes when >= 1 hour but < 1 day remaining', () => {
@@ -569,7 +569,7 @@ describe('formatCapacityCountdown', () => {
     const result = formatCapacityCountdown(ms);
 
     // THEN
-    expect(result).toBe('next slot in 5h 30m');
+    expect(result).toBe('next home in 5h 30m');
   });
 
   it('formats minutes only when < 1 hour remaining', () => {
@@ -584,7 +584,7 @@ describe('formatCapacityCountdown', () => {
     const result = formatCapacityCountdown(ms);
 
     // THEN
-    expect(result).toBe('next slot in 45m');
+    expect(result).toBe('next home in 45m');
   });
 
   it('formats exactly 1 day as "1d 0h"', () => {
@@ -602,7 +602,7 @@ describe('formatCapacityCountdown', () => {
     const result = formatCapacityCountdown(ms);
 
     // THEN
-    expect(result).toBe('next slot in 1d 0h');
+    expect(result).toBe('next home in 1d 0h');
   });
 
   it('rounds sub-minute ms up to 1m', () => {
@@ -611,7 +611,7 @@ describe('formatCapacityCountdown', () => {
      * "1m" rather than "0m", so the countdown never tells a user "0 minutes"
      * while the clock is still running.
      *
-     * If this breaks, the UI shows "next slot in 0m" for a brief window,
+     * If this breaks, the UI shows "next home in 0m" for a brief window,
      * which looks broken even though the slot hasn't opened yet.
      */
     // GIVEN — 30 seconds (half a minute)
@@ -621,7 +621,7 @@ describe('formatCapacityCountdown', () => {
     const result = formatCapacityCountdown(ms);
 
     // THEN
-    expect(result).toBe('next slot in 1m');
+    expect(result).toBe('next home in 1m');
   });
 });
 

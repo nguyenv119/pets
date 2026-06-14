@@ -203,7 +203,7 @@ describe('capacity gate — btn-add disabled when full', () => {
     // AND — #capacity-reason is visible (no hidden attr) with text
     const reason = document.getElementById('capacity-reason')!;
     expect(reason.hasAttribute('hidden')).toBe(false);
-    expect(reason.textContent).toContain('next slot');
+    expect(reason.textContent).toContain('next home');
   });
 });
 

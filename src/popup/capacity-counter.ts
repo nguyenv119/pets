@@ -12,18 +12,16 @@ let capacityInterval: ReturnType<typeof setInterval> | null = null;
 
 export async function renderCapacityCounter(
   countEl: HTMLElement | null,
-  maxEl: HTMLElement | null,
   nextEl: HTMLElement | null,
   petCount: number
 ): Promise<void> {
-  if (!countEl || !maxEl || !nextEl) return;
+  if (!countEl || !nextEl) return;
 
   const s = await loadSettings();
   const now = Date.now();
   const { capacity, nextSlotMs } = currentCapacity(s.homeAnchorAt ?? null, petCount, now);
 
   countEl.textContent = String(capacity);
-  maxEl.textContent = String(CAPACITY_CAP);
 
   // Clear any prior countdown interval before potentially starting a new one.
   if (capacityInterval !== null) {
@@ -36,7 +34,7 @@ export async function renderCapacityCounter(
     return;
   }
 
-  nextEl.textContent = formatCapacityCountdown(nextSlotMs);
+  nextEl.textContent = '· ' + formatCapacityCountdown(nextSlotMs);
 
   // Tick every 60 seconds to update the countdown display.
   // Days/hours granularity means per-second ticks would waste CPU.
@@ -47,9 +45,9 @@ export async function renderCapacityCounter(
       // A full growth interval has elapsed — re-render from storage.
       clearInterval(capacityInterval!);
       capacityInterval = null;
-      renderCapacityCounter(countEl, maxEl, nextEl, petCount);
+      renderCapacityCounter(countEl, nextEl, petCount);
     } else {
-      nextEl!.textContent = formatCapacityCountdown(remaining);
+      nextEl!.textContent = '· ' + formatCapacityCountdown(remaining);
     }
   }, 60_000);
 }

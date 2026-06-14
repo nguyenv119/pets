@@ -108,10 +108,10 @@ describe('canAddPet — at CAPACITY_CAP', () => {
 // ---------------------------------------------------------------------------
 
 describe('capacityReason — at capacity with countdown', () => {
-  it('returns a string containing "next slot" when capacity is full but not maxed', () => {
+  it('returns a string containing "next home" when capacity is full but not maxed', () => {
     /**
      * Verifies that capacityReason shows a countdown message telling the user
-     * when the next slot opens, so they understand the gate is time-based, not
+     * when the next home opens, so they understand the gate is time-based, not
      * permanent.
      *
      * Without an honest countdown, users think adoption is permanently broken
@@ -126,8 +126,8 @@ describe('capacityReason — at capacity with countdown', () => {
     // WHEN
     const reason = capacityReason(anchor, 1, now);
 
-    // THEN — should mention time (contains "next slot")
-    expect(reason).toContain('next slot');
+    // THEN — should mention time (contains "next home")
+    expect(reason).toContain('next home');
   });
 });
 
@@ -136,9 +136,9 @@ describe('capacityReason — at CAPACITY_CAP', () => {
     /**
      * Verifies that capacityReason returns an honest "max capacity" message
      * when the roster is at CAPACITY_CAP, rather than showing a countdown
-     * (there is no next slot to wait for).
+     * (there is no next home to wait for).
      *
-     * If violated, the UI shows "next slot in 0m" instead of "max capacity
+     * If violated, the UI shows "next home in 0m" instead of "max capacity
      * reached", confusing users into waiting for a slot that never comes.
      */
     // GIVEN — old anchor, max pets
