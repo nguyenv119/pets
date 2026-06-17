@@ -573,11 +573,12 @@ describe('loadPetData — dedupe corrupted [X,X] roster on read', () => {
      * If violated, corrupted storage continues rendering two overlapping
      * sprites and the next savePets persists the duplication again.
      */
-    // GIVEN — corrupted [X,X] storage
+    // GIVEN — corrupted [X,X] storage; duplicates made distinguishable so the
+    // test can prove KEEP-FIRST (a keep-last regression would surface 'Overwritten').
     mockStorage['pixel-pets-v1'] = {
       roster: [
-        { id: 'x', name: 'Rex', type: 'dog', color: 'brown' },
-        { id: 'x', name: 'Rex', type: 'dog', color: 'brown' },
+        { id: 'x', name: 'Original', type: 'dog', color: 'brown' },
+        { id: 'x', name: 'Overwritten', type: 'fox', color: 'red' },
       ],
     };
     mockStorage['pixel-pets-positions-v1'] = { 'x': { x: 100, y: 200 } };
@@ -585,9 +586,11 @@ describe('loadPetData — dedupe corrupted [X,X] roster on read', () => {
     // WHEN
     const result = await loadPetData();
 
-    // THEN — only one pet returned
+    // THEN — only one pet returned, and it is the FIRST occurrence
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('x');
+    expect(result[0].name).toBe('Original');
+    expect(result[0].type).toBe('dog');
     expect(result[0].x).toBe(100);
   });
 
@@ -628,27 +631,31 @@ describe('loadPetData — dedupe corrupted [X,X] roster on read', () => {
 describe('loadRoster — dedupe corrupted [X,X] roster on read', () => {
   it('returns one entry when storage has two roster entries with the same id', async () => {
     /**
-     * Verifies loadRoster deduplicates the roster it returns, so cross-tab
-     * listeners that call loadRoster cannot receive a corrupted [X,X] roster
-     * and trigger duplicate pet reconciliation in other tabs.
+     * Verifies loadRoster deduplicates (keep-first) the roster it returns.
      *
-     * If violated, cross-tab reconcile receives two entries for the same id
-     * and may instantiate two pet sprites in the listening tab.
+     * This is defense-in-depth: the live cross-tab path in content.ts reads
+     * change.newValue directly and dedupes inside reconcileRoster, so loadRoster
+     * has no current corruption-exposed caller. The guard protects any direct or
+     * future caller from observing a [X,X] roster.
+     *
+     * If violated, such a caller receives two entries for the same id and may
+     * instantiate two pet sprites.
      */
-    // GIVEN — corrupted [X,X] storage
+    // GIVEN — corrupted [X,X] storage; duplicates distinguishable to prove keep-first
     mockStorage['pixel-pets-v1'] = {
       roster: [
-        { id: 'y', name: 'Buddy', type: 'dog', color: 'black' },
-        { id: 'y', name: 'Buddy', type: 'dog', color: 'black' },
+        { id: 'y', name: 'Original', type: 'dog', color: 'black' },
+        { id: 'y', name: 'Overwritten', type: 'fox', color: 'red' },
       ],
     };
 
     // WHEN
     const result = await loadRoster();
 
-    // THEN — only one entry
+    // THEN — only one entry, and it is the FIRST occurrence
     expect(result.roster).toHaveLength(1);
     expect(result.roster[0].id).toBe('y');
+    expect(result.roster[0].name).toBe('Original');
   });
 
   it('preserves all distinct entries when no duplicates', async () => {
