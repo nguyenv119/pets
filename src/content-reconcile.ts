@@ -126,9 +126,12 @@ export function reconcileRoster(
   // Replace contents in place
   pets.splice(0, pets.length, ...reordered);
 
-  // 4. Sweep orphaned views: remove any view whose key Pet object is no longer
-  //    in pets[] after the reorder. This prevents frozen "ghost" sprites when a
-  //    duplicate-id Pet object was dropped from pets[] but its DOM view survived.
+  // 4. Defensive sweep: remove any view whose key Pet object is no longer in
+  //    pets[] after the reorder. In normal operation ids are unique and this is
+  //    a no-op. It guards the invariant that a Pet object dropped from pets[]
+  //    (e.g. if a duplicate-id object ever enters the scene) cannot leave behind
+  //    an orphaned DOM view — the tick loop iterates pets[], not views, so such
+  //    a view would otherwise stay frozen on screen forever.
   const liveSet = new Set<unknown>(pets);
   for (const [pet, view] of [...views.entries()]) {
     if (!liveSet.has(pet)) {

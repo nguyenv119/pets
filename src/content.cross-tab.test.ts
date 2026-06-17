@@ -339,11 +339,11 @@ describe('reconcileRoster — sweep orphaned views after reorder', () => {
      * Verifies that reconcileRoster removes any view whose key Pet object is
      * no longer present in pets[] after the step-3 reorder splice.
      *
-     * This prevents "ghost" sprites: when two Pet objects share the same id
-     * (e.g., created in different tabs or via a makePet call on a pre-existing
-     * id), the reconcile loop keeps one in pets[] and silently drops the other.
-     * Without this sweep, the dropped Pet object's DOM <img> view is never
-     * cleaned up and remains frozen on screen indefinitely.
+     * This is a defensive invariant guard. In normal operation ids are unique
+     * and the sweep is a no-op. But if two Pet objects ever share an id, the
+     * step-3 reorder (keyed by id) keeps one in pets[] and silently drops the
+     * other. Without this sweep, the dropped Pet object's DOM <img> view is
+     * never cleaned up and remains frozen on screen indefinitely.
      *
      * If violated, orphaned views accumulate in `views` and their frozen
      * sprites remain visible to the user even after the duplicate pet object
