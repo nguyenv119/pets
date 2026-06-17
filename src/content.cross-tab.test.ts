@@ -330,6 +330,50 @@ describe('reconcileRoster — hidden toggle', () => {
 });
 
 // ---------------------------------------------------------------------------
+// reconcileRoster — orphaned view sweep
+// ---------------------------------------------------------------------------
+
+describe('reconcileRoster — sweep orphaned views after reorder', () => {
+  it('removes the view for a duplicate-id Pet object that is dropped from pets[] after reorder', () => {
+    /**
+     * Verifies that reconcileRoster removes any view whose key Pet object is
+     * no longer present in pets[] after the step-3 reorder splice.
+     *
+     * This prevents "ghost" sprites: when two Pet objects share the same id
+     * (e.g., created in different tabs or via a makePet call on a pre-existing
+     * id), the reconcile loop keeps one in pets[] and silently drops the other.
+     * Without this sweep, the dropped Pet object's DOM <img> view is never
+     * cleaned up and remains frozen on screen indefinitely.
+     *
+     * If violated, orphaned views accumulate in `views` and their frozen
+     * sprites remain visible to the user even after the duplicate pet object
+     * has been evicted from pets[].
+     */
+    // GIVEN — two Pet objects with the same id; both have views in the map
+    const petA = makePet({ id: 'dup', name: 'Alpha' });
+    const petB = makePet({ id: 'dup', name: 'Beta' });
+    const viewA = { el: 'viewA' };
+    const viewB = { el: 'viewB' };
+    // petA is the "winner" already in pets[]; petB is an orphan with a stale view
+    pets = [petA];
+    (mockViews as Map<FakePet, unknown>).set(petA, viewA);
+    (mockViews as Map<FakePet, unknown>).set(petB, viewB);
+
+    const roster: RosterEntry[] = [makeEntry({ id: 'dup', name: 'Alpha' })];
+
+    // WHEN — reconcileRoster runs; petB is not in pets[] so should be swept
+    reconcileRoster(roster, pets, mockViews as Map<unknown, unknown>, mockMakePet, mockAddPetToScene, mockRemovePetView, mockClearGreetCooldownsForPet);
+
+    // THEN — orphaned view for petB was removed; petA's view is intact
+    expect(mockRemovePetView).toHaveBeenCalledWith(viewB);
+    expect(mockRemovePetView).not.toHaveBeenCalledWith(viewA);
+    expect(mockViews.has(petB)).toBe(false);
+    expect(pets).toHaveLength(1);
+    expect(pets[0].id).toBe('dup');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // reconcileRoster — ordering
 // ---------------------------------------------------------------------------
 

@@ -125,4 +125,15 @@ export function reconcileRoster(
   }
   // Replace contents in place
   pets.splice(0, pets.length, ...reordered);
+
+  // 4. Sweep orphaned views: remove any view whose key Pet object is no longer
+  //    in pets[] after the reorder. This prevents frozen "ghost" sprites when a
+  //    duplicate-id Pet object was dropped from pets[] but its DOM view survived.
+  const liveSet = new Set<unknown>(pets);
+  for (const [pet, view] of [...views.entries()]) {
+    if (!liveSet.has(pet)) {
+      removePetView(view);
+      views.delete(pet);
+    }
+  }
 }
