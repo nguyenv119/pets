@@ -4,6 +4,17 @@ export const ROSTER_KEY = 'pixel-pets-v1';
 export const POSITIONS_KEY = 'pixel-pets-positions-v1';
 
 /**
+ * Returns a new array with duplicate ids removed, keeping the FIRST occurrence.
+ * Applied on both write (savePets) and read (loadPetData, loadRoster) so that
+ * duplicate-id pets can never be persisted and any already-corrupted [X,X]
+ * storage self-heals on next load.
+ */
+export function dedupeById<T extends { id: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  return items.filter(i => seen.has(i.id) ? false : (seen.add(i.id), true));
+}
+
+/**
  * Roster entry — identity fields only, no positional data.
  * Written to ROSTER_KEY so cross-tab listeners watch a stable key
  * that does NOT change on every position update.
@@ -23,7 +34,7 @@ interface RosterStorage {
 
 /** Save pets to the roster key (strips x, y). Cross-tab listeners watch this key. */
 export async function savePets(pets: PetData[]): Promise<void> {
-  const roster: RosterEntry[] = pets.map(({ id, name, type, color, hidden }) => {
+  const roster: RosterEntry[] = dedupeById(pets).map(({ id, name, type, color, hidden }) => {
     const entry: RosterEntry = { id, name, type, color };
     if (hidden) entry.hidden = true;
     return entry;
@@ -48,7 +59,7 @@ export async function loadRoster(): Promise<{ roster: RosterEntry[] }> {
     const result = await chrome.storage.local.get(ROSTER_KEY);
     const data = result[ROSTER_KEY] as RosterStorage | undefined;
     if (data && typeof data === 'object' && Array.isArray(data.roster)) {
-      return { roster: data.roster };
+      return { roster: dedupeById(data.roster) };
     }
     return { roster: [] };
   } catch {
@@ -71,7 +82,7 @@ export async function loadPetData(): Promise<PetData[]> {
       return [];
     }
 
-    return rosterData.roster.map((entry): PetData => {
+    return dedupeById(rosterData.roster).map((entry): PetData => {
       const pos = positions[entry.id] ?? { x: 0, y: 0 };
       return {
         id: entry.id,

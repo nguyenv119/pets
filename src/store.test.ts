@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { savePets, savePositions, loadPetData, loadRoster } from './store';
+import { savePets, savePositions, loadPetData, loadRoster, dedupeById } from './store';
 import type { PetData } from './types';
 
 // ---------------------------------------------------------------------------
@@ -409,5 +409,269 @@ describe('loadPetData — storage key', () => {
     // THEN
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('manual');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// dedupeById — pure helper
+// ---------------------------------------------------------------------------
+
+describe('dedupeById — pure helper', () => {
+  it('keeps first occurrence and drops subsequent duplicates', () => {
+    /**
+     * Verifies dedupeById retains the first item with a given id and
+     * discards any later items with the same id.
+     *
+     * This is the contract that prevents [X,X] roster corruption from
+     * persisting or propagating. Keeping FIRST preserves the original
+     * item's state rather than an overwritten copy.
+     *
+     * If violated, savePets / loadPetData could still produce duplicate
+     * pets causing two visible sprites to share one id.
+     */
+    // GIVEN — two items with the same id
+    const items = [
+      { id: 'a', name: 'First' },
+      { id: 'a', name: 'Duplicate' },
+    ];
+
+    // WHEN
+    const result = dedupeById(items);
+
+    // THEN — only first kept
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('First');
+  });
+
+  it('preserves all items when ids are distinct', () => {
+    /**
+     * Verifies dedupeById does not remove legitimate items that happen
+     * to have unique ids. The regression guard for the happy path.
+     *
+     * If violated, normal multi-pet rosters would silently lose pets
+     * each time the roster is saved or loaded.
+     */
+    // GIVEN — two items with distinct ids
+    const items = [
+      { id: 'a', name: 'Alpha' },
+      { id: 'b', name: 'Beta' },
+    ];
+
+    // WHEN
+    const result = dedupeById(items);
+
+    // THEN — both preserved in order
+    expect(result).toHaveLength(2);
+    expect(result[0].id).toBe('a');
+    expect(result[1].id).toBe('b');
+  });
+
+  it('preserves insertion order of first occurrences', () => {
+    /**
+     * Verifies dedupeById maintains the original order of items, which
+     * matters because roster order is user-controlled (drag-to-reorder).
+     *
+     * If violated, pets appear in arbitrary order after dedupe, ignoring
+     * the order the user set.
+     */
+    // GIVEN — three items, one duplicate
+    const items = [
+      { id: 'c', name: 'Charlie' },
+      { id: 'a', name: 'Alpha' },
+      { id: 'c', name: 'Charlie-dup' },
+      { id: 'b', name: 'Beta' },
+    ];
+
+    // WHEN
+    const result = dedupeById(items);
+
+    // THEN — order of first occurrences preserved
+    expect(result.map(i => i.id)).toEqual(['c', 'a', 'b']);
+  });
+
+  it('returns empty array for empty input', () => {
+    /**
+     * Verifies dedupeById handles empty input gracefully.
+     * Prevents crashes when called on an empty roster.
+     */
+    // GIVEN — empty array
+    // WHEN
+    const result = dedupeById([]);
+
+    // THEN
+    expect(result).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// savePets — dedupe by id on write
+// ---------------------------------------------------------------------------
+
+describe('savePets — dedupe duplicate-id pets on write', () => {
+  it('writes a single roster entry when given two pets with the same id', async () => {
+    /**
+     * Verifies savePets deduplicates by id before persisting. When a
+     * duplicate-id pet exists in memory (due to the ADD_PET race), only
+     * one entry must reach storage so the [X,X] corruption cannot be saved.
+     *
+     * This is a write-time guard that prevents corruption at the source.
+     *
+     * If violated, saving after the ADD_PET race writes [X,X] to storage
+     * and the duplication survives page reload.
+     */
+    // GIVEN — two pets with the same id
+    const pet = makePetData({ id: 'dup', name: 'Original', x: 0, y: 0 });
+    const petDup = makePetData({ id: 'dup', name: 'Duplicate', x: 10, y: 10 });
+
+    // WHEN — save both
+    await savePets([pet, petDup]);
+
+    // THEN — only one entry written, first wins
+    const callArg = chromeStorageMock.local.set.mock.calls[0][0] as Record<string, unknown>;
+    const stored = callArg['pixel-pets-v1'] as { roster: Array<{ id: string; name: string }> };
+    expect(stored.roster).toHaveLength(1);
+    expect(stored.roster[0].id).toBe('dup');
+    expect(stored.roster[0].name).toBe('Original');
+  });
+
+  it('preserves all distinct-id pets in order when no duplicates', async () => {
+    /**
+     * Regression: dedupe must not drop legitimate distinct-id pets.
+     * Multi-pet users would silently lose pets if this contract breaks.
+     *
+     * If violated, normal saves strip pets from the roster, making
+     * pets disappear permanently on next load.
+     */
+    // GIVEN — two pets with distinct ids
+    const p1 = makePetData({ id: 'p1', name: 'Rex', x: 0, y: 0 });
+    const p2 = makePetData({ id: 'p2', name: 'Kitsune', type: 'fox', color: 'red', x: 0, y: 0 });
+
+    // WHEN
+    await savePets([p1, p2]);
+
+    // THEN — both preserved
+    const callArg = chromeStorageMock.local.set.mock.calls[0][0] as Record<string, unknown>;
+    const stored = callArg['pixel-pets-v1'] as { roster: Array<{ id: string }> };
+    expect(stored.roster).toHaveLength(2);
+    expect(stored.roster[0].id).toBe('p1');
+    expect(stored.roster[1].id).toBe('p2');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// loadPetData — dedupe by id on read (self-heal corrupted storage)
+// ---------------------------------------------------------------------------
+
+describe('loadPetData — dedupe corrupted [X,X] roster on read', () => {
+  it('returns one PetData when storage has two roster entries with the same id', async () => {
+    /**
+     * Verifies loadPetData self-heals an already-corrupted [X,X] roster by
+     * deduplicating on read. Users who already have corruption in storage
+     * should see a correct single-pet render immediately on next load,
+     * without needing to clear storage manually.
+     *
+     * If violated, corrupted storage continues rendering two overlapping
+     * sprites and the next savePets persists the duplication again.
+     */
+    // GIVEN — corrupted [X,X] storage
+    mockStorage['pixel-pets-v1'] = {
+      roster: [
+        { id: 'x', name: 'Rex', type: 'dog', color: 'brown' },
+        { id: 'x', name: 'Rex', type: 'dog', color: 'brown' },
+      ],
+    };
+    mockStorage['pixel-pets-positions-v1'] = { 'x': { x: 100, y: 200 } };
+
+    // WHEN
+    const result = await loadPetData();
+
+    // THEN — only one pet returned
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('x');
+    expect(result[0].x).toBe(100);
+  });
+
+  it('preserves all distinct pets when roster has no duplicates', async () => {
+    /**
+     * Regression: loadPetData dedupe must not drop legitimate pets.
+     * Verifies the happy path is unaffected by the dedupe guard.
+     *
+     * If violated, every load drops all pets after the first, leaving
+     * the user with only one pet regardless of how many they added.
+     */
+    // GIVEN — two distinct-id entries
+    mockStorage['pixel-pets-v1'] = {
+      roster: [
+        { id: 'a', name: 'Alpha', type: 'dog', color: 'brown' },
+        { id: 'b', name: 'Beta', type: 'fox', color: 'red' },
+      ],
+    };
+    mockStorage['pixel-pets-positions-v1'] = {
+      'a': { x: 10, y: 20 },
+      'b': { x: 30, y: 40 },
+    };
+
+    // WHEN
+    const result = await loadPetData();
+
+    // THEN — both pets returned
+    expect(result).toHaveLength(2);
+    expect(result[0].id).toBe('a');
+    expect(result[1].id).toBe('b');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// loadRoster — dedupe by id on read
+// ---------------------------------------------------------------------------
+
+describe('loadRoster — dedupe corrupted [X,X] roster on read', () => {
+  it('returns one entry when storage has two roster entries with the same id', async () => {
+    /**
+     * Verifies loadRoster deduplicates the roster it returns, so cross-tab
+     * listeners that call loadRoster cannot receive a corrupted [X,X] roster
+     * and trigger duplicate pet reconciliation in other tabs.
+     *
+     * If violated, cross-tab reconcile receives two entries for the same id
+     * and may instantiate two pet sprites in the listening tab.
+     */
+    // GIVEN — corrupted [X,X] storage
+    mockStorage['pixel-pets-v1'] = {
+      roster: [
+        { id: 'y', name: 'Buddy', type: 'dog', color: 'black' },
+        { id: 'y', name: 'Buddy', type: 'dog', color: 'black' },
+      ],
+    };
+
+    // WHEN
+    const result = await loadRoster();
+
+    // THEN — only one entry
+    expect(result.roster).toHaveLength(1);
+    expect(result.roster[0].id).toBe('y');
+  });
+
+  it('preserves all distinct entries when no duplicates', async () => {
+    /**
+     * Regression: loadRoster dedupe must not drop legitimate distinct entries.
+     *
+     * If violated, cross-tab listeners receive incomplete rosters, causing
+     * pets to be removed from other tabs when a storage event fires.
+     */
+    // GIVEN — two distinct entries
+    mockStorage['pixel-pets-v1'] = {
+      roster: [
+        { id: 'r1', name: 'Rex', type: 'dog', color: 'brown' },
+        { id: 'r2', name: 'Kitsune', type: 'fox', color: 'orange' },
+      ],
+    };
+
+    // WHEN
+    const result = await loadRoster();
+
+    // THEN — both preserved
+    expect(result.roster).toHaveLength(2);
+    expect(result.roster[0].id).toBe('r1');
+    expect(result.roster[1].id).toBe('r2');
   });
 });
