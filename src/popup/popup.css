@@ -498,7 +498,7 @@ h1 {
 #pet-color-grid {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
   gap: 5px;
   padding: 4px 0;
 }
