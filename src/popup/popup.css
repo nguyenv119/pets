@@ -77,8 +77,8 @@
    --------------------------------------------------------------------------- */
 
 body {
-  width: 420px;
-  min-height: 400px;
+  min-width: 420px;
+  max-width: 800px;
   font-family: 'Nunito', system-ui, -apple-system, sans-serif;
   padding: 20px;
   background: var(--bg);
@@ -442,7 +442,7 @@ h1 {
 #pet-type-grid {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
   gap: 6px;
   padding: 4px 0;
 }
@@ -498,7 +498,7 @@ h1 {
 #pet-color-grid {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
   gap: 5px;
   padding: 4px 0;
 }
