@@ -287,8 +287,8 @@ async function removePet(id: string): Promise<void> {
   pets = pets.filter(p => p.id !== id);
   renderPetList();
   // Refresh the meter too: for an over-capacity (migrated) user the displayed
-  // count is petCount-derived, so it must drop now rather than waiting for the
-  // SW's deferred-removal storage event. The undo path below re-renders to restore.
+  // count is petCount-derived, so this eager refresh is the only thing that
+  // updates it. The undo path below re-renders to restore.
   renderCapacityCounterInPopup();
 
   // Tell SW to schedule the deferred removal (storage write + broadcast).
