@@ -5,8 +5,6 @@ export const POSITIONS_KEY = 'pixel-pets-positions-v1';
 
 /**
  * Roster entry — identity fields only, no positional data.
- * Written to ROSTER_KEY so cross-tab listeners watch a stable key
- * that does NOT change on every position update.
  */
 export interface RosterEntry {
   id: string;
@@ -21,7 +19,7 @@ interface RosterStorage {
   roster: RosterEntry[];
 }
 
-/** Save pets to the roster key (strips x, y). Cross-tab listeners watch this key. */
+/** Save pets to the roster key (strips x, y). */
 export async function savePets(pets: PetData[]): Promise<void> {
   const roster: RosterEntry[] = pets.map(({ id, name, type, color, hidden }) => {
     const entry: RosterEntry = { id, name, type, color };
@@ -33,27 +31,10 @@ export async function savePets(pets: PetData[]): Promise<void> {
 
 /**
  * Save positions to the positions key.
- * Called by content.ts debouncedSave — does NOT trigger the cross-tab roster listener.
+ * Called by content.ts debouncedSave.
  */
 export async function savePositions(positions: Record<string, { x: number; y: number }>): Promise<void> {
   await chrome.storage.local.set({ [POSITIONS_KEY]: positions });
-}
-
-/**
- * Load the roster only (no position data).
- * Used by cross-tab listeners in content.ts and popup.ts to get the current pet list.
- */
-export async function loadRoster(): Promise<{ roster: RosterEntry[] }> {
-  try {
-    const result = await chrome.storage.local.get(ROSTER_KEY);
-    const data = result[ROSTER_KEY] as RosterStorage | undefined;
-    if (data && typeof data === 'object' && Array.isArray(data.roster)) {
-      return { roster: data.roster };
-    }
-    return { roster: [] };
-  } catch {
-    return { roster: [] };
-  }
 }
 
 /**

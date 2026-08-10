@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { savePets, savePositions, loadPetData, loadRoster } from './store';
+import { savePets, savePositions, loadPetData } from './store';
 import type { PetData } from './types';
 
 // ---------------------------------------------------------------------------
@@ -176,50 +176,6 @@ describe('savePositions — writes to positions key', () => {
 });
 
 // ---------------------------------------------------------------------------
-// loadRoster — reads roster key
-// ---------------------------------------------------------------------------
-
-describe('loadRoster — reads roster shape from storage', () => {
-  it('returns roster array from pixel-pets-v1 when stored in new shape', async () => {
-    /**
-     * Verifies loadRoster can parse the new storage shape where the key
-     * contains { roster: RosterEntry[] } instead of a plain PetData array.
-     *
-     * Needed so cross-tab listeners in content.ts can read the current roster.
-     *
-     * If violated, cross-tab reconciliation receives empty roster and
-     * removes all pets from other tabs on first storage change.
-     */
-    // GIVEN — new-shape data in storage
-    mockStorage['pixel-pets-v1'] = {
-      roster: [{ id: 'p1', name: 'Rex', type: 'dog', color: 'brown' }],
-    };
-
-    // WHEN
-    const result = await loadRoster();
-
-    // THEN
-    expect(result.roster).toHaveLength(1);
-    expect(result.roster[0].id).toBe('p1');
-  });
-
-  it('returns empty roster when key is absent', async () => {
-    /**
-     * Verifies loadRoster gracefully handles missing storage key.
-     * On first install or cleared storage, the roster key does not exist.
-     *
-     * If violated, cross-tab listener crashes trying to iterate undefined.
-     */
-    // GIVEN — empty storage
-    // WHEN
-    const result = await loadRoster();
-
-    // THEN
-    expect(result.roster).toEqual([]);
-  });
-});
-
-// ---------------------------------------------------------------------------
 // loadPetData — merges roster + positions
 // ---------------------------------------------------------------------------
 
@@ -230,7 +186,7 @@ describe('loadPetData — merges roster and positions', () => {
      * the returned PetData objects include x/y from the positions key.
      *
      * This is the boot path: all callers that need full PetData use
-     * loadPetData. loadRoster is only for the cross-tab listener.
+     * loadPetData.
      *
      * If violated, all pets start at (0, 0) on every page load instead
      * of their last-known positions.

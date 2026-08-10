@@ -15,8 +15,6 @@ import {
 } from './renderer';
 import type { PetView, Particle } from './renderer';
 import { savePets, savePositions, loadPetData } from './store';
-import type { RosterEntry } from './store';
-import { reconcileRoster } from './content-reconcile';
 import type { PetData, ExtMessage } from './types';
 import { tryGreetPairs, clearGreetCooldownsForPet } from './greet';
 
@@ -94,9 +92,8 @@ const BALL_RADIUS = 8;
 const GRAVITY = 800;
 const BOUNCE_DAMPING = 0.6;
 
-// Persistence debounce — writes positions only (not roster).
-// Writing to pixel-pets-positions-v1 does NOT trigger the cross-tab roster
-// listener, preventing every position update from causing a reconcile in all tabs.
+// Persistence debounce — writes positions only (not roster), keeping the
+// roster key clean for reads on the next boot.
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 function debouncedSave(): void {
   if (saveTimeout) clearTimeout(saveTimeout);
@@ -333,7 +330,6 @@ chrome.runtime.onMessage.addListener((msg: ExtMessage, _sender, sendResponse) =>
       pets.push(newPet);
       addPetToScene(newPet);
       // Save roster (without positions) then save positions separately.
-      // This keeps the roster key clean and avoids flooding cross-tab listeners.
       savePets(pets.map(p => p.toData()));
       const positions: Record<string, { x: number; y: number }> = {};
       for (const p of pets) {
@@ -371,7 +367,7 @@ chrome.runtime.onMessage.addListener((msg: ExtMessage, _sender, sendResponse) =>
           views.delete(removed);
         }
         clearGreetCooldownsForPet(removed.id, removed);
-        // Roster write only — positions for removed pet can stay stale, no cross-tab effect
+        // Roster write only — positions for removed pet can stay stale
         savePets(pets.map(p => p.toData()));
       }
       break;
@@ -411,35 +407,6 @@ chrome.runtime.onMessage.addListener((msg: ExtMessage, _sender, sendResponse) =>
       break;
     }
   }
-});
-
-// ---------------------------------------------------------------------------
-// Cross-tab roster sync
-// ---------------------------------------------------------------------------
-//
-// Self-echo suppression: content.ts never writes to the roster key
-// (pixel-pets-v1). All roster writes go through popup.ts or the service
-// worker. Therefore, every roster change event originates from another tab
-// and we always reconcile without needing a nonce.
-
-chrome.storage.onChanged.addListener((changes: Record<string, chrome.storage.StorageChange>, area: string) => {
-  if (area !== 'local') return;
-  const change = changes['pixel-pets-v1'];
-  if (!change || !change.newValue) return;
-
-  const newData = change.newValue as { roster?: RosterEntry[] };
-  if (!Array.isArray(newData.roster)) return;
-
-  reconcileRoster(
-    newData.roster,
-    pets as unknown as import('./content-reconcile').ReconcilablePet[],
-    views as Map<unknown, unknown>,
-    (data) => makePet(data as PetData) as unknown as import('./content-reconcile').ReconcilablePet,
-    (pet) => addPetToScene(pet as unknown as Pet),
-    (view) => { removePetView(view as PetView); },
-    (id, pet) => clearGreetCooldownsForPet(id, pet as unknown as Pet),
-    () => Math.random() * Math.max(0, window.innerWidth - DRAW_W),
-  );
 });
 
 // ---------------------------------------------------------------------------
