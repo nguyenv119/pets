@@ -1,6 +1,6 @@
 import type { PetData, PetType, ExtMessage } from '../types';
 import type { Theme } from '../settings';
-import { loadSettings, updateSettings } from '../settings';
+import { loadSettings, updateSettings, SETTINGS_KEY } from '../settings';
 import { loadPetData, savePets } from '../store';
 import { pingTab } from './tab-probe';
 import { renderPetItemHTML } from './render-pet-item';
@@ -11,7 +11,6 @@ import { setAddFormExpanded, isAddFormExpanded } from './collapsible-form';
 import { showToast } from './toast';
 import { renderTreatCounter } from './treat-counter';
 import { renderCapacityCounter } from './capacity-counter';
-import { handleStorageChange } from './popup-cross-tab';
 import { canAddPet, adoptionAnchor, migrationAnchor, capacityReason } from './capacity-gate';
 
 // ---------------------------------------------------------------------------
@@ -76,30 +75,14 @@ async function refreshAddButtonState(): Promise<void> {
   }
 }
 
-// Listen for storage changes from other tabs:
-// - Roster change (pixel-pets-v1): re-render pet list to reflect add/remove/reorder from another tab
-// - Settings change (pixel-pets-settings-v1): refresh treat counter, capacity meter, and theme
-//
-// Self-echo note: popup writes roster then immediately updates its own pets[] and re-renders.
-// If the storage event fires for our own write, re-rendering is idempotent (same data → same DOM),
-// so no nonce suppression is needed.
 chrome.storage.onChanged.addListener((changes, area) => {
-  handleStorageChange(
-    changes as Record<string, unknown>,
-    area,
-    async () => {
-      pets = await loadPetData();
-      renderPetList();
-      renderCapacityCounterInPopup();
-      await refreshAddButtonState();
-    },
-    () => {
-      renderTreatCounterInPopup();
-      renderCapacityCounterInPopup();
-      applyTheme(currentTheme);
-      refreshAddButtonState();
-    },
-  );
+  if (area !== 'local') return;
+  if (SETTINGS_KEY in changes) {
+    renderTreatCounterInPopup();
+    renderCapacityCounterInPopup();
+    applyTheme(currentTheme);
+    refreshAddButtonState();
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -304,8 +287,8 @@ async function removePet(id: string): Promise<void> {
   pets = pets.filter(p => p.id !== id);
   renderPetList();
   // Refresh the meter too: for an over-capacity (migrated) user the displayed
-  // count is petCount-derived, so it must drop now rather than waiting for the
-  // SW's deferred-removal storage event. The undo path below re-renders to restore.
+  // count is petCount-derived, so this eager refresh is the only thing that
+  // updates it. The undo path below re-renders to restore.
   renderCapacityCounterInPopup();
 
   // Tell SW to schedule the deferred removal (storage write + broadcast).

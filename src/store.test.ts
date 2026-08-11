@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { savePets, savePositions, loadPetData, loadRoster } from './store';
+import { savePets, savePositions, loadPetData } from './store';
 import type { PetData } from './types';
 
 // ---------------------------------------------------------------------------
@@ -60,11 +60,13 @@ describe('savePets — roster-only shape', () => {
     /**
      * Verifies savePets writes to the roster key, not the positions key.
      * This is the split-storage contract: roster and positions must be
-     * separate so cross-tab listeners can watch the roster key without
-     * being flooded by per-frame position updates.
+     * separate so the frequent (~every 2s) position writes never touch
+     * the roster key, keeping write churn low and the boot-path roster
+     * read (loadPetData) clean of per-frame position noise.
      *
-     * If violated, cross-tab listeners fire on every position save,
-     * causing all content scripts to reconcile dozens of times per second.
+     * If violated, every position save also rewrites the roster key,
+     * multiplying storage writes and bloating the roster payload with
+     * position data on every tick.
      */
     // GIVEN — a pet with position
     const pet = makePetData({ id: 'p1', x: 500, y: 200 });
@@ -85,11 +87,12 @@ describe('savePets — roster-only shape', () => {
      * Verifies that savePets strips positional fields (x, y) and writes
      * only roster fields (id, name, type, color, hidden).
      *
-     * This prevents the cross-tab listener from seeing position data in
-     * roster changes, keeping the roster key stable between position saves.
+     * This keeps the roster key stable between position saves — position
+     * data belongs solely in the positions key, written on its own
+     * ~2-second cadence, so roster writes stay small and infrequent.
      *
-     * If violated, roster entries contain x/y which leak position data
-     * to other tabs and bloat the storage event payload.
+     * If violated, roster entries contain x/y, bloating every roster
+     * write with position data that changes on a much faster cadence.
      */
     // GIVEN — a pet with x/y
     const pet = makePetData({ id: 'p1', x: 123, y: 456 });
@@ -108,10 +111,11 @@ describe('savePets — roster-only shape', () => {
   it('includes id, name, type, color in roster entry', async () => {
     /**
      * Verifies that savePets preserves the identity fields in roster entries
-     * so other tabs can reconstruct the pet without position data.
+     * so loadPetData can reconstruct a full PetData on the next boot without
+     * needing position data.
      *
-     * If violated, other tabs cannot add/remove/update pets correctly
-     * because the roster entries lack required identity information.
+     * If violated, the roster is missing required identity information and
+     * pets fail to reconstruct correctly (or at all) on the next page load.
      */
     // GIVEN — a pet with all fields
     const pet = makePetData({ id: 'p2', name: 'Buddy', type: 'fox', color: 'red', x: 0, y: 0 });
@@ -127,11 +131,11 @@ describe('savePets — roster-only shape', () => {
 
   it('preserves hidden field in roster entry when set', async () => {
     /**
-     * Verifies that the hidden flag survives the roster strip so cross-tab
-     * reconciliation can correctly show/hide pets on arrival.
+     * Verifies that the hidden flag survives the roster strip so the next
+     * boot-path load restores the pet's shown/hidden state correctly.
      *
-     * If violated, all pets appear visible on other tabs regardless of their
-     * actual hidden state.
+     * If violated, all pets appear visible again after a reload regardless
+     * of their actual hidden state, silently discarding the user's choice.
      */
     // GIVEN — a hidden pet
     const pet = makePetData({ id: 'h1', hidden: true, x: 0, y: 0 });
@@ -155,10 +159,11 @@ describe('savePositions — writes to positions key', () => {
   it('writes to pixel-pets-positions-v1, not the roster key', async () => {
     /**
      * Verifies savePositions targets the positions key so the roster key
-     * remains unchanged and does NOT trigger cross-tab listeners.
+     * remains unchanged on every position save.
      *
-     * If violated, every debouncedSave fires the cross-tab reconcile
-     * handler causing expensive DOM operations 60 times per second.
+     * If violated, every debouncedSave (on a ~2s cadence, driven by pet
+     * movement) also rewrites the roster key, multiplying storage writes
+     * and defeating the purpose of splitting the two keys.
      */
     // GIVEN — some positions
     const positions = { 'p1': { x: 100, y: 200 } };
@@ -176,50 +181,6 @@ describe('savePositions — writes to positions key', () => {
 });
 
 // ---------------------------------------------------------------------------
-// loadRoster — reads roster key
-// ---------------------------------------------------------------------------
-
-describe('loadRoster — reads roster shape from storage', () => {
-  it('returns roster array from pixel-pets-v1 when stored in new shape', async () => {
-    /**
-     * Verifies loadRoster can parse the new storage shape where the key
-     * contains { roster: RosterEntry[] } instead of a plain PetData array.
-     *
-     * Needed so cross-tab listeners in content.ts can read the current roster.
-     *
-     * If violated, cross-tab reconciliation receives empty roster and
-     * removes all pets from other tabs on first storage change.
-     */
-    // GIVEN — new-shape data in storage
-    mockStorage['pixel-pets-v1'] = {
-      roster: [{ id: 'p1', name: 'Rex', type: 'dog', color: 'brown' }],
-    };
-
-    // WHEN
-    const result = await loadRoster();
-
-    // THEN
-    expect(result.roster).toHaveLength(1);
-    expect(result.roster[0].id).toBe('p1');
-  });
-
-  it('returns empty roster when key is absent', async () => {
-    /**
-     * Verifies loadRoster gracefully handles missing storage key.
-     * On first install or cleared storage, the roster key does not exist.
-     *
-     * If violated, cross-tab listener crashes trying to iterate undefined.
-     */
-    // GIVEN — empty storage
-    // WHEN
-    const result = await loadRoster();
-
-    // THEN
-    expect(result.roster).toEqual([]);
-  });
-});
-
-// ---------------------------------------------------------------------------
 // loadPetData — merges roster + positions
 // ---------------------------------------------------------------------------
 
@@ -230,7 +191,7 @@ describe('loadPetData — merges roster and positions', () => {
      * the returned PetData objects include x/y from the positions key.
      *
      * This is the boot path: all callers that need full PetData use
-     * loadPetData. loadRoster is only for the cross-tab listener.
+     * loadPetData.
      *
      * If violated, all pets start at (0, 0) on every page load instead
      * of their last-known positions.
@@ -312,12 +273,18 @@ describe('loadPetData — merges roster and positions', () => {
      * { roster: RosterEntry[] }; the old format is unrecognized and
      * we fall back to empty.
      *
-     * This is acceptable: the migration path is that content.ts adds
-     * the default pet and saves the new format. Users lose position data
-     * on first load after the upgrade, which is acceptable.
+     * KNOWN GAP: this is not just "position data is lost" — the entire
+     * roster is discarded. An upgrading user with N pets sees all N
+     * vanish on first load after the upgrade, because the legacy array
+     * is never read into the new shape, only treated as absent. This
+     * test documents that current behavior; it does not endorse it. The
+     * real fix — reading the legacy array and migrating it into the new
+     * split-storage shape — is tracked as the filed release-blocker bead
+     * pets-b8n.5 and is intentionally NOT implemented here.
      *
-     * If violated, legacy data might be misinterpreted, causing type
-     * errors or garbled pets.
+     * If violated in the other direction (legacy data misinterpreted
+     * instead of dropped), it could cause type errors or garbled pets —
+     * so returning [] is the safe fallback until pets-b8n.5 lands.
      */
     // GIVEN — old-format data
     mockStorage['pixel-pets-v1'] = [{ id: 'old', name: 'OldPet', type: 'dog', color: 'brown', x: 1, y: 2 }];
