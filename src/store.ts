@@ -38,21 +38,71 @@ export async function savePositions(positions: Record<string, { x: number; y: nu
 }
 
 /**
+ * Shape guard for a published-1.0.4 legacy roster entry: a bare object with
+ * x/y inline (no separate positions key existed yet). Only the fields we
+ * need to reconstruct a PetData are required; anything else on the object
+ * is ignored. Used to filter out corrupt entries instead of throwing.
+ */
+function isLegacyRosterEntry(
+  value: unknown
+): value is { id: string; name: string; type: string; color: string; x?: unknown; y?: unknown; hidden?: unknown } {
+  if (!value || typeof value !== 'object') return false;
+  const e = value as Record<string, unknown>;
+  return typeof e.id === 'string' && typeof e.name === 'string' && typeof e.type === 'string' && typeof e.color === 'string';
+}
+
+/**
  * Boot path: reads BOTH keys and merges them into full PetData[].
- * Returns [] on empty/missing/legacy storage so content.ts can add the default pet.
+ * Returns [] on empty/missing storage so content.ts can add the default pet.
+ *
+ * Also migrates published-1.0.4 storage: that version wrote a bare array of
+ * pets (x/y inline) at ROSTER_KEY, with no positions key at all. Treating
+ * that shape as "not new-shape roster" (as this function used to) makes
+ * every upgrading user look like a first install, spawning the default pet
+ * and then overwriting their real roster. Detecting the array and migrating
+ * it in place is what keeps their pets alive across the 1.0.4 -> 1.0.5 update.
  */
 export async function loadPetData(): Promise<PetData[]> {
   try {
     const result = await chrome.storage.local.get([ROSTER_KEY, POSITIONS_KEY]);
-    const rosterData = result[ROSTER_KEY] as RosterStorage | undefined;
+    const rosterData = result[ROSTER_KEY];
     const positions = (result[POSITIONS_KEY] ?? {}) as Record<string, { x: number; y: number }>;
 
-    // If not new-shape roster, return empty (legacy flat-array or missing)
-    if (!rosterData || typeof rosterData !== 'object' || !Array.isArray(rosterData.roster)) {
+    if (Array.isArray(rosterData)) {
+      const migrated: PetData[] = rosterData.filter(isLegacyRosterEntry).map((entry) => ({
+        id: entry.id,
+        name: entry.name,
+        type: entry.type as PetType,
+        color: entry.color,
+        x: typeof entry.x === 'number' ? entry.x : 0,
+        y: typeof entry.y === 'number' ? entry.y : 0,
+        ...(entry.hidden ? { hidden: true } : {}),
+      }));
+
+      // Persist the upgrade once so this branch isn't re-entered next load.
+      // savePets alone writes roster-only (no x/y) — without also calling
+      // savePositions, every migrated pet's x/y would be silently dropped
+      // and reset to (0, 0) on the very next load.
+      try {
+        await savePets(migrated);
+        await savePositions(Object.fromEntries(migrated.map((p) => [p.id, { x: p.x, y: p.y }])));
+      } catch {
+        // Persisting failed (e.g. storage quota) — still return the
+        // migrated pets for this session; the migration will simply retry
+        // on the next load rather than losing the roster outright.
+      }
+
+      return migrated;
+    }
+
+    const rosterStorage = rosterData as RosterStorage | undefined;
+
+    // If not new-shape roster, return empty (missing/corrupt)
+    if (!rosterStorage || typeof rosterStorage !== 'object' || !Array.isArray(rosterStorage.roster)) {
       return [];
     }
 
-    return rosterData.roster.map((entry): PetData => {
+    return rosterStorage.roster.map((entry): PetData => {
       const pos = positions[entry.id] ?? { x: 0, y: 0 };
       return {
         id: entry.id,

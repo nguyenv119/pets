@@ -266,34 +266,193 @@ describe('loadPetData — merges roster and positions', () => {
     expect(result).toEqual([]);
   });
 
-  it('handles legacy flat-array storage shape by returning empty array', async () => {
+});
+
+// ---------------------------------------------------------------------------
+// loadPetData — legacy 1.0.4 flat-array migration (pets-b8n.5)
+// ---------------------------------------------------------------------------
+
+describe('loadPetData — legacy 1.0.4 flat-array migration', () => {
+  // Real payload read out of a live 1.0.4 install's chrome.storage.local at
+  // pixel-pets-v1. Published 1.0.4 wrote a bare array (no `roster` wrapper,
+  // no separate positions key) — this is the exact shape loadPetData must
+  // recognize and upgrade in place.
+  const legacyFixture = [
+    {
+      color: 'brown',
+      id: '409ab74c-3300-4840-8e30-1da87baa5c0c',
+      name: 'Rex',
+      type: 'dog',
+      x: 310.0079999999654,
+      y: 940,
+    },
+  ];
+
+  it('reads a single-pet legacy array into full PetData', async () => {
     /**
-     * Verifies loadPetData returns [] when encountering the old storage
-     * format (plain PetData[] at the roster key). The new format uses
-     * { roster: RosterEntry[] }; the old format is unrecognized and
-     * we fall back to empty.
+     * Verifies that a bare legacy array with one pet is recognized and
+     * converted, rather than being treated as "not new-shape" and dropped.
      *
-     * KNOWN GAP: this is not just "position data is lost" — the entire
-     * roster is discarded. An upgrading user with N pets sees all N
-     * vanish on first load after the upgrade, because the legacy array
-     * is never read into the new shape, only treated as absent. This
-     * test documents that current behavior; it does not endorse it. The
-     * real fix — reading the legacy array and migrating it into the new
-     * split-storage shape — is tracked as the filed release-blocker bead
-     * pets-b8n.5 and is intentionally NOT implemented here.
+     * This is the core release-blocker fix: published 1.0.4 stores the
+     * roster as a flat array at pixel-pets-v1, and main previously returned
+     * [] for anything that wasn't {roster: [...]}. content.ts then reads []
+     * as a first install, spawns the default Rex, and overwrites the key —
+     * destroying the user's real roster.
      *
-     * If violated in the other direction (legacy data misinterpreted
-     * instead of dropped), it could cause type errors or garbled pets —
-     * so returning [] is the safe fallback until pets-b8n.5 lands.
+     * If violated, every pre-existing 1.0.4 user loses their pets the
+     * moment they update to a build that includes this check.
      */
-    // GIVEN — old-format data
-    mockStorage['pixel-pets-v1'] = [{ id: 'old', name: 'OldPet', type: 'dog', color: 'brown', x: 1, y: 2 }];
+    // GIVEN — legacy flat-array storage, no positions key at all
+    mockStorage['pixel-pets-v1'] = legacyFixture;
 
     // WHEN
     const result = await loadPetData();
 
-    // THEN — treated as empty (new format required)
+    // THEN — the pet survives with its identity intact
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      id: '409ab74c-3300-4840-8e30-1da87baa5c0c',
+      name: 'Rex',
+      type: 'dog',
+      color: 'brown',
+    });
+  });
+
+  it('reads a multi-pet legacy array preserving all entries', async () => {
+    /**
+     * Verifies the migration handles more than one legacy pet, not just
+     * the single-fixture case — a user with a full roster must not have
+     * entries silently dropped during the upgrade.
+     *
+     * If violated, upgrading users with multiple pets could lose all but
+     * one, which would look like a partial (and confusing) data loss bug
+     * rather than the totalizing loss this bead already fixes.
+     */
+    // GIVEN — two legacy pets
+    mockStorage['pixel-pets-v1'] = [
+      legacyFixture[0],
+      { color: 'red', id: 'second-pet-id', name: 'Kitsune', type: 'fox', x: 50, y: 300 },
+    ];
+
+    // WHEN
+    const result = await loadPetData();
+
+    // THEN — both pets survive
+    expect(result).toHaveLength(2);
+    expect(result.map((p) => p.id)).toEqual(['409ab74c-3300-4840-8e30-1da87baa5c0c', 'second-pet-id']);
+  });
+
+  it('preserves the legacy x coordinate instead of defaulting to 0', async () => {
+    /**
+     * Verifies that x is carried over from the legacy entry (where it was
+     * stored inline) rather than defaulted, since there is no positions
+     * key yet to read it from.
+     *
+     * If violated, every migrated pet would stack at x=0 on first render
+     * after the upgrade instead of appearing where the user left it.
+     */
+    // GIVEN — legacy entry with a distinctive x
+    mockStorage['pixel-pets-v1'] = legacyFixture;
+
+    // WHEN
+    const result = await loadPetData();
+
+    // THEN — x is preserved from the legacy entry
+    expect(result[0].x).toBe(310.0079999999654);
+  });
+
+  it('defaults hidden to false when absent from the legacy entry', async () => {
+    /**
+     * Verifies that a legacy entry without a `hidden` field (it was an
+     * optional field in 1.0.4, absent when false) migrates to a visible
+     * pet, matching the new-shape roster's existing "absent means false"
+     * convention.
+     *
+     * If violated, migrated pets could be miscategorized as hidden (or the
+     * field could be `undefined` instead of a clean boolean), breaking
+     * popup visibility toggling for upgraded users.
+     */
+    // GIVEN — legacy entry with no hidden field
+    mockStorage['pixel-pets-v1'] = legacyFixture;
+
+    // WHEN
+    const result = await loadPetData();
+
+    // THEN — not marked hidden
+    expect(result[0].hidden).toBeUndefined();
+  });
+
+  it('leaves already-new-shape roster data untouched', async () => {
+    /**
+     * Verifies the legacy-array branch does not fire for roster data that
+     * is already in the current {roster: [...]} shape — only a bare array
+     * should trigger migration.
+     *
+     * If violated, a post-migration user (or a user who never had legacy
+     * data) could have their normal roster misread on every load.
+     */
+    // GIVEN — current-shape roster, not an array
+    mockStorage['pixel-pets-v1'] = {
+      roster: [{ id: 'new', name: 'NewPet', type: 'dog', color: 'brown' }],
+    };
+    mockStorage['pixel-pets-positions-v1'] = { new: { x: 42, y: 7 } };
+
+    // WHEN
+    const result = await loadPetData();
+
+    // THEN — read via the normal new-shape path (positions merged in)
+    expect(result).toEqual([{ id: 'new', name: 'NewPet', type: 'dog', color: 'brown', x: 42, y: 7 }]);
+  });
+
+  it('degrades a malformed legacy array to an empty roster without throwing', async () => {
+    /**
+     * Verifies that a legacy value which is an array but whose entries are
+     * not recognizable pets (missing required identity fields, or not
+     * objects at all) is treated as corrupt and produces [] rather than
+     * throwing or fabricating garbled PetData.
+     *
+     * If violated, a corrupt legacy value would crash loadPetData, which
+     * propagates into content.ts init() and breaks pet rendering for every
+     * user, not just the one with bad data — strictly worse than the bug
+     * this migration fixes.
+     */
+    // GIVEN — an array of junk, not valid legacy roster entries
+    mockStorage['pixel-pets-v1'] = [null, 'not-a-pet', { onlyName: 'nope' }, 42];
+
+    // WHEN
+    const result = await loadPetData();
+
+    // THEN — safe empty fallback, no throw
     expect(result).toEqual([]);
+  });
+
+  it('persists the migrated roster so a second load takes the new-shape path unchanged', async () => {
+    /**
+     * Verifies the migration is a one-time, idempotent upgrade: after the
+     * first load rewrites pixel-pets-v1 into the new {roster: [...]} shape
+     * (and positions into pixel-pets-positions-v1), a second load must
+     * return the identical roster via the normal new-shape path, not
+     * re-enter the legacy branch.
+     *
+     * If violated, either the upgrade is never persisted (silently
+     * re-migrating — and re-writing storage — on every single load), or
+     * the second load diverges from the first (e.g. loses x), which would
+     * make the pets visibly jump after the very next page refresh.
+     */
+    // GIVEN — legacy flat-array storage
+    mockStorage['pixel-pets-v1'] = legacyFixture;
+
+    // WHEN — load twice, simulating two page loads across the upgrade
+    const firstLoad = await loadPetData();
+    const secondLoad = await loadPetData();
+
+    // THEN — both loads produce the identical roster
+    expect(secondLoad).toEqual(firstLoad);
+    // AND — storage now holds the new shape, not the legacy array
+    expect(Array.isArray(mockStorage['pixel-pets-v1'])).toBe(false);
+    expect(mockStorage['pixel-pets-v1']).toMatchObject({
+      roster: [expect.objectContaining({ id: '409ab74c-3300-4840-8e30-1da87baa5c0c' })],
+    });
   });
 });
 
