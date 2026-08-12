@@ -357,8 +357,9 @@ describe('loadPetData — legacy 1.0.4 flat-array migration', () => {
     // WHEN
     const result = await loadPetData();
 
-    // THEN — x is preserved from the legacy entry
+    // THEN — x and y are preserved from the legacy entry
     expect(result[0].x).toBe(310.0079999999654);
+    expect(result[0].y).toBe(940);
   });
 
   it('defaults hidden to false when absent from the legacy entry', async () => {
@@ -453,6 +454,68 @@ describe('loadPetData — legacy 1.0.4 flat-array migration', () => {
     expect(mockStorage['pixel-pets-v1']).toMatchObject({
       roster: [expect.objectContaining({ id: '409ab74c-3300-4840-8e30-1da87baa5c0c' })],
     });
+  });
+
+  it('still returns the migrated pets for this session when persisting the upgrade fails', async () => {
+    /**
+     * Verifies that a storage-write failure during migration (e.g. quota
+     * exceeded, or the extension context invalidating mid-write) does not
+     * prevent the migrated pets from being returned for the current
+     * session — only the persistence of the upgrade is allowed to fail.
+     *
+     * This is the load-bearing data-safety branch for this bead: if a
+     * regression made a persistence failure fall through to the outer
+     * catch instead, loadPetData would return [], and content.ts would
+     * read that as "no pets" and spawn a default pet over the user's real
+     * roster — the exact wipe this migration exists to prevent.
+     */
+    // GIVEN — legacy flat-array storage, and the persistence write fails
+    mockStorage['pixel-pets-v1'] = legacyFixture;
+    chromeStorageMock.local.set.mockRejectedValueOnce(new Error('quota exceeded'));
+
+    // WHEN
+    const result = await loadPetData();
+
+    // THEN — the migrated pet is still returned for this session
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      id: '409ab74c-3300-4840-8e30-1da87baa5c0c',
+      name: 'Rex',
+      type: 'dog',
+      color: 'brown',
+      x: 310.0079999999654,
+      y: 940,
+    });
+  });
+
+  it('leaves the legacy array in storage unchanged when some entries are filtered out as corrupt', async () => {
+    /**
+     * Verifies that when the legacy array contains a mix of valid and
+     * unrecognizable entries, the filtered (lossy) result is never
+     * persisted over the only copy of the legacy data — storage must
+     * still hold the original, unfiltered legacy array afterward.
+     *
+     * The legacy array is the sole record of the dropped entries. If a
+     * filtered roster were written back to ROSTER_KEY, that write would
+     * both look like a successful upgrade and permanently destroy the
+     * entries that failed to parse, with no way to recover them later.
+     *
+     * If violated, the filtered entries are gone forever the moment this
+     * function runs, even though the bead only asked the migration to
+     * degrade (drop them for this session), never to persist the loss.
+     */
+    // GIVEN — one valid legacy entry and one unrecognizable entry
+    const partiallyCorrupt = [legacyFixture[0], { id: 'b', name: 'Blue', type: 'fox', x: 30, y: 40 }];
+    mockStorage['pixel-pets-v1'] = partiallyCorrupt;
+
+    // WHEN
+    const result = await loadPetData();
+
+    // THEN — the valid pet is still returned this session
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('409ab74c-3300-4840-8e30-1da87baa5c0c');
+    // AND — storage was left untouched, still the original legacy array
+    expect(mockStorage['pixel-pets-v1']).toBe(partiallyCorrupt);
   });
 });
 

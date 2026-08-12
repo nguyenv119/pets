@@ -79,17 +79,35 @@ export async function loadPetData(): Promise<PetData[]> {
         ...(entry.hidden ? { hidden: true } : {}),
       }));
 
-      // Persist the upgrade once so this branch isn't re-entered next load.
-      // savePets alone writes roster-only (no x/y) — without also calling
-      // savePositions, every migrated pet's x/y would be silently dropped
-      // and reset to (0, 0) on the very next load.
-      try {
-        await savePets(migrated);
-        await savePositions(Object.fromEntries(migrated.map((p) => [p.id, { x: p.x, y: p.y }])));
-      } catch {
-        // Persisting failed (e.g. storage quota) — still return the
-        // migrated pets for this session; the migration will simply retry
-        // on the next load rather than losing the roster outright.
+      // Only persist the upgrade when nothing was dropped by the filter
+      // above. If some legacy entries were unrecognizable and filtered
+      // out, `migrated` is a lossy view of the legacy data — writing it
+      // over ROSTER_KEY would permanently destroy the filtered entries
+      // (the legacy array is their only copy). Leave storage untouched
+      // in that case; the session still gets `migrated` below, and a
+      // future build can still recover the dropped entries from the
+      // legacy array on the next load.
+      if (migrated.length === rosterData.length) {
+        // Persist the upgrade once so this branch isn't re-entered next
+        // load. Write positions BEFORE roster: savePets writes the
+        // {roster:[...]} shape to ROSTER_KEY, which is exactly the
+        // sentinel that tells the next load "not legacy, don't migrate."
+        // Writing positions first means that if the roster write never
+        // happens (quota, extension context invalidated, tab closed
+        // between the two awaits), ROSTER_KEY still holds the legacy
+        // array, so the next load re-enters this branch and retries the
+        // identical migration. If the positions write itself fails,
+        // nothing has been written at all yet.
+        try {
+          await savePositions(Object.fromEntries(migrated.map((p) => [p.id, { x: p.x, y: p.y }])));
+          await savePets(migrated);
+        } catch {
+          // Persisting failed. Because positions are written first,
+          // ROSTER_KEY still holds the legacy array unless both writes
+          // already succeeded — so the next load re-enters this branch
+          // and retries the identical migration rather than losing the
+          // roster outright.
+        }
       }
 
       return migrated;
