@@ -14,7 +14,7 @@ import {
   HAS_SWIPE,
 } from './renderer';
 import type { PetView, Particle } from './renderer';
-import { savePets, savePositions, loadPetData } from './store';
+import { savePets, savePositions, loadPetData, hasStoredRoster } from './store';
 import type { PetData, ExtMessage } from './types';
 import { tryGreetPairs, clearGreetCooldownsForPet } from './greet';
 
@@ -183,7 +183,13 @@ async function init(): Promise<void> {
 
   const savedData = await loadPetData();
 
-  if (savedData.length === 0) {
+  // Tell "first install" apart from "user deleted every pet" — both look
+  // like an empty roster, but only the former should spawn a welcome pet.
+  // See hasStoredRoster's docstring for why the roster key's mere presence
+  // is the signal, rather than a separate stored flag.
+  const rosterExists = await hasStoredRoster();
+
+  if (savedData.length === 0 && !rosterExists) {
     // Default pet on first install
     const defaultPet: PetData = {
       id: crypto.randomUUID(),

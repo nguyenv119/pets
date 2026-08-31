@@ -4,6 +4,26 @@ export const ROSTER_KEY = 'pixel-pets-v1';
 export const POSITIONS_KEY = 'pixel-pets-positions-v1';
 
 /**
+ * Tells "first install" apart from "user deleted every pet" via ROSTER_KEY's
+ * mere presence: a fresh install has no key; anyone who ever had a pet
+ * (including a pre-migration legacy array) does. Nothing ever removes the
+ * key, so this is durable — no separate flag to keep in sync.
+ *
+ * On a read failure, defaults to `true` (suppress the spawn) rather than
+ * `false`: `false` could make the caller spawn a pet and overwrite a real
+ * roster it merely failed to read. `true` only costs a missing welcome pet
+ * until the next successful read.
+ */
+export async function hasStoredRoster(): Promise<boolean> {
+  try {
+    const result = await chrome.storage.local.get(ROSTER_KEY);
+    return result[ROSTER_KEY] !== undefined;
+  } catch {
+    return true;
+  }
+}
+
+/**
  * Roster entry — identity fields only, no positional data.
  */
 export interface RosterEntry {
@@ -53,7 +73,8 @@ function isLegacyRosterEntry(
 
 /**
  * Boot path: reads BOTH keys and merges them into full PetData[].
- * Returns [] on empty/missing storage so content.ts can add the default pet.
+ * Returns [] on empty/missing/corrupt storage — an empty result alone does
+ * NOT mean first install (pair with `hasStoredRoster()` for that decision).
  *
  * Also migrates published-1.0.4 storage: that version wrote a bare array of
  * pets (x/y inline) at ROSTER_KEY, with no positions key at all. Treating

@@ -358,3 +358,38 @@ describe('capacity gate — fresh install with no anchor, no pets', () => {
     expect(reason.hasAttribute('hidden')).toBe(true);
   });
 });
+
+describe('addPet — leaves a durable roster-exists signal (pets-b8n.2)', () => {
+  it('persists a roster key when a pet is adopted from the popup on a tab with no content script', async () => {
+    /**
+     * addPet() leaves the signal a later content.ts boot uses to tell
+     * "first install" apart from "deleted every pet": ROSTER_KEY presence
+     * (see store.ts hasStoredRoster). The popup can create the first pet
+     * on a tab with no content script (e.g. chrome://), so content.ts's
+     * own roster write never runs for that session.
+     * If violated, adopting then deleting the only pet via the popup alone
+     * respawns Rex on the next normal page load.
+     */
+    // GIVEN — fresh install: no settings, no pets, no roster key yet
+    chromeMock.storage.local.get.mockImplementation(async () => ({}));
+
+    await loadPopupModule();
+    await new Promise(r => setTimeout(r, 0));
+
+    // WHEN — the user adopts a pet from the popup
+    const btnAdd = document.getElementById('btn-add') as HTMLButtonElement;
+    expect(btnAdd.disabled).toBe(false); // confirm capacity allows the add
+    btnAdd.click();
+    await new Promise(r => setTimeout(r, 0));
+
+    // THEN — a roster was persisted under the roster key
+    const setCalls = chromeMock.storage.local.set.mock.calls;
+    const rosterSave = setCalls.find(
+      (call: unknown[]) =>
+        typeof call[0] === 'object' &&
+        call[0] !== null &&
+        (call[0] as Record<string, unknown>)['pixel-pets-v1'] !== undefined
+    );
+    expect(rosterSave).toBeDefined();
+  });
+});

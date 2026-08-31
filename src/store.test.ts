@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { savePets, savePositions, loadPetData } from './store';
+import { savePets, savePositions, loadPetData, hasStoredRoster } from './store';
 import type { PetData } from './types';
 
 // ---------------------------------------------------------------------------
@@ -598,5 +598,55 @@ describe('loadPetData — storage key', () => {
     // THEN
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('manual');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// hasStoredRoster — derived first-install signal (pets-b8n.2)
+// ---------------------------------------------------------------------------
+
+describe('hasStoredRoster — derives roster-exists from ROSTER_KEY presence', () => {
+  it('reports false when ROSTER_KEY has never been written', async () => {
+    /**
+     * A brand-new install has no ROSTER_KEY. content.ts uses this to know a
+     * first install is genuine, without a separately-maintained flag.
+     * If violated, a real first install could be mistaken for established
+     * and never spawn the welcome pet.
+     */
+    // GIVEN — empty storage (nothing written yet)
+    // WHEN
+    const result = await hasStoredRoster();
+    // THEN
+    expect(result).toBe(false);
+  });
+
+  it('reports true when ROSTER_KEY holds an empty roster', async () => {
+    /**
+     * The actual bug fix: presence of the key, not its contents, gates the
+     * welcome-pet spawn — a user who emptied their roster on purpose must
+     * not look like a first install.
+     * If violated, deleting the last pet and reloading respawns Rex.
+     */
+    // GIVEN
+    mockStorage['pixel-pets-v1'] = { roster: [] };
+    // WHEN
+    const result = await hasStoredRoster();
+    // THEN
+    expect(result).toBe(true);
+  });
+
+  it('reports true when the underlying storage read rejects', async () => {
+    /**
+     * Safe-default on failure: `false` here could make the caller spawn a
+     * pet over — and overwrite — a real roster it merely failed to read,
+     * destroying data. `true` only costs a missing welcome pet.
+     * If violated, a transient storage error could silently wipe a roster.
+     */
+    // GIVEN
+    chromeStorageMock.local.get.mockRejectedValueOnce(new Error('storage unavailable'));
+    // WHEN
+    const result = await hasStoredRoster();
+    // THEN
+    expect(result).toBe(true);
   });
 });
