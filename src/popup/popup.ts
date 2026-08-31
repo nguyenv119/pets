@@ -1,7 +1,7 @@
 import type { PetData, PetType, ExtMessage } from '../types';
 import type { Theme } from '../settings';
 import { loadSettings, updateSettings, SETTINGS_KEY } from '../settings';
-import { loadPetData, savePets, INITIALIZED_KEY } from '../store';
+import { loadPetData, savePets } from '../store';
 import { pingTab } from './tab-probe';
 import { renderPetItemHTML } from './render-pet-item';
 import { initTypePicker, buildTypePickerHTML } from './type-picker';
@@ -251,11 +251,6 @@ async function addPet(): Promise<void> {
 
   pets.push(pet);
   await savePets(pets);
-  // A pet now exists via the popup alone, which may run on a tab with no
-  // content script (e.g. a chrome:// page). Mark initialized here too, so
-  // a later remove-all doesn't respawn the default pet on the next normal
-  // page load (content.ts's own back-fill only runs when it boots).
-  await chrome.storage.local.set({ [INITIALIZED_KEY]: true });
   renderPetList();
   renderCapacityCounterInPopup();
 

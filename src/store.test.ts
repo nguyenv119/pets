@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { savePets, savePositions, loadPetData, shouldSpawnDefault } from './store';
+import { savePets, savePositions, loadPetData, hasStoredRoster } from './store';
 import type { PetData } from './types';
 
 // ---------------------------------------------------------------------------
@@ -602,60 +602,51 @@ describe('loadPetData — storage key', () => {
 });
 
 // ---------------------------------------------------------------------------
-// shouldSpawnDefault — pure decision helper (pets-b8n.2)
+// hasStoredRoster — derived first-install signal (pets-b8n.2)
 // ---------------------------------------------------------------------------
 
-describe('shouldSpawnDefault — tells first-install apart from remove-all', () => {
-  it('spawns the default pet on a genuine first install (empty roster, never initialized)', () => {
+describe('hasStoredRoster — derives roster-exists from ROSTER_KEY presence', () => {
+  it('reports false when ROSTER_KEY has never been written', async () => {
     /**
-     * Verifies that an empty roster with no initialized flag is treated as
-     * a first install, so the welcome pet is minted.
-     *
-     * This is the baseline "new user" case the whole flag design exists to
-     * preserve — the fix for the respawn bug must not break onboarding.
-     *
-     * If violated, brand-new installs would show an empty scene with no
-     * pet and no way to discover the extension works.
+     * A brand-new install has no ROSTER_KEY. content.ts uses this to know a
+     * first install is genuine, without a separately-maintained flag.
+     * If violated, a real first install could be mistaken for established
+     * and never spawn the welcome pet.
      */
-    // GIVEN / WHEN / THEN — pure function, no setup needed
-    expect(shouldSpawnDefault(0, false)).toBe(true);
+    // GIVEN — empty storage (nothing written yet)
+    // WHEN
+    const result = await hasStoredRoster();
+    // THEN
+    expect(result).toBe(false);
   });
 
-  it('does not spawn the default pet when the roster is empty but already initialized', () => {
+  it('reports true when ROSTER_KEY holds an empty roster', async () => {
     /**
-     * Verifies that an empty roster with the initialized flag set is NOT
-     * treated as a first install — this is a user who deleted their last
-     * pet on purpose.
-     *
-     * This is the core bug fix: previously an empty roster always meant
-     * "spawn Rex," resurrecting a pet the user chose to remove.
-     *
-     * If violated, deleting the last pet and reloading the page brings
-     * back a default dog the user never asked for.
+     * The actual bug fix: presence of the key, not its contents, gates the
+     * welcome-pet spawn — a user who emptied their roster on purpose must
+     * not look like a first install.
+     * If violated, deleting the last pet and reloading respawns Rex.
      */
-    expect(shouldSpawnDefault(0, true)).toBe(false);
+    // GIVEN
+    mockStorage['pixel-pets-v1'] = { roster: [] };
+    // WHEN
+    const result = await hasStoredRoster();
+    // THEN
+    expect(result).toBe(true);
   });
 
-  it('does not spawn the default pet when the roster already has pets and is not initialized', () => {
+  it('reports true when the underlying storage read rejects', async () => {
     /**
-     * Verifies that a non-empty roster never triggers a spawn, regardless
-     * of the initialized flag's value — there is never a reason to add a
-     * default pet on top of an existing roster.
-     *
-     * If violated, users with pets could see an unwanted extra "Rex"
-     * appended alongside their real roster.
+     * Safe-default on failure: `false` here could make the caller spawn a
+     * pet over — and overwrite — a real roster it merely failed to read,
+     * destroying data. `true` only costs a missing welcome pet.
+     * If violated, a transient storage error could silently wipe a roster.
      */
-    expect(shouldSpawnDefault(2, false)).toBe(false);
-  });
-
-  it('does not spawn the default pet when the roster already has pets and is initialized', () => {
-    /**
-     * Verifies the steady-state case: an established user with pets and
-     * the flag already set never spawns a default pet.
-     *
-     * If violated, every normal page load for an existing user would risk
-     * minting an unwanted extra pet.
-     */
-    expect(shouldSpawnDefault(2, true)).toBe(false);
+    // GIVEN
+    chromeStorageMock.local.get.mockRejectedValueOnce(new Error('storage unavailable'));
+    // WHEN
+    const result = await hasStoredRoster();
+    // THEN
+    expect(result).toBe(true);
   });
 });

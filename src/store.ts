@@ -4,21 +4,23 @@ export const ROSTER_KEY = 'pixel-pets-v1';
 export const POSITIONS_KEY = 'pixel-pets-positions-v1';
 
 /**
- * Set once a roster has ever been non-empty (or the user has adopted from
- * the popup), so an empty roster can be told apart from a fresh install.
- */
-export const INITIALIZED_KEY = 'pixel-pets-initialized';
-
-/**
- * Decides whether content.ts should mint the default "Rex" pet on boot.
+ * Tells "first install" apart from "user deleted every pet" via ROSTER_KEY's
+ * mere presence: a fresh install has no key; anyone who ever had a pet
+ * (including a pre-migration legacy array) does. Nothing ever removes the
+ * key, so this is durable — no separate flag to keep in sync.
  *
- * A default pet belongs ONLY on a genuine first install: an empty roster
- * that has never been initialized. An empty roster that HAS been
- * initialized means the user deleted their last pet on purpose — spawning
- * a replacement there would resurrect pets the user chose to remove.
+ * On a read failure, defaults to `true` (suppress the spawn) rather than
+ * `false`: `false` could make the caller spawn a pet and overwrite a real
+ * roster it merely failed to read. `true` only costs a missing welcome pet
+ * until the next successful read.
  */
-export function shouldSpawnDefault(rosterLen: number, initialized: boolean): boolean {
-  return rosterLen === 0 && !initialized;
+export async function hasStoredRoster(): Promise<boolean> {
+  try {
+    const result = await chrome.storage.local.get(ROSTER_KEY);
+    return result[ROSTER_KEY] !== undefined;
+  } catch {
+    return true;
+  }
 }
 
 /**
@@ -71,7 +73,8 @@ function isLegacyRosterEntry(
 
 /**
  * Boot path: reads BOTH keys and merges them into full PetData[].
- * Returns [] on empty/missing storage so content.ts can add the default pet.
+ * Returns [] on empty/missing/corrupt storage — an empty result alone does
+ * NOT mean first install (pair with `hasStoredRoster()` for that decision).
  *
  * Also migrates published-1.0.4 storage: that version wrote a bare array of
  * pets (x/y inline) at ROSTER_KEY, with no positions key at all. Treating

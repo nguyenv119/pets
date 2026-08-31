@@ -359,23 +359,18 @@ describe('capacity gate — fresh install with no anchor, no pets', () => {
   });
 });
 
-describe('addPet — marks the roster initialized (pets-b8n.2)', () => {
-  it('sets pixel-pets-initialized when a pet is adopted from the popup', async () => {
+describe('addPet — leaves a durable roster-exists signal (pets-b8n.2)', () => {
+  it('persists a roster key when a pet is adopted from the popup on a tab with no content script', async () => {
     /**
-     * Verifies that addPet() sets the initialized flag itself, not just
-     * content.ts's boot path.
-     *
-     * The popup can create the first pet on a tab with no content script
-     * (e.g. a chrome:// page), so content.ts's own back-fill never runs
-     * for that session. Without this write here, the flag would stay
-     * unset and the next normal page load would still treat the roster as
-     * a first install.
-     *
-     * If violated, a user who adopts and later deletes their only pet via
-     * the popup alone would see the default pet respawn on their next
-     * normal page load — the exact bug this bead exists to close.
+     * addPet() leaves the signal a later content.ts boot uses to tell
+     * "first install" apart from "deleted every pet": ROSTER_KEY presence
+     * (see store.ts hasStoredRoster). The popup can create the first pet
+     * on a tab with no content script (e.g. chrome://), so content.ts's
+     * own roster write never runs for that session.
+     * If violated, adopting then deleting the only pet via the popup alone
+     * respawns Rex on the next normal page load.
      */
-    // GIVEN — fresh install: no settings, no pets, no initialized flag
+    // GIVEN — fresh install: no settings, no pets, no roster key yet
     chromeMock.storage.local.get.mockImplementation(async () => ({}));
 
     await loadPopupModule();
@@ -387,14 +382,14 @@ describe('addPet — marks the roster initialized (pets-b8n.2)', () => {
     btnAdd.click();
     await new Promise(r => setTimeout(r, 0));
 
-    // THEN — the initialized flag was written true
+    // THEN — a roster was persisted under the roster key
     const setCalls = chromeMock.storage.local.set.mock.calls;
-    const flagSave = setCalls.find(
+    const rosterSave = setCalls.find(
       (call: unknown[]) =>
         typeof call[0] === 'object' &&
         call[0] !== null &&
-        (call[0] as Record<string, unknown>)['pixel-pets-initialized'] === true
+        (call[0] as Record<string, unknown>)['pixel-pets-v1'] !== undefined
     );
-    expect(flagSave).toBeDefined();
+    expect(rosterSave).toBeDefined();
   });
 });

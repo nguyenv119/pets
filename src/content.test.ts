@@ -59,108 +59,64 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// init() — spawn-vs-backfill decision (pets-b8n.2)
+// init() — spawn decision derived from ROSTER_KEY presence (pets-b8n.2)
 // ---------------------------------------------------------------------------
 
-describe('content init() — default-pet spawn is gated on the initialized flag', () => {
-  it('spawns the default pet and sets the flag on a genuine first install', async () => {
+describe('content init() — default-pet spawn is gated on whether a roster key exists', () => {
+  it('spawns the default pet on a genuine first install (roster key absent)', async () => {
     /**
-     * Verifies the baseline "new user" path still works: no roster and no
-     * initialized flag is a first install, so content.ts mints the
-     * welcome pet and marks the flag true.
-     *
-     * If violated, either new installs see no pet at all, or the flag is
-     * left unset and the very next load treats the same fresh roster as
-     * "not yet initialized" again.
+     * No ROSTER_KEY at all is a first install, so content.ts mints Rex.
+     * If violated, brand-new installs show an empty scene with no pet.
      */
     // GIVEN — nothing in storage at all
-
     // WHEN
     await loadContentModule();
-
     // THEN — a default roster of exactly one pet was persisted
     const roster = mockStorage['pixel-pets-v1'] as { roster: Array<{ name: string }> };
     expect(roster.roster).toHaveLength(1);
     expect(roster.roster[0].name).toBe('Rex');
-    // AND — the flag is now set
-    expect(mockStorage['pixel-pets-initialized']).toBe(true);
   });
 
-  it('does not spawn the default pet when the roster is empty but already initialized', async () => {
+  it('does not spawn when the roster key exists but holds an empty roster', async () => {
     /**
-     * Verifies the actual bug fix: deleting the last pet leaves an empty
-     * roster with the initialized flag already true, and reloading must
-     * NOT resurrect a default pet.
-     *
-     * This is the exact scenario that was broken in the published build —
-     * an empty roster meant "spawn Rex" unconditionally, with no way to
-     * distinguish "never had pets" from "deleted them all."
-     *
-     * If violated, every user who removes their last pet gets an unwanted
-     * dog back the next time they load a page.
+     * The bug fix: a roster key present but empty (a popup-only
+     * delete-all, which never boots content.ts to back-fill anything)
+     * must not be treated as a first install.
+     * If violated, removing the last pet respawns an unwanted dog.
      */
-    // GIVEN — roster emptied by the user, flag already recorded as true
+    // GIVEN — roster key present, but the user emptied it
     mockStorage['pixel-pets-v1'] = { roster: [] };
-    mockStorage['pixel-pets-initialized'] = true;
-
     // WHEN
     await loadContentModule();
-
     // THEN — no pet was written back into the roster
     const roster = mockStorage['pixel-pets-v1'] as { roster: unknown[] };
     expect(roster.roster).toHaveLength(0);
   });
 
-  it('back-fills the flag when a non-empty roster loads without it set', async () => {
+  it('does not respawn after a previously-populated roster is emptied and the page reloads', async () => {
     /**
-     * Verifies the migration back-fill: a user who already has pets (e.g.
-     * a legacy-storage upgrade that predates this flag) must be marked
-     * initialized on their very next load, without content.ts touching
-     * their existing roster.
-     *
-     * If violated, an existing user's flag would stay unset forever (it is
-     * only ever set from the spawn branch or here), so deleting their last
-     * pet later would incorrectly respawn a default pet.
+     * End-to-end reported symptom, driven through two real init() runs:
+     * boot with a populated roster (created by real code, not test
+     * setup), empty it as the popup would, boot again.
+     * A write-time flag can miss this sequence if content.ts never boots
+     * between creation and emptying (e.g. a chrome:// tab); deriving the
+     * signal from the roster key's presence cannot, since nothing removes
+     * that key. If violated, emptying the roster and reloading respawns Rex.
      */
-    // GIVEN — an existing roster, no initialized flag recorded yet
+    // GIVEN — a populated roster, created by a real content.ts boot
     mockStorage['pixel-pets-v1'] = {
       roster: [{ id: 'p1', name: 'Buddy', type: 'dog', color: 'brown' }],
     };
     mockStorage['pixel-pets-positions-v1'] = { p1: { x: 10, y: 20 } };
-
-    // WHEN
     await loadContentModule();
 
-    // THEN — the flag is now set
-    expect(mockStorage['pixel-pets-initialized']).toBe(true);
-    // AND — the existing roster was left untouched (no default pet appended)
-    const roster = mockStorage['pixel-pets-v1'] as { roster: Array<{ id: string }> };
-    expect(roster.roster).toHaveLength(1);
-    expect(roster.roster[0].id).toBe('p1');
-  });
-
-  it('does not rewrite the flag when a non-empty roster loads and it is already true', async () => {
-    /**
-     * Verifies the steady-state case does no unnecessary storage write:
-     * once a user is initialized, every subsequent load with pets present
-     * should not touch pixel-pets-initialized again.
-     *
-     * If violated, every normal page load for an established user performs
-     * a redundant storage write on top of the roster/positions writes.
-     */
-    // GIVEN — existing roster, already initialized
-    mockStorage['pixel-pets-v1'] = {
-      roster: [{ id: 'p1', name: 'Buddy', type: 'dog', color: 'brown' }],
-    };
-    mockStorage['pixel-pets-initialized'] = true;
-
-    // WHEN
+    // WHEN — the roster is emptied out-of-band (e.g. by the popup) and the
+    // page is reloaded, booting content.ts again
+    mockStorage['pixel-pets-v1'] = { roster: [] };
     await loadContentModule();
 
-    // THEN — set() was never called with the initialized key
-    const initializedWrites = chromeMock.storage.local.set.mock.calls.filter(
-      (call) => (call[0] as Record<string, unknown>)['pixel-pets-initialized'] !== undefined
-    );
-    expect(initializedWrites).toHaveLength(0);
+    // THEN — no default pet was spawned into the now-empty roster
+    const roster = mockStorage['pixel-pets-v1'] as { roster: unknown[] };
+    expect(roster.roster).toHaveLength(0);
   });
 });

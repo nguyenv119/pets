@@ -14,7 +14,7 @@ import {
   HAS_SWIPE,
 } from './renderer';
 import type { PetView, Particle } from './renderer';
-import { savePets, savePositions, loadPetData, shouldSpawnDefault, INITIALIZED_KEY } from './store';
+import { savePets, savePositions, loadPetData, hasStoredRoster } from './store';
 import type { PetData, ExtMessage } from './types';
 import { tryGreetPairs, clearGreetCooldownsForPet } from './greet';
 
@@ -185,10 +185,11 @@ async function init(): Promise<void> {
 
   // Tell "first install" apart from "user deleted every pet" — both look
   // like an empty roster, but only the former should spawn a welcome pet.
-  const initResult = await chrome.storage.local.get(INITIALIZED_KEY);
-  const initialized = initResult[INITIALIZED_KEY] === true;
+  // See hasStoredRoster's docstring for why the roster key's mere presence
+  // is the signal, rather than a separate stored flag.
+  const rosterExists = await hasStoredRoster();
 
-  if (shouldSpawnDefault(savedData.length, initialized)) {
+  if (savedData.length === 0 && !rosterExists) {
     // Default pet on first install
     const defaultPet: PetData = {
       id: crypto.randomUUID(),
@@ -204,15 +205,8 @@ async function init(): Promise<void> {
     const initPos: Record<string, { x: number; y: number }> = {};
     for (const p of pets) { const d = p.toData(); initPos[d.id] = { x: d.x, y: d.y }; }
     await savePositions(initPos);
-    await chrome.storage.local.set({ [INITIALIZED_KEY]: true });
   } else {
     pets = savedData.map(makePet);
-    // Back-fill: a non-empty roster proves this user was already
-    // initialized (e.g. a legacy-storage upgrade), even if the flag was
-    // never set. Flagging it now means a later remove-all won't respawn Rex.
-    if (savedData.length > 0 && !initialized) {
-      await chrome.storage.local.set({ [INITIALIZED_KEY]: true });
-    }
   }
 
   // Only add visible pets to the scene; hidden pets exist in pets[] but not in views
