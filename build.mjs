@@ -1,5 +1,6 @@
 import * as esbuild from 'esbuild';
 import { cpSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { getShippedAssetDirs, assertAssetDirsExist } from './scripts/asset-dirs.mjs';
 
 // Clean and create dist
 mkdirSync('dist/popup', { recursive: true });
@@ -34,8 +35,20 @@ await esbuild.build({
   minify: true,
 });
 
-// 4. Copy static assets
-cpSync('assets', 'dist/assets', { recursive: true });
+// 4. Copy static assets — allowlist, not a wholesale copy. Only the
+// directories PetType (src/types.ts) actually needs ship, plus icons/
+// (used by manifest.json). Unlisted directories (source reference art,
+// unused species, .DS_Store) are excluded by default: a new junk directory
+// under assets/ never ships unless something adds it to PetType.
+const assetDirs = getShippedAssetDirs();
+assertAssetDirsExist(assetDirs); // fail the build rather than ship a missing sprite set
+mkdirSync('dist/assets', { recursive: true });
+for (const dir of assetDirs) {
+  cpSync(`assets/${dir}`, `dist/assets/${dir}`, {
+    recursive: true,
+    filter: (src) => !src.endsWith('.DS_Store'),
+  });
+}
 cpSync('src/popup/popup.css', 'dist/popup/popup.css');
 cpSync('LICENSE', 'dist/LICENSE');
 

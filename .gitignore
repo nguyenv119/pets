@@ -154,3 +154,7 @@ dolt/
 
 .beads/
 .claude/
+
+# macOS Finder metadata / packaged extension zips — never ship in the repo
+.DS_Store
+*.zip
