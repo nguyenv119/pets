@@ -1,8 +1,9 @@
 import * as esbuild from 'esbuild';
-import { cpSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
-import { getShippedAssetDirs, assertAssetDirsExist } from './scripts/asset-dirs.mjs';
+import { cpSync, mkdirSync, rmSync, writeFileSync, readFileSync } from 'fs';
+import { getShippedAssetDirs, assertAssetDirsExist, assertWebAccessibleResourcesMatch } from './scripts/asset-dirs.mjs';
 
 // Clean and create dist
+rmSync('dist', { recursive: true, force: true });
 mkdirSync('dist/popup', { recursive: true });
 
 // 1. Content script — single IIFE, no dynamic imports, no code splitting
@@ -60,6 +61,11 @@ writeFileSync('dist/popup/popup.html', popupHtml);
 // 6. Write manifest pointing to built paths
 const manifest = JSON.parse(readFileSync('manifest.json', 'utf-8'));
 // Paths are already correct in source manifest — content.js, service-worker.js, popup/popup.html
+// Guard against a 3rd, unchecked copy of the pet list: web_accessible_resources
+// is hand-maintained, so a pet type missing from it would still build, still
+// copy its sprites, and still render in the popup — then 404 on every page,
+// since MV3 blocks content-script access to resources not listed there.
+assertWebAccessibleResourcesMatch(assetDirs.filter((dir) => dir !== 'icons'), manifest);
 writeFileSync('dist/manifest.json', JSON.stringify(manifest, null, 2));
 
 console.log('✓ Build complete → dist/');

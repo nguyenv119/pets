@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { derivePetTypes, getShippedAssetDirs, assertAssetDirsExist } from './asset-dirs.mjs';
+import { fileURLToPath } from 'node:url';
+import { derivePetTypes, getShippedAssetDirs, assertAssetDirsExist, assertWebAccessibleResourcesMatch } from './asset-dirs.mjs';
 
 describe('derivePetTypes', () => {
   it('extracts every member of the PetType union in declaration order', () => {
@@ -55,16 +56,59 @@ describe('getShippedAssetDirs', () => {
      */
     // GIVEN — the real src/types.ts, resolved relative to this test file
     // WHEN — deriving the shipped asset directories
-    const dirs = getShippedAssetDirs(new URL('../src/types.ts', import.meta.url).pathname);
+    const dirs = getShippedAssetDirs(fileURLToPath(new URL('../src/types.ts', import.meta.url)));
 
-    // THEN — every known pet type is present, plus icons
-    expect(dirs).toEqual(
-      expect.arrayContaining([
-        'chicken', 'cockatiel', 'crab', 'dog', 'fox', 'horse', 'miffy',
-        'monkey', 'panda', 'rat', 'snail', 'snake', 'totoro', 'turtle', 'icons',
-      ])
-    );
-    expect(dirs).toHaveLength(15);
+    // THEN — exactly the known pet types, in declaration order, plus icons.
+    // An exact match (not a subset check) means a future length mismatch
+    // names the offending element instead of just a bare count.
+    expect(dirs).toEqual([
+      'chicken', 'cockatiel', 'crab', 'dog', 'fox', 'horse', 'miffy',
+      'monkey', 'panda', 'rat', 'snail', 'snake', 'totoro', 'turtle', 'icons',
+    ]);
+  });
+});
+
+describe('assertWebAccessibleResourcesMatch', () => {
+  it('does not throw when every pet type has a matching web_accessible_resources entry', () => {
+    /**
+     * What: assertWebAccessibleResourcesMatch must pass silently when the
+     * manifest already grants every pet type's assets to content scripts.
+     * Why: this is the happy path the build takes on every normal run; it
+     * must not raise false alarms.
+     * What breaks: a false positive here would break every build.
+     */
+    // GIVEN — a manifest whose web_accessible_resources covers both pet types
+    const manifest = {
+      web_accessible_resources: [
+        { resources: ['assets/dog/*.gif', 'assets/fox/*.gif'], matches: ['<all_urls>'] },
+      ],
+    };
+
+    // WHEN / THEN — asserting against a manifest that covers every type does not throw
+    expect(() => assertWebAccessibleResourcesMatch(['dog', 'fox'], manifest)).not.toThrow();
+  });
+
+  it('throws naming the pet type missing from web_accessible_resources', () => {
+    /**
+     * What: assertWebAccessibleResourcesMatch must fail the build when a
+     * pet type's assets aren't listed in manifest.json's
+     * web_accessible_resources.
+     * Why: web_accessible_resources is a hand-maintained, unchecked third
+     * copy of the pet list — a missing entry still builds, still copies
+     * sprites, and still renders in the popup, then 404s on every page
+     * because MV3 blocks content-script access to unlisted resources.
+     * What breaks: without this, a new pet type could ship broken on every
+     * real page and only be caught by a user report.
+     */
+    // GIVEN — a manifest missing an entry for 'fox'
+    const manifest = {
+      web_accessible_resources: [
+        { resources: ['assets/dog/*.gif'], matches: ['<all_urls>'] },
+      ],
+    };
+
+    // WHEN / THEN — asserting against the incomplete manifest throws, naming 'fox'
+    expect(() => assertWebAccessibleResourcesMatch(['dog', 'fox'], manifest)).toThrow(/fox/);
   });
 });
 

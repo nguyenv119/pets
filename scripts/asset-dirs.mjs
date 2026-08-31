@@ -33,3 +33,17 @@ export function assertAssetDirsExist(dirs, assetsRoot = 'assets') {
     throw new Error(`Missing required asset director${missing.length === 1 ? 'y' : 'ies'} under ${assetsRoot}/: ${missing.join(', ')}`);
   }
 }
+
+// Fails fast if a pet type's assets aren't also granted to content scripts
+// via manifest.json's web_accessible_resources. That list is hand-maintained
+// (not derived), so it's the one place a missing pet type is invisible until
+// a user reports a 404: MV3 blocks content-script access to any resource not
+// listed there, even though the sprites still copy and still render in the
+// popup.
+export function assertWebAccessibleResourcesMatch(petTypes, manifest) {
+  const resources = (manifest.web_accessible_resources ?? []).flatMap((entry) => entry.resources ?? []);
+  const missing = petTypes.filter((type) => !resources.some((resource) => resource.startsWith(`assets/${type}/`)));
+  if (missing.length > 0) {
+    throw new Error(`Missing web_accessible_resources entr${missing.length === 1 ? 'y' : 'ies'} for pet type${missing.length === 1 ? '' : 's'}: ${missing.join(', ')}`);
+  }
+}
