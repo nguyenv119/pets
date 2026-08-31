@@ -4,6 +4,24 @@ export const ROSTER_KEY = 'pixel-pets-v1';
 export const POSITIONS_KEY = 'pixel-pets-positions-v1';
 
 /**
+ * Set once a roster has ever been non-empty (or the user has adopted from
+ * the popup), so an empty roster can be told apart from a fresh install.
+ */
+export const INITIALIZED_KEY = 'pixel-pets-initialized';
+
+/**
+ * Decides whether content.ts should mint the default "Rex" pet on boot.
+ *
+ * A default pet belongs ONLY on a genuine first install: an empty roster
+ * that has never been initialized. An empty roster that HAS been
+ * initialized means the user deleted their last pet on purpose — spawning
+ * a replacement there would resurrect pets the user chose to remove.
+ */
+export function shouldSpawnDefault(rosterLen: number, initialized: boolean): boolean {
+  return rosterLen === 0 && !initialized;
+}
+
+/**
  * Roster entry — identity fields only, no positional data.
  */
 export interface RosterEntry {

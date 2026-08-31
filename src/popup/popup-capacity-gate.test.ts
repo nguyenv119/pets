@@ -358,3 +358,43 @@ describe('capacity gate — fresh install with no anchor, no pets', () => {
     expect(reason.hasAttribute('hidden')).toBe(true);
   });
 });
+
+describe('addPet — marks the roster initialized (pets-b8n.2)', () => {
+  it('sets pixel-pets-initialized when a pet is adopted from the popup', async () => {
+    /**
+     * Verifies that addPet() sets the initialized flag itself, not just
+     * content.ts's boot path.
+     *
+     * The popup can create the first pet on a tab with no content script
+     * (e.g. a chrome:// page), so content.ts's own back-fill never runs
+     * for that session. Without this write here, the flag would stay
+     * unset and the next normal page load would still treat the roster as
+     * a first install.
+     *
+     * If violated, a user who adopts and later deletes their only pet via
+     * the popup alone would see the default pet respawn on their next
+     * normal page load — the exact bug this bead exists to close.
+     */
+    // GIVEN — fresh install: no settings, no pets, no initialized flag
+    chromeMock.storage.local.get.mockImplementation(async () => ({}));
+
+    await loadPopupModule();
+    await new Promise(r => setTimeout(r, 0));
+
+    // WHEN — the user adopts a pet from the popup
+    const btnAdd = document.getElementById('btn-add') as HTMLButtonElement;
+    expect(btnAdd.disabled).toBe(false); // confirm capacity allows the add
+    btnAdd.click();
+    await new Promise(r => setTimeout(r, 0));
+
+    // THEN — the initialized flag was written true
+    const setCalls = chromeMock.storage.local.set.mock.calls;
+    const flagSave = setCalls.find(
+      (call: unknown[]) =>
+        typeof call[0] === 'object' &&
+        call[0] !== null &&
+        (call[0] as Record<string, unknown>)['pixel-pets-initialized'] === true
+    );
+    expect(flagSave).toBeDefined();
+  });
+});

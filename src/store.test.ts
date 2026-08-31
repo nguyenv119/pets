@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { savePets, savePositions, loadPetData } from './store';
+import { savePets, savePositions, loadPetData, shouldSpawnDefault } from './store';
 import type { PetData } from './types';
 
 // ---------------------------------------------------------------------------
@@ -598,5 +598,64 @@ describe('loadPetData — storage key', () => {
     // THEN
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('manual');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// shouldSpawnDefault — pure decision helper (pets-b8n.2)
+// ---------------------------------------------------------------------------
+
+describe('shouldSpawnDefault — tells first-install apart from remove-all', () => {
+  it('spawns the default pet on a genuine first install (empty roster, never initialized)', () => {
+    /**
+     * Verifies that an empty roster with no initialized flag is treated as
+     * a first install, so the welcome pet is minted.
+     *
+     * This is the baseline "new user" case the whole flag design exists to
+     * preserve — the fix for the respawn bug must not break onboarding.
+     *
+     * If violated, brand-new installs would show an empty scene with no
+     * pet and no way to discover the extension works.
+     */
+    // GIVEN / WHEN / THEN — pure function, no setup needed
+    expect(shouldSpawnDefault(0, false)).toBe(true);
+  });
+
+  it('does not spawn the default pet when the roster is empty but already initialized', () => {
+    /**
+     * Verifies that an empty roster with the initialized flag set is NOT
+     * treated as a first install — this is a user who deleted their last
+     * pet on purpose.
+     *
+     * This is the core bug fix: previously an empty roster always meant
+     * "spawn Rex," resurrecting a pet the user chose to remove.
+     *
+     * If violated, deleting the last pet and reloading the page brings
+     * back a default dog the user never asked for.
+     */
+    expect(shouldSpawnDefault(0, true)).toBe(false);
+  });
+
+  it('does not spawn the default pet when the roster already has pets and is not initialized', () => {
+    /**
+     * Verifies that a non-empty roster never triggers a spawn, regardless
+     * of the initialized flag's value — there is never a reason to add a
+     * default pet on top of an existing roster.
+     *
+     * If violated, users with pets could see an unwanted extra "Rex"
+     * appended alongside their real roster.
+     */
+    expect(shouldSpawnDefault(2, false)).toBe(false);
+  });
+
+  it('does not spawn the default pet when the roster already has pets and is initialized', () => {
+    /**
+     * Verifies the steady-state case: an established user with pets and
+     * the flag already set never spawns a default pet.
+     *
+     * If violated, every normal page load for an existing user would risk
+     * minting an unwanted extra pet.
+     */
+    expect(shouldSpawnDefault(2, true)).toBe(false);
   });
 });
