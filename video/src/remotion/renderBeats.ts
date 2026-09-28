@@ -9,7 +9,7 @@
 // import this directly rather than only consuming pre-computed JSON.
 
 import { resolveAnyAnchor, type AnchorContext } from './timeline';
-import type { Events, TimelineBeat } from '../schema';
+import type { ClickEvent, CursorSample, Events, TimelineBeat } from '../schema';
 import type { Shot, ShotBeat, ShotsDoc } from './timeline';
 
 export interface TextWindow {
@@ -26,6 +26,9 @@ export interface RenderBeat {
   clockOutMaster?: number;
   ctaFromMaster?: number;
   brandLine?: boolean;
+  /** This beat's shot's own cursor track/clicks, in source (CSS) coordinates, for Cursor.tsx. */
+  cursorTrack: readonly CursorSample[];
+  clicks: readonly ClickEvent[];
 }
 
 /**
@@ -53,7 +56,7 @@ export function buildRenderBeats(beats: readonly ShotBeat[], timelineBeats: read
   return beats.map((beat, i) => {
     const tl = timelineBeats[i];
     const ctx: AnchorContext = { events, beatInMs: tl.source_in };
-    const render: RenderBeat = { timeline: tl };
+    const render: RenderBeat = { timeline: tl, cursorTrack: events.cursorTrack, clicks: events.clicks };
 
     if (beat.caption) {
       render.caption = beat.caption;

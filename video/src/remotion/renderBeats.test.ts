@@ -59,9 +59,11 @@ describe('buildRenderBeats', () => {
     const renderBeats = buildRenderBeats(shot.beats, timelineBeats, events);
     const beat0 = timelineBeats[0];
     const window = renderBeats[0].captionWindow!;
-    // caption_at is "src:rex:swipe" for b_hover; recompute its expected master time directly.
+    // caption_at is "src:rex:swipe" for b_hover; recompute its expected master time
+    // via the same demo.mp4-alignment shift (trimBeforeMs) production code applies.
     const swipe = events.observed.find((e) => e.kind === 'src' && e.pet === 'rex' && e.to === 'swipe')!;
-    const expectedFromMaster = beat0.master_in + (swipe.t - beat0.source_in);
+    const expectedSourceT = swipe.t + events.trimBeforeMs;
+    const expectedFromMaster = beat0.master_in + (expectedSourceT - beat0.source_in);
     expect(window.fromMaster).toBe(expectedFromMaster);
   });
 

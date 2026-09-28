@@ -9,6 +9,7 @@ import {
   beatHoldWindow,
   buildTimeline,
   classifyMove,
+  resolveAnyAnchor,
   resolveEditAnchor,
   resolveFocusX,
   type Shot,
@@ -133,6 +134,35 @@ describe('resolveEditAnchor', () => {
      * boundary with no error.
      */
     expect(() => resolveEditAnchor('catch_point', { events })).toThrow(/position/);
+  });
+});
+
+describe('resolveAnyAnchor', () => {
+  const events = loadFixtureEvents();
+
+  it('shifts a recorder anchor by events.trimBeforeMs to align it with demo.mp4', () => {
+    /**
+     * Verifies this bead's step 2 spec: "source_in/source_out ... equal
+     * trimBeforeMs + the LOGGED anchor time." The recorder's own event
+     * clock (observed[].t) is not re-zeroed when the assembled demo.mp4
+     * has its leading clapper trimmed, so every recorder anchor sits
+     * trimBeforeMs later in the file than its logged timestamp. Missing
+     * this shift would make every beat's OffthreadVideo trim point (and
+     * every caption/camera anchor inside it) off by trimBeforeMs — 1080ms
+     * on this fixture, which is most of a whole beat.
+     */
+    const petsReady = events.observed.find((e) => e.kind === 'pets_ready')!;
+    expect(resolveAnyAnchor('pets_ready', { events })).toBe(petsReady.t + events.trimBeforeMs);
+  });
+
+  it('does NOT shift the "in" edit-only anchor, which is already beat-relative', () => {
+    /**
+     * "in" is defined relative to a beat's own beatInMs (itself already
+     * shifted, since it was produced by a prior resolveAnyAnchor call) —
+     * shifting it again would double-count trimBeforeMs and push overlay
+     * windows further into the beat than the storyboard intends.
+     */
+    expect(resolveAnyAnchor('in+100', { events, beatInMs: 5000 })).toBe(5100);
   });
 });
 

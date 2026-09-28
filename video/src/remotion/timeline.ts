@@ -173,20 +173,30 @@ export function resolveEditAnchor(spec: string, ctx: AnchorContext): number {
   throw new Error(`anchor "${spec}": "${name}" is not a resolvable edit-only time anchor (catch_point is a position, not a time)`);
 }
 
-const EDIT_ONLY_NAMES = new Set(['in', 'end', 'cursor_depart', 'ball_in_frame']);
+const SOURCE_CLOCK_SHIFT_NAMES = new Set(['cursor_depart', 'ball_in_frame']);
 
-/** True when `spec` names one of the edit-only time anchors this module resolves itself. */
-function isEditOnlySpec(spec: string): boolean {
-  const name = spec.replace(/[+-]\d+$/, '');
-  return EDIT_ONLY_NAMES.has(name);
-}
-
-/** Resolves any anchor spec: recorder anchors via anchors.ts, edit-only anchors via resolveEditAnchor. */
+/**
+ * Resolves any anchor spec to a position in the shot's demo.mp4: recorder
+ * anchors via anchors.ts, edit-only anchors via resolveEditAnchor. Per
+ * this bead's step 2 spec ("source_in/source_out ... equal trimBeforeMs +
+ * the LOGGED anchor time"), every anchor whose value comes from the
+ * recorder's own logged clock (`observed[]`, `clicks[]`) sits
+ * `events.trimBeforeMs` ms earlier in the assembled demo.mp4 than its
+ * logged timestamp, because the file was NOT re-zeroed to the recorder's
+ * own clock start when its leading clapper was trimmed. `in` and `end`
+ * are exempt: they are already defined relative to a beat's own
+ * (already-shifted) master_in, or to the whole edit's master length, and
+ * adding the shift again would double-count it.
+ */
 export function resolveAnyAnchor(spec: string, ctx: AnchorContext): number {
-  if (isEditOnlySpec(spec)) {
+  const name = spec.replace(/[+-]\d+$/, '');
+  if (name === 'in' || name === 'end') {
     return resolveEditAnchor(spec, ctx);
   }
-  return resolveAnchor(spec, ctx.events);
+  if (SOURCE_CLOCK_SHIFT_NAMES.has(name)) {
+    return resolveEditAnchor(spec, ctx) + ctx.events.trimBeforeMs;
+  }
+  return resolveAnchor(spec, ctx.events) + ctx.events.trimBeforeMs;
 }
 
 // --- Focus resolution -----------------------------------------------------
