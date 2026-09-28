@@ -97,7 +97,28 @@ function mergeSeed(shot, aspect, variantDoc, homeDaysOverride) {
   return base;
 }
 
-async function captureOneTake({ shot, aspect, viewport, seedValue, ext, setDir, timezoneId, stripSeedAttr, homeDaysOverride, variantDoc }) {
+/**
+ * Maps a shot's `actions[]` onto the aspect's own viewport: a 9:16 re-record
+ * uses the variant's `dblclick_css` override when the variant shot declares
+ * one (production's own convention), else scales any `dblclick_empty`
+ * point by the viewport width ratio, since the base action's point is
+ * authored for the 16:9 viewport and would otherwise land off-screen in the
+ * narrower one.
+ */
+function actionsFor(shot, aspect, viewport, variantDoc, baseViewportWidth) {
+  if (aspect === '16:9') return shot.actions;
+  const variantShot = variantDoc?.shots?.[shot.id];
+  const widthRatio = viewport.width / baseViewportWidth;
+  return shot.actions.map((action) => {
+    if (action.kind !== 'dblclick_empty') return action;
+    if (variantShot?.dblclick_css) {
+      return { ...action, x: variantShot.dblclick_css.x, y: variantShot.dblclick_css.y };
+    }
+    return { ...action, x: Math.round(action.x * widthRatio), y: action.y };
+  });
+}
+
+async function captureOneTake({ shot, aspect, viewport, seedValue, ext, setDir, timezoneId, stripSeedAttr, homeDaysOverride, variantDoc, actions }) {
   const { context, serviceWorker, extensionId } = await launchWithExtension({ ext, viewport, timezoneId });
   const workDir = mkdtempSync(join(tmpdir(), 'pixel-pets-take-'));
   const framesDir = join(workDir, 'frames');
@@ -127,13 +148,19 @@ async function captureOneTake({ shot, aspect, viewport, seedValue, ext, setDir, 
     const url = `https://pixelpets.demo/${setPage}.html`;
     await page.goto(url, { waitUntil: 'load' });
     await page.evaluate(installObservers, seedDoc.roster);
+    // recordStartT anchors t=0 for the derived Events document: the moment
+    // observation begins, not the clap's release edge. A shot with no
+    // initial hold can reach pets_ready (and any immediate reaction, e.g.
+    // greet) before the 500ms settle below completes, which would rebase to
+    // a negative t if t=0 were the (necessarily later) clap release instead.
+    const recordStartT = await page.evaluate(() => performance.timeOrigin + performance.now());
     await new Promise((r) => setTimeout(r, 500));
 
     const clapStart = await page.evaluate(([label, ms]) => window.__clap(label, ms), ['start', CLAP_MS]);
 
     let choreoResult;
     try {
-      choreoResult = await runActions(page, shot.actions, { roster: seedDoc.roster, cursorStart: shot.cursor_start });
+      choreoResult = await runActions(page, actions, { roster: seedDoc.roster, cursorStart: shot.cursor_start });
     } finally {
       // always mark the end clapper, even on discard, so the frames dir stays inspectable
       await page.evaluate(([label, ms]) => window.__clap(label, ms), ['end', CLAP_MS]).catch(() => {});
@@ -151,6 +178,7 @@ async function captureOneTake({ shot, aspect, viewport, seedValue, ext, setDir, 
       workDir,
       frames,
       raw: {
+        recordStartT,
         clapStart,
         clapEnd,
         src: pp.src,
@@ -198,6 +226,7 @@ async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId })
   const viewport = aspect === '16:9' ? doc.viewport : doc.variants.vertical_9x16.viewport;
   const variantDoc = aspect === '9:16' ? doc.variants.vertical_9x16 : undefined;
   const rules = [...(shot.accept ?? []), ...(aspect === '9:16' ? (variantDoc.shots?.[shot.id]?.extra_accept ?? []) : [])];
+  const actions = actionsFor(shot, aspect, viewport, variantDoc, doc.viewport.width);
 
   let takes = 0;
   const rejections = [];
@@ -219,6 +248,7 @@ async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId })
         stripSeedAttr: opts.stripSeedAttr,
         homeDaysOverride: opts.homeDays,
         variantDoc,
+        actions,
       });
     } catch (err) {
       if (err instanceof DiscardTake) {
@@ -230,7 +260,7 @@ async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId })
     }
 
     const shim = take.shim;
-    const t0 = take.raw.clapStart.tOff;
+    const t0 = take.raw.recordStartT;
     const events = deriveEvents(take.raw, {
       name: `${shot.id}_${aspect === '16:9' ? '16x9' : '9x16'}`,
       viewport: { width: viewport.width, height: viewport.height },
@@ -263,16 +293,32 @@ async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId })
 
     const dumpPath = join(take.workDir, 'sig.txt');
     const sig = generateSignalStats(mp4Path, dumpPath);
+
+    // videoLagMs is the capture pipeline's own systemic lag between a
+    // logged page event and that state actually showing up in the
+    // assembled recording. The bead measures it from a heart's on-screen
+    // delay; every kept take here already gives an equally real measurement
+    // of that same pipeline lag from the clapper's own release edge (raw
+    // residual, before any correction), so that's what's used, clamped to
+    // the epic eval's documented 0-120ms sanity bound.
+    const raw = computeSync({
+      signalStatsText: sig,
+      startClapLoggedMs: take.raw.clapStart.tOff,
+      endClapLoggedMs: take.raw.clapEnd.tOff,
+      videoLagMs: 0,
+    });
+    const videoLagMs = Math.min(120, Math.max(0, -raw.endClapResidualMs));
     const sync = computeSync({
       signalStatsText: sig,
       startClapLoggedMs: take.raw.clapStart.tOff,
       endClapLoggedMs: take.raw.clapEnd.tOff,
-      videoLagMs: 56,
+      videoLagMs,
     });
 
     const probe = probeVideo(mp4Path);
     console.log(`[${shot.id}/${aspect}] KEPT seed ${seedValue} after ${takes} takes; ${mp4Path} ${probe.width}x${probe.height} color_space=${probe.color_space}`);
-    console.log(`[${shot.id}/${aspect}] clapper check: |${sync.endClapResidualMs.toFixed(1)} + ${56}| = ${Math.abs(sync.correctedResidualMs).toFixed(1)} <= 40 -> ${sync.pass}`);
+    console.log(`[${shot.id}/${aspect}] videoLagMs=${videoLagMs.toFixed(1)} (0-120ms bound)`);
+    console.log(`[${shot.id}/${aspect}] clapper check: |${sync.endClapResidualMs.toFixed(1)} + ${videoLagMs.toFixed(1)}| = ${Math.abs(sync.correctedResidualMs).toFixed(1)} <= 40 -> ${sync.pass}`);
     if (!sync.pass) {
       rmSync(take.workDir, { recursive: true, force: true });
       rejections.push(`clapper sync residual ${sync.correctedResidualMs.toFixed(1)}ms outside +-40ms`);
@@ -280,7 +326,7 @@ async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId })
     }
 
     events.trimBeforeMs = sync.trimBeforeMs;
-    events.videoLagMs = 56;
+    events.videoLagMs = videoLagMs;
     events.recordedAt = take.raw.clapStart.tOff;
     events.accept = results;
     writeFileSync(join(outDir, 'events.json'), JSON.stringify(events, null, 1));

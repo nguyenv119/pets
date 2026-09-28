@@ -33,9 +33,17 @@ function debounceOnOff(marks, base, windowMs) {
   return current;
 }
 
-/** Rebases every `t` in a raw capture onto the clap-start release edge (ms, >= 0). */
+/**
+ * Rebases every `t` in a raw capture onto recording-start (ms, >= 0):
+ * `raw.recordStartT` (the moment observation began) when the raw log
+ * carries one, else the clap-start release edge for legacy raw logs that
+ * predate it (fixtures/raw.sample.json). Anchoring on the clap itself would
+ * make an event that happens during the settle before the clap (a shot with
+ * no initial hold can reach pets_ready, and react, before the clap fires)
+ * rebase to a negative t.
+ */
 function rebase(raw) {
-  const t0 = raw.clapStart.tOff;
+  const t0 = raw.recordStartT ?? raw.clapStart.tOff;
   const shift = (t) => t - t0;
   return {
     ...raw,
@@ -184,8 +192,12 @@ export function deriveEvents(raw, context) {
 
   const observedSrc = r.src.map((e) => ({ t: e.t, kind: 'src', pet: e.pet, from: e.from, to: e.to }));
   const observedMouse = r.mouse.map((e) => ({ t: e.t, kind: e.kind, x: e.x, y: e.y }));
+  // 'clap' marks are synthesized separately below from clapStartMs/clapEndMs
+  // (their own {tInsert,tOn,tRemove,tOff} shape has no single `t`, unlike
+  // every other mark); heart_off is internal-only (feeds debounce, never a
+  // schema ObservedKind).
   const observedMarks = r.marks
-    .filter((m) => m.kind !== 'heart_off')
+    .filter((m) => m.kind !== 'heart_off' && m.kind !== 'clap')
     .map((m) => ({ t: m.t, kind: m.kind, ...(m.x !== undefined ? { x: m.x, y: m.y } : {}) }));
 
   const waveGreet = deriveWaveGreet(r.src, r.hover);

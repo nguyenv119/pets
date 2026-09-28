@@ -164,7 +164,13 @@ export async function runActions(page, actions, { roster, cursorStart }) {
         } else if (action.pet && action.state === 'catch') {
           await waitCatch(page, await readyAt(), timeoutMs);
         } else if (action.state === 'ball_on' || action.state === 'heart_on') {
-          await waitMark(page, action.state, await readyAt(), timeoutMs);
+          // heart_on is "measured from the mouseup" (shots.json's own
+          // convention): anchor on the feed's logged mouseup time when one
+          // is known, not on "now" — the heart can appear while a later
+          // action (e.g. unhover) is still executing, before this wait_state
+          // step ever runs, and "now" would then already be past it.
+          const since = action.state === 'heart_on' && feedMouseupMs !== undefined ? feedMouseupMs : await readyAt();
+          await waitMark(page, action.state, since, timeoutMs);
         } else if (action.state === 'greet_start') {
           await waitGreetStart(page, timeoutMs);
         } else if (action.state === 'greet_end') {
