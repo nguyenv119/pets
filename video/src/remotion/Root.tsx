@@ -7,6 +7,7 @@
 import React from 'react';
 import { Composition, continueRender, delayRender, staticFile } from 'remotion';
 import { STAGE_16X9, STAGE_9X16 } from './camera';
+import { ColourProofStill } from './ColourProofStill';
 import { Promo, type PromoProps } from './Promo';
 
 const FPS = 25;
@@ -83,6 +84,26 @@ export const RemotionRoot: React.FC = () => {
         calculateMetadata={async ({ props }) => ({
           durationInFrames: Math.max(1, Math.round((lastMasterOutMs(props as unknown as PromoProps) / 1000) * FPS)),
         })}
+      />
+      {/*
+        fps=60, NOT the shared FPS constant: OffthreadVideo's trimBefore is
+        frames at the COMPOSITION's own fps, not the source media's. The
+        colour-proof clips are built from the 60fps proof recording
+        (frames-lossless-rgb.mkv) — declaring this composition at 25fps
+        made trimBefore=5 seek to 5/25 = 0.2s = source frame 12 (60fps),
+        not frame 5, showing a different (and wildly different-coloured)
+        animation frame. Caught by comparing the rendered still against a
+        direct ffmpeg decode of the same nominal frame index, which matched
+        exactly, isolating the bug to Remotion's own fps-relative seek.
+      */}
+      <Composition
+        id="ColourProof"
+        component={ColourProofStill as unknown as React.FC<Record<string, unknown>>}
+        fps={60}
+        width={1920}
+        height={1080}
+        durationInFrames={1}
+        defaultProps={{ videoSrc: '', trimBeforeFrames: 0 }}
       />
     </>
   );
