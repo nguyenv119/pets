@@ -62,7 +62,15 @@ function loadShotsDoc(shotsPath) {
 
 function seedCandidates(shot) {
   const prng = shot.seed.prng ?? {};
-  if (prng.seed !== null && prng.seed !== undefined) return [prng.seed];
+  if (prng.seed !== null && prng.seed !== undefined) {
+    // A fixed seed only controls game-logic RNG; real capture timing (the
+    // clapper check) is not deterministic even at the same seed, so a
+    // transient timing discard still needs a next attempt to retry into
+    // (bounded by the caller's own SEED_BUDGET loop) rather than exhausting
+    // immediately with nothing left to try.
+    const seed = prng.seed;
+    return { [Symbol.iterator]: () => ({ next: () => ({ value: seed, done: false }) }) };
+  }
   const tried = new Set();
   const candidates = [...(prng.sim_candidates ?? [])];
   let next = 1;
