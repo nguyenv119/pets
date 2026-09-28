@@ -39,6 +39,17 @@ describe('rectsOverlap', () => {
   });
 
   it('reports no overlap when a rect ends exactly at the zone start', () => {
+    /**
+     * Verifies the overlap test's half-open boundary: a rect that ends
+     * exactly where a forbidden zone begins is touching, not crossing.
+     *
+     * This matters because every band/zone check in check-pages.mjs is
+     * built on this test; if a touching edge counted as an overlap, text
+     * that legally sits right above a band would fail the check.
+     *
+     * If this contract breaks, innocent text adjacent to a band or zone
+     * boundary starts false-failing every page that has any.
+     */
     // GIVEN — a rect ending exactly where the zone begins
     // WHEN — checking overlap
     const overlaps = rectsOverlap(270, 286, 286, 302);
@@ -69,6 +80,17 @@ describe('firstFontFamily', () => {
   });
 
   it('returns an empty string for an empty or missing value', () => {
+    /**
+     * Verifies firstFontFamily degrades gracefully on empty input instead
+     * of throwing.
+     *
+     * This matters because getComputedStyle can return an empty
+     * font-family string for an element with no resolved style; the
+     * checker must not crash mid-sweep on that case.
+     *
+     * If this contract breaks, check-pages.mjs throws on a page with any
+     * such element instead of reporting a clean or failed check.
+     */
     // GIVEN — no computed value
     // WHEN — extracting the first family
     const family = firstFontFamily('');
@@ -79,6 +101,17 @@ describe('firstFontFamily', () => {
 
 describe('isFontAllowed', () => {
   it('accepts a family that is in the page\'s allowed list', () => {
+    /**
+     * Verifies the happy path: a font the page actually declares (and
+     * bundles under video/set/fonts) passes the check.
+     *
+     * This matters because isFontAllowed gates every text node on every
+     * page; if a legitimately declared font were rejected, no real page
+     * could ever pass check-pages.mjs.
+     *
+     * If this contract breaks, every set page permanently fails the font
+     * check regardless of what it actually renders.
+     */
     // GIVEN — the review page's allowed fonts
     // WHEN — checking a JetBrains Mono diff line
     const allowed = isFontAllowed('"JetBrains Mono", monospace', ['Inter', 'JetBrains Mono']);
@@ -109,6 +142,16 @@ describe('isFontAllowed', () => {
 
 describe('findBandViolation', () => {
   it('flags ordinary text that crosses the 286-302 band', () => {
+    /**
+     * Verifies the base case: non-exempt text that overlaps the crop-line
+     * band is flagged.
+     *
+     * This matters because the band exists precisely to keep the 2.0x
+     * crop from cutting a line of copy mid-sentence in the final edit.
+     *
+     * If this contract breaks, a real caption/copy violation ships
+     * unnoticed into the recorded takes.
+     */
     // GIVEN — a rect crossing the band, not exempt
     // WHEN — checking for a violation
     const violation = findBandViolation({ top: 280, bottom: 295 }, false);
@@ -139,6 +182,16 @@ describe('findBandViolation', () => {
   });
 
   it('does not flag text entirely above the band', () => {
+    /**
+     * Verifies ordinary, well-clear text is left alone.
+     *
+     * This matters because most text on every set page sits above the
+     * band; if the check were too eager, the false-positive rate would
+     * make the gate useless.
+     *
+     * If this contract breaks, every page fails the band check even with
+     * no real violation, hiding genuine failures in noise.
+     */
     // GIVEN — a rect well above the band
     // WHEN — checking for a violation
     const violation = findBandViolation({ top: 200, bottom: 220 }, false);
@@ -149,6 +202,17 @@ describe('findBandViolation', () => {
 
 describe('findBottomZoneViolation', () => {
   it('flags text in the wide-layout bottom-200 zone', () => {
+    /**
+     * Verifies the base case: non-exempt text inside the wide layout's
+     * bottom-200 zone (y 340-540) is flagged.
+     *
+     * This matters because that zone is where the pets stand and walk;
+     * any text there would visually collide with a pet or get walked
+     * over in the recording.
+     *
+     * If this contract breaks, a real layout regression that puts text
+     * under the pets ships unnoticed.
+     */
     // GIVEN — a rect at y 400 in the wide layout
     // WHEN — checking for a violation
     const violation = findBottomZoneViolation({ top: 400, bottom: 415 }, 'wide', false);
@@ -157,6 +221,19 @@ describe('findBottomZoneViolation', () => {
   });
 
   it('does not flag the exempt inbox end note in the bottom zone', () => {
+    /**
+     * Verifies the single named exception in page_rules: the inbox's
+     * "#end-note" is allowed to sit inside the otherwise-forbidden
+     * bottom-200 zone.
+     *
+     * This matters because storyboard-final.md's inbox design places
+     * "That's everything for today." at y 318-334, inside the zone by
+     * design; without the exemption the inbox page could never pass.
+     *
+     * If this contract breaks, either the inbox permanently fails (the
+     * exemption is missing) or a real stray element hides behind a too-
+     * broad exemption.
+     */
     // GIVEN — the end note's rect, marked exempt
     // WHEN — checking for a violation
     const violation = findBottomZoneViolation({ top: 318, bottom: 334 }, 'wide', true);
@@ -188,6 +265,17 @@ describe('findBottomZoneViolation', () => {
 
 describe('findNarrowTextOverflow', () => {
   it('flags narrow-layout text that extends below y357', () => {
+    /**
+     * Verifies the base case: non-exempt narrow-layout text that runs
+     * past the y 357 crop line is flagged.
+     *
+     * This matters because the 9:16 re-record's 2.0x crop begins at
+     * y 357; text below it would be cut off mid-line in the vertical
+     * cut.
+     *
+     * If this contract breaks, a real narrow-layout overflow ships
+     * unnoticed and shows truncated text in the 9:16 deliverable.
+     */
     // GIVEN — a rect ending at y 360 in the narrow layout
     // WHEN — checking for overflow
     const violation = findNarrowTextOverflow({ top: 340, bottom: 360 }, 'narrow', false);
@@ -196,6 +284,18 @@ describe('findNarrowTextOverflow', () => {
   });
 
   it('never flags the wide layout, regardless of position', () => {
+    /**
+     * Verifies the y357 overflow rule is scoped to the narrow layout
+     * only; the wide layout has no such limit (it uses the band and
+     * bottom-zone rules instead).
+     *
+     * This matters because the wide layout legally has text near the
+     * bottom (e.g. inbox rows); applying the narrow rule there would
+     * false-fail the wide layout on ordinary content.
+     *
+     * If this contract breaks, the wide-layout checks start rejecting
+     * legitimate pages for a rule that was never meant to apply to them.
+     */
     // GIVEN — the same low rect, but in the wide layout
     // WHEN — checking for overflow
     const violation = findNarrowTextOverflow({ top: 340, bottom: 360 }, 'wide', false);
@@ -252,6 +352,17 @@ describe('isInteractiveDescriptor', () => {
   });
 
   it('flags an element with an explicit interactive role', () => {
+    /**
+     * Verifies a non-native interactive widget (a div with role="button")
+     * is caught, not just native tags like <a>/<button>.
+     *
+     * This matters because a hand-rolled control on a set page (e.g. a
+     * div styled to look clickable) is just as disruptive in the
+     * bottom-200 zone as a real <a>, but a tag-only check would miss it.
+     *
+     * If this contract breaks, an ARIA-widget regression in that zone
+     * ships undetected.
+     */
     // GIVEN — a div acting as a button via ARIA
     // WHEN — checking interactivity
     const interactive = isInteractiveDescriptor({ tagName: 'DIV', role: 'button', tabIndex: -1, hasOnClick: false });
@@ -259,8 +370,82 @@ describe('isInteractiveDescriptor', () => {
     expect(interactive).toBe(true);
   });
 
+  it('flags an element with tabindex="0"', () => {
+    /**
+     * Verifies the tabIndex >= 0 branch: an element made keyboard-focusable
+     * (tabindex="0") counts as interactive even with no matching tag or role.
+     *
+     * This matters because a focusable element is reachable and operable
+     * by a keyboard user regardless of its tag, so it is exactly the kind
+     * of stray control the bottom-200 sweep exists to catch.
+     *
+     * If this contract breaks, a keyboard-focusable element planted in the
+     * zone (e.g. a styled div with tabindex="0") passes the checker
+     * undetected.
+     */
+    // GIVEN — a div made focusable via tabindex="0"
+    // WHEN — checking interactivity
+    const interactive = isInteractiveDescriptor({ tagName: 'DIV', role: null, tabIndex: 0, hasOnClick: false });
+    // THEN — it is interactive
+    expect(interactive).toBe(true);
+  });
+
+  it('flags an element with an inline onclick handler', () => {
+    /**
+     * Verifies the hasOnClick branch: an element wired up with an inline
+     * onclick handler counts as interactive even with no matching tag,
+     * role, or tabindex.
+     *
+     * This matters because an onclick handler makes an element clickable
+     * regardless of its semantic tag — a plain div with onclick behaves
+     * like a button to the person watching, even though it isn't one.
+     *
+     * If this contract breaks, a clickable div planted in the bottom-200
+     * zone via onclick passes the checker undetected.
+     */
+    // GIVEN — a div with an inline onclick handler
+    // WHEN — checking interactivity
+    const interactive = isInteractiveDescriptor({ tagName: 'DIV', role: null, tabIndex: -1, hasOnClick: true });
+    // THEN — it is interactive
+    expect(interactive).toBe(true);
+  });
+
   it('does not flag a plain, decorative div', () => {
+    /**
+     * Verifies the negative case combining all four signals: a tag
+     * outside INTERACTIVE_TAGS, no interactive role, a negative tabIndex,
+     * and no onclick handler together produce "not interactive".
+     *
+     * This matters because review's div#dbl-zone is exactly this shape
+     * (an empty, transparent, user-select:none box) and must be able to
+     * sit inside the bottom-200 zone without failing the sweep.
+     *
+     * If this contract breaks, every page with a decorative, non-focusable
+     * div in that zone (dbl-zone included) permanently fails the check.
+     */
     // GIVEN — an inert div (e.g. the empty double-click zone)
+    // WHEN — checking interactivity
+    const interactive = isInteractiveDescriptor({ tagName: 'DIV', role: null, tabIndex: -1, hasOnClick: false });
+    // THEN — it is not interactive
+    expect(interactive).toBe(false);
+  });
+
+  it('does not flag an element at the tabIndex boundary (tabIndex -1)', () => {
+    /**
+     * Verifies the exact boundary of the tabIndex >= 0 branch: a negative
+     * tabIndex (programmatically focusable only, e.g. tabindex="-1") is
+     * NOT flagged, isolating this from the "no signals at all" case above.
+     *
+     * This matters because tabindex="-1" is a common, intentional pattern
+     * for elements that must be focusable via script but never part of
+     * the normal tab order or a filming hazard; treating it the same as
+     * tabindex="0" would false-flag legitimate set-page markup.
+     *
+     * If this contract breaks, the >= 0 comparison silently becomes >,
+     * or the boundary check regresses to > -1, and the checker starts
+     * false-failing pages with tabindex="-1" elements in the zone.
+     */
+    // GIVEN — an element focusable only via script (tabIndex -1), no other signal
     // WHEN — checking interactivity
     const interactive = isInteractiveDescriptor({ tagName: 'DIV', role: null, tabIndex: -1, hasOnClick: false });
     // THEN — it is not interactive

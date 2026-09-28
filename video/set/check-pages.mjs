@@ -104,14 +104,14 @@ async function checkPage(ext, pageSpec, layout, failures) {
     if (routeLog.status404.length > 0) {
       failures.push(`${label}: 404s: ${routeLog.status404.join(', ')}`);
     }
-    // routeSet aborts every non-pixelpets.demo request, which also catches
-    // the extension's own chrome-extension:// sprite/icon loads (expected:
-    // the extension always serves its own bundled assets, route or no
-    // route). Only a THIRD-PARTY host on the page itself — the thing
-    // page_rules and the public-repo grep actually forbid — counts here.
-    const thirdParty = routeLog.unrouted.filter((url) => !url.startsWith('chrome-extension://'));
-    if (thirdParty.length > 0) {
-      failures.push(`${label}: unrouted third-party requests: ${thirdParty.join(', ')}`);
+    // routeSet (video/lib/browser.mjs) lets the extension's own
+    // chrome-extension:// and data: requests through at the routing layer,
+    // so they never reach `route.abort()` and never land in
+    // routeLog.unrouted. Anything that DOES show up here was genuinely
+    // aborted (a third-party host page_rules and the public-repo grep
+    // forbid), so any aborted request is a real failure — no filtering.
+    if (routeLog.unrouted.length > 0) {
+      failures.push(`${label}: unrouted requests: ${routeLog.unrouted.join(', ')}`);
     }
 
     checkFonts(await getFontStatus(page, pageSpec.fonts), label, failures);
@@ -131,17 +131,42 @@ async function checkPage(ext, pageSpec, layout, failures) {
       document.getElementById('pixel-pets-host').style.display = '';
     });
 
-    const petCount = await page.evaluate(
-      () => document.getElementById('pixel-pets-host').shadowRoot.querySelectorAll('#pets-layer img').length,
-    );
+    const petCount = await countLoadedPetImages(page);
     if (petCount !== 2) {
-      failures.push(`${label}: expected 2 pet images in #pixel-pets-host, found ${petCount}`);
+      failures.push(`${label}: expected 2 LOADED pet images in #pixel-pets-host, found ${petCount}`);
     }
 
     await page.screenshot({ path: join(OUT_DIR, `${pageSpec.id}-${layout.name}.png`) });
   } finally {
     await context.close();
   }
+}
+
+// A broken <img> (bad src, aborted request) still exists in the DOM, so a
+// bare querySelectorAll count would pass with every sprite showing as a
+// broken-image icon. `complete && naturalWidth > 0` is the only reliable
+// "actually decoded a real image" signal; wait for it with a bounded
+// timeout instead of racing the pets' own attach animation.
+async function countLoadedPetImages(page) {
+  try {
+    await page.waitForFunction(
+      () => {
+        const host = document.getElementById('pixel-pets-host');
+        const imgs = host ? [...host.shadowRoot.querySelectorAll('#pets-layer img')] : [];
+        return imgs.length > 0 && imgs.every((img) => img.complete && img.naturalWidth > 0);
+      },
+      { timeout: 5000 },
+    );
+  } catch {
+    // Timed out waiting for every image to load — fall through and count
+    // however many actually loaded, so the caller reports the real number.
+  }
+
+  return page.evaluate(() => {
+    const host = document.getElementById('pixel-pets-host');
+    const imgs = host ? [...host.shadowRoot.querySelectorAll('#pets-layer img')] : [];
+    return imgs.filter((img) => img.complete && img.naturalWidth > 0).length;
+  });
 }
 
 async function getFontStatus(page, families) {
