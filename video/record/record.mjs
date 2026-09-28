@@ -20,7 +20,8 @@ import { DiscardTake, runActions } from './choreo.mjs';
 import { deriveEvents } from './derive.mjs';
 import { installObservers } from './observe.js';
 import { recordPopupTake } from './popup.mjs';
-import { computeSync } from './sync.mjs';
+import { computeSync, HEART_MASK_FILTER, measureVideoLagFromHeart } from './sync.mjs';
+import { fallbackVideoLagMs, keptHeartLagsMs } from './video-lag.mjs';
 
 const VIDEO_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
 const CACHE_TAKES_DIR = join(VIDEO_DIR, '.cache', 'takes');
@@ -295,20 +296,27 @@ async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId })
     const dumpPath = join(take.workDir, 'sig.txt');
     const sig = generateSignalStats(mp4Path, dumpPath);
 
-    // videoLagMs is the capture pipeline's own systemic lag between a
-    // logged page event and that state actually showing up in the
-    // assembled recording. The bead measures it from a heart's on-screen
-    // delay; every kept take here already gives an equally real measurement
-    // of that same pipeline lag from the clapper's own release edge (raw
-    // residual, before any correction), so that's what's used, clamped to
-    // the epic eval's documented 0-120ms sanity bound.
-    const raw = computeSync({
-      signalStatsText: sig,
-      startClapLoggedMs: take.raw.clapStart.tOff,
-      endClapLoggedMs: take.raw.clapEnd.tOff,
-      videoLagMs: 0,
-    });
-    const videoLagMs = Math.min(120, Math.max(0, -raw.endClapResidualMs));
+    // videoLagMs (bead step 9): the gap between a logged catch/eat event and
+    // the first video frame that actually shows the heart it produced,
+    // measured for real over this take's own assembled mp4 (not borrowed).
+    const heartAnchor = events.observed.find((e) => e.kind === 'eat') ?? events.observed.find((e) => e.kind === 'catch');
+    let videoLagMs;
+    let videoLagSource;
+    let measuredFromHeart = false;
+    if (heartAnchor) {
+      const heartDumpPath = join(take.workDir, 'heart.txt');
+      const heartSig = generateSignalStats(mp4Path, heartDumpPath, HEART_MASK_FILTER);
+      const measured = measureVideoLagFromHeart({ heartMaskSignalStatsText: heartSig, sinceMs: heartAnchor.t });
+      if (measured !== null) {
+        videoLagMs = measured;
+        videoLagSource = `measured from the heart after ${heartAnchor.kind}`;
+        measuredFromHeart = true;
+      }
+    }
+    if (videoLagMs === undefined) {
+      ({ videoLagMs, source: videoLagSource } = fallbackVideoLagMs());
+    }
+
     const sync = computeSync({
       signalStatsText: sig,
       startClapLoggedMs: take.raw.clapStart.tOff,
@@ -318,13 +326,15 @@ async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId })
 
     const probe = probeVideo(mp4Path);
     console.log(`[${shot.id}/${aspect}] KEPT seed ${seedValue} after ${takes} takes; ${mp4Path} ${probe.width}x${probe.height} color_space=${probe.color_space}`);
-    console.log(`[${shot.id}/${aspect}] videoLagMs=${videoLagMs.toFixed(1)} (0-120ms bound)`);
+    console.log(`[${shot.id}/${aspect}] videoLagMs=${videoLagMs.toFixed(1)} (${videoLagSource}; epic eval bound 0-120ms)`);
     console.log(`[${shot.id}/${aspect}] clapper check: |${sync.endClapResidualMs.toFixed(1)} + ${videoLagMs.toFixed(1)}| = ${Math.abs(sync.correctedResidualMs).toFixed(1)} <= 40 -> ${sync.pass}`);
     if (!sync.pass) {
       rmSync(take.workDir, { recursive: true, force: true });
       rejections.push(`clapper sync residual ${sync.correctedResidualMs.toFixed(1)}ms outside +-40ms`);
       continue;
     }
+
+    if (measuredFromHeart) keptHeartLagsMs.push(videoLagMs);
 
     events.trimBeforeMs = sync.trimBeforeMs;
     events.videoLagMs = videoLagMs;

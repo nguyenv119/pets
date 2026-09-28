@@ -69,11 +69,11 @@ export function assembleFrames({ frames, outPath, fps = 25, workDir }) {
  * plus its `lavfi.signalstats.*` lines), matching proof/analyze.mjs's
  * proven command.
  */
-export function generateSignalStats(mp4Path, dumpPath) {
+export function generateSignalStats(mp4Path, dumpPath, filter = 'signalstats') {
   execFileSync('ffmpeg', [
     '-nostdin', '-v', 'error', '-y',
     '-i', mp4Path,
-    '-vf', `signalstats,metadata=print:file=${dumpPath}`,
+    '-vf', `${filter},metadata=print:file=${dumpPath}`,
     '-an', '-f', 'null', '-',
   ]);
   return readFileSync(dumpPath, 'utf-8');

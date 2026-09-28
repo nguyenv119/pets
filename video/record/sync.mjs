@@ -7,8 +7,9 @@
 
 const SATMIN_THRESHOLD = 60;
 const RESIDUAL_TOLERANCE_MS = 40;
+const HEART_YMAX_THRESHOLD = 30; // a masked all-black frame reads Y=16 (tv-range black); a visible heart pixel reads Y~63+
 
-/** Parses `ffmpeg -f lavfi -i "movie=...,signalstats" -f ... -` metadata output into one row per frame. */
+/** Parses `ffmpeg -f lavfi -i "movie=...,signalstats" -f ... -` metadata output into one row per frame (SATMIN and YMAX, the two metrics this module reads). */
 export function parseSignalStats(text) {
   const frames = [];
   let current = null;
@@ -16,11 +17,13 @@ export function parseSignalStats(text) {
     const header = /^frame:(\d+)\s+pts:(\d+)\s+pts_time:([\d.]+)/.exec(line);
     if (header) {
       if (current) frames.push(current);
-      current = { n: Number(header[1]), t: Number(header[3]), satmin: undefined };
+      current = { n: Number(header[1]), t: Number(header[3]), satmin: undefined, ymax: undefined };
       continue;
     }
     const satmin = /lavfi\.signalstats\.SATMIN=([\d.]+)/.exec(line);
     if (satmin && current) current.satmin = Number(satmin[1]);
+    const ymax = /lavfi\.signalstats\.YMAX=([\d.]+)/.exec(line);
+    if (ymax && current) current.ymax = Number(ymax[1]);
   }
   if (current) frames.push(current);
   return frames;
@@ -49,6 +52,43 @@ export function findMagentaRuns(frames, threshold = SATMIN_THRESHOLD) {
     runs.push({ startT: frames[runStart].t, endT: frames[frames.length - 1].t, releaseT: frames[frames.length - 1].t });
   }
   return runs;
+}
+
+/**
+ * The ffmpeg filter chain that masks every frame down to only its
+ * heart-coloured pixels (the same threshold as record/observe.js's canvas
+ * scan: r>180, g<70, b<90), full red where matched and black everywhere
+ * else, so signalstats' YMAX becomes a clean per-frame "heart visible"
+ * signal (~16 = no match, tv-range black; ~63+ = a match). Exported so
+ * record.mjs/popup.mjs can build the exact ffmpeg command.
+ */
+export const HEART_MASK_FILTER =
+  "geq=r='if(gt(r(X\\,Y)\\,180)*lt(g(X\\,Y)\\,70)*lt(b(X\\,Y)\\,90)\\,255\\,0)':g=0:b=0,signalstats";
+
+/**
+ * Finds the first frame at or after `sinceMs` whose masked YMAX crosses the
+ * heart threshold — the first frame, after a logged catch/eat, that
+ * actually shows the heart on screen.
+ */
+export function findFirstHeartFrame(frames, sinceMs, threshold = HEART_YMAX_THRESHOLD) {
+  const sinceS = sinceMs / 1000;
+  const hit = frames.find((f) => f.t >= sinceS && f.ymax >= threshold);
+  return hit ? hit.t * 1000 : null;
+}
+
+/**
+ * Measures videoLagMs (bead step 9): the gap between a logged catch/eat
+ * event and the first video frame that actually shows the heart it
+ * produced. `heartMaskSignalStatsText` is ffmpeg signalstats output over
+ * HEART_MASK_FILTER; `sinceMs` is the logged catch/eat event's t (Events
+ * timeline, ms). Returns null if no heart frame is found after `sinceMs`
+ * (a heart-less take, or a take whose heart never rendered).
+ */
+export function measureVideoLagFromHeart({ heartMaskSignalStatsText, sinceMs }) {
+  const frames = parseSignalStats(heartMaskSignalStatsText);
+  const heartFrameMs = findFirstHeartFrame(frames, sinceMs);
+  if (heartFrameMs === null) return null;
+  return heartFrameMs - sinceMs;
 }
 
 /**

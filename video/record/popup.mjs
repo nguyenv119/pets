@@ -11,6 +11,7 @@ import { launchWithExtension, logPopupRects, openPopup, seedStorage } from '../l
 import { evaluateRules } from './accept.mjs';
 import { assembleFrames, generateSignalStats, probeVideo } from './assemble.mjs';
 import { computeSync } from './sync.mjs';
+import { fallbackVideoLagMs } from './video-lag.mjs';
 
 const CLAP_MS = 160;
 const TAKE_BUDGET = 5; // no seed search; a small retry budget only for transient CDP/layout timing
@@ -356,13 +357,14 @@ export async function recordPopupTake({ shot, doc, ext, opts, runId, buildDir })
 
     const dumpPath = join(take.workDir, 'sig.txt');
     const sig = generateSignalStats(mp4Path, dumpPath);
-    const rawSync = computeSync({ signalStatsText: sig, startClapLoggedMs: take.clapStart.tOff, endClapLoggedMs: take.clapEnd.tOff, videoLagMs: 0 });
-    const videoLagMs = Math.min(120, Math.max(0, -rawSync.endClapResidualMs));
+    // s2b_shelter has no heart (bead step 9): borrow the fallback (median of
+    // this run's heart-measured kept shots, else the proof's own value).
+    const { videoLagMs, source: videoLagSource } = fallbackVideoLagMs();
     const sync = computeSync({ signalStatsText: sig, startClapLoggedMs: take.clapStart.tOff, endClapLoggedMs: take.clapEnd.tOff, videoLagMs });
 
     const probe = probeVideo(mp4Path);
     console.log(`[${shot.id}] KEPT attempt ${attempt}; ${mp4Path} ${probe.width}x${probe.height} color_space=${probe.color_space}`);
-    console.log(`[${shot.id}] videoLagMs=${videoLagMs.toFixed(1)} borrowed for the clapper check (0-120ms bound; no heart in this take)`);
+    console.log(`[${shot.id}] videoLagMs=${videoLagMs.toFixed(1)} (${videoLagSource}; epic eval bound 0-120ms)`);
     console.log(`[${shot.id}] clapper check: |${sync.endClapResidualMs.toFixed(1)} + ${videoLagMs.toFixed(1)}| = ${Math.abs(sync.correctedResidualMs).toFixed(1)} <= 40 -> ${sync.pass}`);
     if (!sync.pass) {
       rmSync(take.workDir, { recursive: true, force: true });
