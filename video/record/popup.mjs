@@ -355,6 +355,20 @@ export async function recordPopupTake({ shot, doc, ext, opts, runId, buildDir })
     const mp4Path = join(outDir, 'demo.mp4');
     assembleFrames({ frames: take.frames, outPath: mp4Path, fps: doc.fps ?? 25, workDir: take.workDir });
 
+    // See record.mjs's matching check: a screencast frame can arrive at the
+    // wrong device-pixel size under heavy system load.
+    const dpr = shot.viewport.device_scale_factor ?? 2;
+    const expectedWidth = shot.viewport.width * dpr;
+    const expectedHeight = shot.viewport.height * dpr;
+    const earlyProbe = probeVideo(mp4Path);
+    if (earlyProbe.width !== expectedWidth || earlyProbe.height !== expectedHeight) {
+      rmSync(take.workDir, { recursive: true, force: true });
+      const detail = `assembled at ${earlyProbe.width}x${earlyProbe.height}, expected ${expectedWidth}x${expectedHeight}`;
+      rejections.push(detail);
+      console.log(`[${shot.id}] attempt ${attempt} discarded: ${detail}`);
+      continue;
+    }
+
     const dumpPath = join(take.workDir, 'sig.txt');
     const sig = generateSignalStats(mp4Path, dumpPath);
     // s2b_shelter has no heart (bead step 9): borrow the fallback (median of
@@ -362,7 +376,7 @@ export async function recordPopupTake({ shot, doc, ext, opts, runId, buildDir })
     const { videoLagMs, source: videoLagSource } = fallbackVideoLagMs();
     const sync = computeSync({ signalStatsText: sig, startClapLoggedMs: take.clapStart.tOff, endClapLoggedMs: take.clapEnd.tOff, videoLagMs });
 
-    const probe = probeVideo(mp4Path);
+    const probe = earlyProbe;
     console.log(`[${shot.id}] KEPT attempt ${attempt}; ${mp4Path} ${probe.width}x${probe.height} color_space=${probe.color_space}`);
     console.log(`[${shot.id}] videoLagMs=${videoLagMs.toFixed(1)} (${videoLagSource}; epic eval bound 0-120ms)`);
     console.log(`[${shot.id}] clapper check: |${sync.endClapResidualMs.toFixed(1)} + ${videoLagMs.toFixed(1)}| = ${Math.abs(sync.correctedResidualMs).toFixed(1)} <= 40 -> ${sync.pass}`);

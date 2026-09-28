@@ -301,6 +301,24 @@ async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId })
     const mp4Path = join(outDir, 'demo.mp4');
     assembleFrames({ frames: take.frames, outPath: mp4Path, fps: doc.fps ?? 25, workDir: take.workDir });
 
+    // A screencast frame occasionally arrives at the wrong device-pixel size
+    // under heavy system load (observed live: 1920x906, 1080x1286 instead of
+    // 1920x1080/1080x1460) — a real, if rare, CDP/compositor race, not a
+    // logic bug. Caught here, before the expensive signalstats/heart-mask
+    // passes, so a malformed take fails fast rather than shipping the wrong
+    // resolution (acceptance 1 requires "the right size").
+    const dpr = viewport.device_scale_factor ?? 2;
+    const expectedWidth = viewport.width * dpr;
+    const expectedHeight = viewport.height * dpr;
+    const earlyProbe = probeVideo(mp4Path);
+    if (earlyProbe.width !== expectedWidth || earlyProbe.height !== expectedHeight) {
+      rmSync(take.workDir, { recursive: true, force: true });
+      const detail = `assembled at ${earlyProbe.width}x${earlyProbe.height}, expected ${expectedWidth}x${expectedHeight}`;
+      rejections.push(detail);
+      console.log(`[${shot.id}/${aspect}] seed ${seedValue} discarded: ${detail}`);
+      continue;
+    }
+
     const dumpPath = join(take.workDir, 'sig.txt');
     const sig = generateSignalStats(mp4Path, dumpPath);
 
@@ -347,7 +365,7 @@ async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId })
       videoLagMs,
     });
 
-    const probe = probeVideo(mp4Path);
+    const probe = earlyProbe;
     console.log(`[${shot.id}/${aspect}] KEPT seed ${seedValue} after ${takes} takes; ${mp4Path} ${probe.width}x${probe.height} color_space=${probe.color_space}`);
     console.log(`[${shot.id}/${aspect}] videoLagMs=${videoLagMs.toFixed(1)} (${videoLagSource}; epic eval bound 0-120ms)`);
     console.log(`[${shot.id}/${aspect}] clapper check: |${sync.endClapResidualMs.toFixed(1)} + ${videoLagMs.toFixed(1)}| = ${Math.abs(sync.correctedResidualMs).toFixed(1)} <= 40 -> ${sync.pass}`);
