@@ -82,14 +82,17 @@ export async function launchWithExtension({ ext, viewport, timezoneId } = {}) {
 /**
  * Serves `root` at https://pixelpets.demo/** with explicit content types,
  * filling only EXISTING data-pp-seed/data-pp-hour attributes on the served
- * HTML's root element. Aborts every other host. Returns a log of 404s and
- * unrouted (aborted) requests for the caller to assert against.
+ * HTML's root element. The extension's own chrome-extension:// and data:
+ * loads (pet sprites) pass through; every other host is aborted. Returns a
+ * log of 404s and unrouted (aborted) requests for the caller to assert
+ * against.
  */
 export async function routeSet(context, root, { seed, hour } = {}) {
   const log = { status404: [], unrouted: [] };
 
   await context.route('**/*', async (route) => {
     const url = new URL(route.request().url());
+    if (url.protocol === 'chrome-extension:' || url.protocol === 'data:') return route.continue();
     if (url.hostname !== 'pixelpets.demo') {
       log.unrouted.push(url.href);
       return route.abort();
