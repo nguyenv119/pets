@@ -39,9 +39,12 @@ export interface CaptionPillProps {
 }
 
 export const CaptionPill: React.FC<CaptionPillProps> = ({ text, fromFrame, toFrame, fontSizePx, style }) => {
+  // Every hook runs unconditionally, before the visibility early-return —
+  // an early return ahead of a hook call varies the hook count between
+  // renders (React error #310), which this component originally had.
   const frame = useCurrentFrame();
-  if (frame < fromFrame || frame > toFrame) return null;
   const { fps } = useVideoConfig();
+  if (frame < fromFrame || frame > toFrame) return null;
   const springFrames = Math.round(0.18 * fps);
   const scale = pillSpringScale(frame - fromFrame, springFrames);
   const exitFrames = Math.round(0.12 * fps);
