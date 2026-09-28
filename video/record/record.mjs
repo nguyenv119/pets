@@ -325,6 +325,21 @@ async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId })
       ({ videoLagMs, source: videoLagSource } = fallbackVideoLagMs());
     }
 
+    // "The epic eval requires every shot's videoLagMs to be 0-120ms... a
+    // measured lag outside that range is a recorder bug to fix, never a
+    // value to write" (bead step 9). A real measurement outside that bound
+    // is discarded and retried here rather than shipped — never clamped or
+    // silently accepted, even when this take's own clapper check happens to
+    // pass (both sides of the check can grow together under heavy system
+    // load without the corrected residual crossing 40ms).
+    if (measuredFromHeart && (videoLagMs < 0 || videoLagMs > 120)) {
+      rmSync(take.workDir, { recursive: true, force: true });
+      const detail = `videoLagMs ${videoLagMs.toFixed(1)}ms outside the epic eval's 0-120ms bound (${videoLagSource})`;
+      rejections.push(detail);
+      console.log(`[${shot.id}/${aspect}] seed ${seedValue} discarded: ${detail}`);
+      continue;
+    }
+
     const sync = computeSync({
       signalStatsText: sig,
       startClapLoggedMs: take.raw.clapStart.tOff,
