@@ -1,0 +1,173 @@
+body {
+  background: #ffffff;
+  color: #2b2a27;
+}
+
+.titlebar {
+  position: absolute;
+  top: 48px;
+  left: 0;
+  right: 0;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0 20px;
+  font-size: 13px;
+}
+
+.titlebar .filename {
+  font-weight: 600;
+}
+
+.titlebar .menu {
+  display: flex;
+  gap: 16px;
+  color: #6b6a63;
+}
+
+.toolbar {
+  position: absolute;
+  top: 80px;
+  left: 0;
+  right: 0;
+  height: 24px;
+  display: flex;
+  gap: 10px;
+  padding: 0 20px;
+  align-items: center;
+}
+
+.toolbar span {
+  width: 16px;
+  height: 14px;
+  background: #e2e0d6;
+  border-radius: 2px;
+}
+
+.formula-bar {
+  position: absolute;
+  top: 104px;
+  left: 0;
+  right: 0;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  font-size: 11px;
+  color: #6b6a63;
+  border-bottom: 1px solid #e7e4dc;
+}
+
+.tabs {
+  position: absolute;
+  top: 126px;
+  left: 0;
+  right: 0;
+  height: 20px;
+  display: flex;
+  gap: 18px;
+  padding: 0 20px;
+  align-items: center;
+  font-size: 11px;
+  color: #8a8678;
+}
+
+.tabs .active {
+  color: #2b2a27;
+  font-weight: 600;
+}
+
+.grid {
+  position: absolute;
+  top: 146px;
+  left: 0;
+  width: 960px;
+  height: 138px;
+}
+
+.grid .col-headers {
+  height: 18px;
+  display: flex;
+  font-size: 10px;
+  color: #8a8678;
+}
+
+.grid .col-headers span {
+  width: 150px;
+  text-align: center;
+  border-bottom: 1px solid #e7e4dc;
+}
+
+.grid .col-headers span:first-child {
+  width: 40px;
+}
+
+.grid .row {
+  height: 20px;
+  display: flex;
+  font-size: 11px;
+}
+
+.grid .row .rownum {
+  width: 40px;
+  text-align: center;
+  color: #8a8678;
+  border-right: 1px solid #eef0f2;
+}
+
+.grid .row .cell {
+  width: 150px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #f2f0e8;
+}
+
+.grid .row.selected .cell.total {
+  outline: 2px solid #4a8a4f;
+  outline-offset: -2px;
+}
+
+.grid .empty-rows {
+  height: 20px;
+}
+
+.grid .empty-rows .rownum {
+  width: 40px;
+  text-align: center;
+  color: #c9c6ba;
+  border-right: 1px solid #eef0f2;
+}
+
+.grid .empty-rows .cell {
+  flex: 1;
+  border-bottom: 1px solid #eef0f2;
+}
+
+@media (max-width: 599px) {
+  .titlebar {
+    top: 20px;
+    height: 28px;
+  }
+
+  .toolbar,
+  .formula-bar,
+  .tabs {
+    display: none;
+  }
+
+  .grid {
+    top: 60px;
+    width: 540px;
+    height: 260px;
+  }
+
+  .grid .col-headers span {
+    width: 84px;
+  }
+
+  .grid .row .cell {
+    width: 84px;
+  }
+}
