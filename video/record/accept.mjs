@@ -508,3 +508,65 @@ export function familyNameForRule(rule) {
 export function evaluateRules(rules, events, ctx = {}) {
   return rules.map((rule) => evaluateRule(rule, events, ctx));
 }
+
+// -- 9:16 base-rule replacement ----------------------------------------
+//
+// An extra_accept rule whose text says it replaces a base limit ("a catch
+// by Rex within 2800 ms of the dblclick, replacing the 16:9 limit of 2600
+// ms...") is judged at the variant's own value but reported against the
+// BASE rule's verbatim text (bead step 8): the epic eval matches shots.json
+// rule text exactly, and the base text is what shots.json's accept[] holds.
+
+const RE_REPLACES_MARKER = /replacing the 16:9 limit of (\d+) ms/;
+
+/** Maps an extra_accept family to the base family whose limit it replaces. */
+const REPLACES_FAMILY = {
+  evalCatchReplaceLimit: 'evalCatchAfterDblclick',
+};
+
+/**
+ * Merges a shot's base `accept[]` with a 9:16 variant's `extra_accept[]`:
+ * a replacing extra rule substitutes for its matching base rule (evaluated
+ * at the extra rule's own value, reported under the base rule's text); every
+ * other extra rule is appended as its own entry. Returns
+ * `[{ reportText, evalText }]` — `reportText` is what AcceptResult.rule
+ * should read, `evalText` is what evaluateRule should actually check.
+ */
+export function mergeAcceptRules(baseRules, extraRules) {
+  const merged = baseRules.map((rule) => ({ reportText: rule, evalText: rule, replaced: false }));
+
+  for (const extra of extraRules) {
+    const markerMatch = extra.match(RE_REPLACES_MARKER);
+    if (!markerMatch) {
+      merged.push({ reportText: extra, evalText: extra, replaced: false });
+      continue;
+    }
+
+    const oldLimit = markerMatch[1];
+    const extraFamily = familyNameForRule(extra);
+    const baseFamily = REPLACES_FAMILY[extraFamily];
+    const idx = merged.findIndex(
+      (entry) => !entry.replaced && familyNameForRule(entry.evalText) === baseFamily && entry.evalText.includes(`within ${oldLimit} ms of the dblclick`),
+    );
+
+    if (idx === -1) {
+      throw new Error(`mergeAcceptRules: no base rule found for the extra_accept replacement: "${extra}"`);
+    }
+    merged[idx] = { reportText: merged[idx].evalText, evalText: extra, replaced: true };
+  }
+
+  return merged;
+}
+
+/**
+ * Evaluates a shot's base `accept[]` merged with a 9:16 variant's
+ * `extra_accept[]` (see mergeAcceptRules): a replacement's AcceptResult
+ * carries the base rule's verbatim text and a detail noting the swap.
+ */
+export function evaluateShotRules(baseRules, extraRules, events, ctx = {}) {
+  return mergeAcceptRules(baseRules, extraRules).map(({ reportText, evalText, replaced }) => {
+    const result = evaluateRule(evalText, events, ctx);
+    if (!replaced) return result;
+    return { ...result, rule: reportText, detail: `replaced in 9:16 by extra_accept${result.detail ? `; ${result.detail}` : ''}` };
+  });
+}

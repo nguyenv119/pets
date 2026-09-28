@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { evaluateRule, familyNameForRule, RULE_FAMILIES } from './accept.mjs';
+import { evaluateRule, evaluateShotRules, familyNameForRule, mergeAcceptRules, RULE_FAMILIES } from './accept.mjs';
 
 const FAMILY_REGEX_BY_NAME = Object.fromEntries(RULE_FAMILIES.map(([regex, evaluator]) => [evaluator.name, regex]));
 
@@ -238,4 +238,80 @@ describe('accept.mjs rule coverage', () => {
       expect(result.pass, 'predicate is always-true: it passed a log edited to violate it').toBe(false);
     });
   }
+});
+
+describe('9:16 base-rule replacement (mergeAcceptRules / evaluateShotRules)', () => {
+  const s2 = shots.shots.find((s) => s.id === 's2_review');
+  const variant = shots.variants.vertical_9x16.shots.s2_review;
+  const baseCatchRule = 'a catch by Rex (conventions.states.catch) within 2600 ms of the dblclick';
+  const replacingExtraRule = 'a catch by Rex within 2800 ms of the dblclick, replacing the 16:9 limit of 2600 ms (the 730 px page gives a 1.34 s fall)';
+
+  it('substitutes the replacing extra rule for its matching base rule, keyed by the base text', () => {
+    // GIVEN — s2_review's real base accept[] and its 9:16 extra_accept[] (both copied from shots.json)
+    // WHEN — they are merged
+    const merged = mergeAcceptRules(s2.accept, variant.extra_accept);
+
+    // THEN — exactly one merged entry reports under the base catch rule's verbatim text but evaluates the extra rule's 2800ms limit
+    const entry = merged.find((e) => e.reportText === baseCatchRule);
+    expect(entry).toBeDefined();
+    expect(entry.evalText).toBe(replacingExtraRule);
+    expect(entry.replaced).toBe(true);
+    // AND the base rule's own text does not additionally appear as its own separately-evaluated entry
+    expect(merged.filter((e) => e.evalText === baseCatchRule)).toHaveLength(0);
+  });
+
+  it('judges a replaced rule at the extra value: a catch inside 2800ms but outside 2600ms passes, reported under the base text', () => {
+    // GIVEN — a catch 2700ms after the dblclick (fails the base 16:9 limit of 2600ms, passes the 9:16 limit of 2800ms)
+    const events = {
+      roster: [{ id: 'rex', name: 'Rex', type: 'dog', color: 'brown' }],
+      observed: [{ t: 0, kind: 'dblclick' }, { t: 2700, kind: 'catch', pet: 'rex' }],
+      tracks: [],
+    };
+
+    // WHEN — the shot's rules are evaluated with the 9:16 extra_accept merged in
+    const results = evaluateShotRules(s2.accept, variant.extra_accept, events);
+
+    // THEN — the catch rule passes (judged at 2800ms) and is reported under the BASE rule's verbatim text, with a detail noting the swap
+    const catchResult = results.find((r) => r.rule === baseCatchRule);
+    expect(catchResult).toBeDefined();
+    expect(catchResult.pass).toBe(true);
+    expect(catchResult.detail).toMatch(/^replaced in 9:16 by extra_accept/);
+  });
+
+  it('still fails a replaced rule when the catch misses even the wider 9:16 limit', () => {
+    // GIVEN — a catch 3000ms after the dblclick (outside both the 2600ms base and the 2800ms 9:16 limit)
+    const events = {
+      roster: [{ id: 'rex', name: 'Rex', type: 'dog', color: 'brown' }],
+      observed: [{ t: 0, kind: 'dblclick' }, { t: 3000, kind: 'catch', pet: 'rex' }],
+      tracks: [],
+    };
+
+    // WHEN — the shot's rules are evaluated with the 9:16 extra_accept merged in
+    const results = evaluateShotRules(s2.accept, variant.extra_accept, events);
+
+    // THEN — the (replaced) catch rule fails
+    const catchResult = results.find((r) => r.rule === baseCatchRule);
+    expect(catchResult.pass).toBe(false);
+  });
+
+  it('keeps a non-replacing extra_accept rule as its own separate entry, reported under its own text', () => {
+    // GIVEN — s2_review's extra_accept list, which also has non-replacing rules (e.g. the box right-edge margin)
+    // WHEN — merged
+    const merged = mergeAcceptRules(s2.accept, variant.extra_accept);
+
+    // THEN — a non-replacing extra rule appears verbatim, evaluated as itself
+    const edgeRule = variant.extra_accept.find((r) => r.includes('right edge stays'));
+    const entry = merged.find((e) => e.reportText === edgeRule);
+    expect(entry).toBeDefined();
+    expect(entry.evalText).toBe(edgeRule);
+    expect(entry.replaced).toBe(false);
+  });
+
+  it('throws when a replacing extra rule names a limit no base rule has', () => {
+    // GIVEN — a replacing rule whose "16:9 limit" doesn't match any base rule's own limit (an authoring mismatch)
+    const badExtra = 'a catch by Rex within 2800 ms of the dblclick, replacing the 16:9 limit of 9999 ms (bogus)';
+
+    // WHEN / THEN — mergeAcceptRules refuses to guess which base rule it meant
+    expect(() => mergeAcceptRules(s2.accept, [badExtra])).toThrow();
+  });
 });
