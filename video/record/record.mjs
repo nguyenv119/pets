@@ -19,6 +19,7 @@ import { assembleFrames, generateSignalStats, probeVideo } from './assemble.mjs'
 import { DiscardTake, runActions } from './choreo.mjs';
 import { deriveEvents } from './derive.mjs';
 import { installObservers } from './observe.js';
+import { recordPopupTake } from './popup.mjs';
 import { computeSync } from './sync.mjs';
 
 const VIDEO_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -355,7 +356,7 @@ async function main() {
 
   for (const shot of shots) {
     if (shot.page === 'popup') {
-      console.log(`[${shot.id}] skipped: popup take not implemented by this recorder run`);
+      await recordPopupTake({ shot, doc, ext, opts, runId, buildDir: BUILD_DIR });
       continue;
     }
     await recordShotAspect({ shot, aspect: '16:9', doc, setDir, ext, opts, runId });
