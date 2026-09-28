@@ -158,3 +158,9 @@ dolt/
 # macOS Finder metadata / packaged extension zips — never ship in the repo
 .DS_Store
 *.zip
+
+# video/ pipeline: generated output, never committed (video/ is otherwise tracked)
+video/out/
+video/build/
+video/.cache/
+video/recordings/

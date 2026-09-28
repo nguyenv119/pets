@@ -1,0 +1,149 @@
+{
+ "version": "fixture-sample",
+ "title": "video/ scaffold fixtures",
+ "edit_order": ["sample_hover_treat_catch", "sample_greet_night"],
+ "viewport": { "width": 960, "height": 540, "device_scale_factor": 2 },
+ "fps": 25,
+ "set_pages": [
+  { "id": "article", "title": "fixture set page", "url": "https://pixelpets.demo/article.html" }
+ ],
+ "shots": [
+  {
+   "id": "sample_hover_treat_catch",
+   "page": "article",
+   "edit_position": 1,
+   "seed": {
+    "roster": [
+     { "id": "rex", "name": "Rex", "type": "dog", "color": "brown" },
+     { "id": "bao", "name": "Bao", "type": "panda", "color": "black", "hidden": true }
+    ],
+    "positions": { "rex": { "x": 488 } },
+    "treats": 10,
+    "theme": "light",
+    "hour": 14,
+    "prng": { "seed": null },
+    "visible": true,
+    "homeAnchorDaysAgo": 3
+   },
+   "cursor_start": { "x": 950, "y": 60, "visible": false },
+   "accept": [
+    "data-pp-shim reads 'v3;seed=<seed>' before the first action",
+    "the swipe src is observed within 600 ms of the hover entry",
+    "heart_on arrives within 400 ms of the mouseup, and exactly one feed heart appears in the take (treats go from 10 to 9 once)",
+    "ball_on arrives within 800 ms of the dblclick",
+    "Rex shows run within 400 ms of the dblclick",
+    "a catch by Rex (conventions.states.catch) within 2600 ms of the dblclick"
+   ],
+   "actions": [
+    { "kind": "wait_state", "state": "pets_ready", "timeout_ms": 5000 },
+    { "kind": "assert_shim" },
+    { "kind": "hover_pet", "pet": "rex", "duration_ms": 250 },
+    { "kind": "wait_state", "pet": "rex", "state": "swipe", "timeout_ms": 600 },
+    { "kind": "click_pet", "pet": "rex" },
+    { "kind": "wait_state", "state": "heart_on", "timeout_ms": 400 },
+    { "kind": "dblclick_empty", "x": 800, "y": 410, "target": "#dbl-zone" },
+    { "kind": "wait_state", "state": "ball_on", "timeout_ms": 800 },
+    { "kind": "wait_state", "pet": "rex", "state": "catch", "timeout_ms": 4000 }
+   ],
+   "beats": [
+    {
+     "name": "b_hover",
+     "in": "pets_ready-160",
+     "caption": "hover: he waves.",
+     "caption_at": "src:rex:swipe",
+     "caption_out": "heart_on-100",
+     "camera": { "zoom": 2.0, "focus": "pet:rex", "move": "hold", "sample": 2.0 }
+    },
+    {
+     "name": "b_treat",
+     "caption": "click: a treat.",
+     "caption_at": "heart_on",
+     "caption_out": "heart_on+1700",
+     "camera": { "zoom": 2.0, "focus": "pet:rex", "move": "hold", "sample": 2.0 }
+    },
+    {
+     "name": "b_throw",
+     "caption": "double-click: a ball.",
+     "caption_at": "mouse:dblclick",
+     "caption_out": "catch",
+     "camera": { "zoom": 1.0, "focus": "page", "move": "hold", "sample": 1.0 }
+    },
+    {
+     "name": "b_catch",
+     "caption": "good boy.",
+     "caption_at": "catch",
+     "caption_out": "catch+1600",
+     "camera": { "zoom": 2.0, "focus": "catch_point", "move": "hold", "sample": 2.0 }
+    }
+   ]
+  },
+  {
+   "id": "sample_greet_night",
+   "page": "article",
+   "edit_position": 2,
+   "seed": {
+    "roster": [
+     { "id": "rex", "name": "Rex", "type": "dog", "color": "brown" },
+     { "id": "bao", "name": "Bao", "type": "panda", "color": "black" },
+     { "id": "pip", "name": "Pip", "type": "chicken", "color": "white" }
+    ],
+    "positions": { "rex": { "x": 340 }, "pip": { "x": 399 }, "bao": { "x": 460 } },
+    "treats": 9,
+    "theme": "light",
+    "hour": 14,
+    "prng": { "seed": 1 },
+    "visible": true,
+    "homeAnchorDaysAgo": 9
+   },
+   "cursor_start": { "visible": false },
+   "accept": [
+    "data-pp-shim reads 'v3;seed=<seed>' right after pets_ready",
+    "greet_start arrives within 150 ms of pets_ready: Rex and Pip play swipe from the first frames, 59 px apart, neither hovered",
+    "all three show lie within 100 ms of hour_set"
+   ],
+   "actions": [
+    { "kind": "wait_state", "state": "pets_ready", "timeout_ms": 5000 },
+    { "kind": "assert_shim" },
+    { "kind": "wait_state", "state": "greet_start", "timeout_ms": 300 },
+    { "kind": "wait_state", "state": "greet_end", "timeout_ms": 1500 },
+    { "kind": "set_hour", "hour": 22 },
+    { "kind": "wait_state", "pet": "rex", "state": "lie", "timeout_ms": 300 },
+    { "kind": "wait_state", "pet": "bao", "state": "lie", "timeout_ms": 300 },
+    { "kind": "wait_state", "pet": "pip", "state": "lie", "timeout_ms": 300 },
+    { "kind": "hold", "hold_ms": 2000 }
+   ],
+   "beats": [
+    {
+     "name": "b_hi",
+     "in": "first_paint",
+     "caption": "pip says hi.",
+     "caption_at": "pets_ready+150",
+     "caption_out": "pets_ready+1350",
+     "camera": { "zoom": 2.0, "focus": "between:rex,bao", "move": "hold", "sample": 1.0 }
+    },
+    {
+     "name": "b_night",
+     "caption": "lights out at 10. up at 6.",
+     "caption_at": "sleep+200",
+     "caption_out": "sleep+2200",
+     "camera": { "zoom": 2.0, "focus": "between:rex,bao", "move": "hold", "sample": 1.0 }
+    }
+   ]
+  }
+ ],
+ "variants": {
+  "vertical_9x16": {
+   "viewport": { "width": 540, "height": 730, "device_scale_factor": 2 },
+   "shots": {
+    "sample_hover_treat_catch": {
+     "positions": { "rex": { "x": 300 } },
+     "extra_accept": ["Rex's box right edge stays at or under CSS x 444 for the whole take"]
+    },
+    "sample_greet_night": {
+     "positions": { "rex": { "x": 200 }, "pip": { "x": 259 }, "bao": { "x": 320 } },
+     "extra_accept": ["every pet box's right edge stays at or under CSS x 444 for the whole take"]
+    }
+   }
+  }
+ }
+}

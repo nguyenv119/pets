@@ -1,0 +1,18 @@
+Music and sound credits for the Pixel Pets promo video (all CC0 / public-domain
+dedication; credit is optional but given with thanks). Only files actually
+shipped in this repo are listed — see LICENSES.md for the full per-file table.
+
+Music:
+"Cat caffe" by TAD - opengameart.org/content/lofi-compilation - CC0
+"forgotten path" by johndekale - opengameart.org/content/forgotten-path - CC0
+
+Sound effects:
+Kenney "Interface Sounds" - kenney.nl - CC0
+One additional 8-bit blip generated in-house with ffmpeg (no third-party material).
+
+Fonts:
+"Press Start 2P" (Press Start 2P Project Authors, cody@zone38.net), "VT323"
+(VT323 Project Authors, peter.hull@oikoi.com) and "Nunito" (The Nunito Project
+Authors), all SIL Open Font License 1.1, via github.com/google/fonts.
+
+Cast sprite credits: see CREDITS.json.

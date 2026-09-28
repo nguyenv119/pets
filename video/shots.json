@@ -1,0 +1,1636 @@
+{
+ "version": "storyboard-final+adopt",
+ "title": "Still There",
+ "edit_order": [
+  "s1_inbox",
+  "s2_review",
+  "s2b_shelter",
+  "s3_sheet",
+  "s4_article_night"
+ ],
+ "note_on_ids": "Shot ids follow the edit order. v2's s2_sheet and s3_review swapped places, so the review (fetch) is now s2 and the sheet (greet) is s3. On 2026-09-27 s2b_shelter, the on-camera adoption in the real popup, was inserted between s2 and s3. Existing shot and beat ids were kept so the eval and the beads need no renames; edit positions are now s1 1, s2 2, s2b 3, s3 4, s4 5. The new beats are b3c_shelter, b3d_pick and b3e_add.",
+ "viewport": {
+  "width": 960,
+  "height": 540,
+  "device_scale_factor": 2
+ },
+ "fps": 25,
+ "capture": {
+  "method": "CDP Page.startScreencast, format png, everyNthFrame 1, every frame acked",
+  "launch": "chromium.launchPersistentContext(freshUserDataDir, { channel: 'chromium', headless: true, args: ['--disable-extensions-except=<recording dist>', '--load-extension=<recording dist>', '--force-device-scale-factor=2'], viewport: { width: 960, height: 540 }, deviceScaleFactor: 2 })",
+  "native_frame": {
+   "width": 1920,
+   "height": 1080
+  },
+  "rate": "about 59 fps, variable, each frame carrying its own timestamp",
+  "assembly": "ffmpeg concat demuxer with per-frame durations to constant 25 fps; lossless or crf 12 or better intermediate",
+  "not_used": "Playwright recordVideo (VP8 halos; at pixel ratio 1 the dog is drawn at 0.46-0.56x of his GIF)"
+ },
+ "master": {
+  "width": 1920,
+  "height": 1080,
+  "fps": 25,
+  "stage": {
+   "page_css_y_shown": [
+    48,
+    540
+   ],
+   "page_stage_y": [
+    0,
+    984
+   ],
+   "floor_band": {
+    "colour": "#FFE3B0",
+    "stage_y": [
+     984,
+     1080
+    ]
+   },
+   "floor_line_stage_y": 984,
+   "note": "The page capture is shown pixel for pixel with its top 48 CSS px left off. The pets stand 96 output px above the frame bottom at every zoom."
+  },
+  "zoom_holds": [
+   1.0,
+   2.0
+  ],
+  "scale_filter": "nearest",
+  "nominal_length_s": 29.0,
+  "expected_length_s": [
+   29.0,
+   30.5
+  ],
+  "length_rule": "Under 28.3 s: extend the final hold by up to 1.0 s. Over 31.0 s: re-run s2_review with the next passing seed that catches within 1300 ms of the dblclick.",
+  "length_note": "Nominal beats: 1-3 unchanged (0-12.33 s), adoption 2.89 s, greet 3.10 s, night 4.26 s, brand line 2.00 s, CTA hold 4.40 s (was 5.0) = 28.98 s.",
+  "motion": {
+   "direction": "punchy motion graphics video. Keep it clean, polished; you are an incredible motion designer.",
+   "pushes": "Every short push is 450 ms (was 600) with an ease-out-expo curve, cubic-bezier(0.16, 1, 0.3, 1). The night push stays a 3000 ms ease-in-out: the film's one slow move.",
+   "captions": "The pill springs in at FULL opacity (scale only: 0.9 to 1.0, at most 4% overshoot, 180 ms; only the words fade, so the olive border is whole from the pill's first frame); words keep the 70 ms stagger (opacity plus a 6 px rise); exit is a 120 ms fade.",
+   "cuts": "Hard cuts on an action frame only. No crossfades, wipes, whip pans or zoom blur.",
+   "popup_card": "overlays.popup_card: the only motion-graphic container in the film.",
+   "brand_line": "Rises 8 px and fades in over 300 ms, then holds still.",
+   "cta": "The icon pops (scale 0 to 1.06 to 1.0 over 240 ms), then each line rises 8 px and fades in, 90 ms apart, then everything holds still.",
+   "never": "No motion or effect is ever drawn on a page sprite. No HUD, level tags, confetti, glow, grain, vignette or dim layer. The product's own particles are the only effects on a page."
+  }
+ },
+ "conventions": {
+  "units": "CSS px in the 960x540 recording viewport, origin top-left. A pet's x is its sprite box's left edge (DRAW_W 64), so its centre is x + 32. Boxes sit at y 476-540 (innerHeight - 64). The content script ignores the stored y; write 476.",
+  "seed_fields": "Written from the service worker before goto: roster -> pixel-pets-v1 {roster}; a roster pet with hidden true is constructed (one random draw for its spawn timer) but never drawn or updated. positions -> pixel-pets-positions-v1 (add y 476); treats and theme -> pixel-pets-settings-v1 {theme, treats, treatsUpdatedAt: now, homeAnchorAt: now - homeAnchorDaysAgo * 86400000}; visible -> pixel-pets-visible. Close the previous page before seeding, because its debounced position save can overwrite the new seed.",
+  "routed_html": "Every set page is served through page.route at https://pixelpets.demo/<id>.html with the take's values templated into its root element: <html data-pp-seed='<seed>' data-pp-hour='<hour>'>. The content script runs at document_idle, so both attributes exist when the shim reads them.",
+  "shim": "Recording copy of dist only; the shipped dist is never touched. content.js is prefixed with the proven shim: seeded mulberry32 Math.random plus Date.prototype.getHours. v3: at boot it reads the seed once from document.documentElement.dataset.ppSeed and writes data-pp-shim='v3;seed=<n>', or data-pp-shim='NO_SEED' when the attribute is missing. getHours reads dataset.ppHour on every call (default 14). The night flip is page.evaluate(() => document.documentElement.dataset.ppHour = '22'). v2 set the attributes with addInitScript before <html> existed, so every v2 run was really seed 0.",
+  "prng": "prng.seed null means search: run the shot headless with the sim candidates first, then seeds 1, 2, 3 and so on, and keep the first seed whose run satisfies every accept rule. prng.prefer ranks passing seeds. Each 9:16 re-record runs its own search. sim_pass_rate is the pass rate of a port of the real state machine over 2000 seeds (it matched the browser to within 1-3 frames on six seeds); it is guidance, not a result.",
+  "hover_point": "The live img box's upper-right corner, 5 px inside: (box.right - 5, box.top + 5). Re-read the box before every mouse step and re-aim until the swipe src is observed. The whole img box is the hit target. At this point the drawn arrow covers none of Rex's art pixels, facing either way.",
+  "action_kinds": [
+   "wait_state",
+   "assert_shim",
+   "glide",
+   "hover_pet",
+   "unhover",
+   "click_pet",
+   "dblclick_empty",
+   "hold",
+   "set_hour",
+   "open_popup",
+   "wait_popup_ready",
+   "glide_to",
+   "click_at",
+   "type_text",
+   "press"
+  ],
+  "action_kinds_note": "assert_shim reads data-pp-shim and discards the take unless it is 'v3;seed=<the shot seed>'. It runs right after pets_ready and before any other action. set_hour sets document.documentElement.dataset.ppHour in the page, and the shim reads it on its next getHours call. Popup kinds (s2b only): open_popup opens chrome-extension://<id>/popup/popup.html in a new page; wait_popup_ready waits for popup_ready; glide_to moves the mouse to a selector's live centre, or to the action's `at` point when one is given ({from: 'left', dx, dy: 'middle'}: dx CSS px right of the live left edge, vertically centred); click_at clicks there and logs the named event; type_text types with a fixed key delay; press sends mousedown, logs its event, and mouseup release_after_ms later.",
+  "states": {
+   "pets_ready": "every visible roster pet has an img in #pixel-pets-host's shadow root",
+   "idle|walk|run|swipe|lie": "that pet's img src matches assets/<type>/<color>_<gif>_8fps.gif",
+   "greet_start": "two pets switch to swipe on the same frame with neither hovered",
+   "greet_end": "both leave swipe",
+   "ball_on": "the yellow-green #b5d92a disc is first found in the canvas scan (g > 170, b < 100, g > r + 15)",
+   "ball_floor": "the ball's logged y reaches a local maximum (floor contact)",
+   "ball_off": "the disc is no longer found",
+   "heart_on": "red heart pixels are first found in the canvas scan (r > 180, g < 70, b < 90); log the red-pixel centroid x and y. The threshold is tuned for Apple Color Emoji.",
+   "catch": "ball_off and heart_on arrive within 60 ms of each other; the catcher is the visible pet whose box centre x is nearest heart.x; it counts only if abs(heart.x - (box.x + 32)) <= 40 and box.top - 48 <= heart.y <= box.top. Never measure from the box centre, and never infer a catch from run turning to idle (nearBall flickers).",
+   "sleep": "the first frame on which every visible pet shows the lie sprite",
+   "popup_ready": "two .pet-item rows rendered, 14 .type-cell buttons built and Nunito loaded in the popup page",
+   "roster_saved": "chrome.storage.onChanged reports pixel-pets-v1 with the adopted pet"
+  },
+  "events": "The recorder writes events.json with epoch ms for: clap (start and end of every page capture), first_paint, pets_ready, shim (the data-pp-shim value), src (pet, from, to), greet_start, greet_end, ball_on, ball_floor, ball_off, heart_on (x, y), catch, hour_set, sleep, cursor samples (about 60 Hz, per page), and mousedown, mouseup, click and dblclick with their x and y. In s2b_shelter: popup_ready, shelter_click, name_click, type_selected (type), color_selected (color), add_mousedown, add_mouseup, roster_saved, plus per-frame DOMRects of every .type-cell (by data-type) and of the six named elements #pets-list, #btn-add-toggle, #add-pet-form, #pet-name, #pet-color-label and #btn-add. Every popup click event (shelter_click, name_click, type_selected, color_selected) and add_mousedown carries the CSS point it was sent at (x, y).",
+  "tracks": "In the same rAF loop as the canvas scan (about 1.8 ms a scan), log every visible pet's box {t, id, x, y, w, h, src} and the ball's centre {t, x, y} on every frame. The camera follows walking pets from this track, and the compositor checks margins against it.",
+  "edit_anchors": "cursor_depart is the start of s1's first glide. ball_in_frame is the first frame the ball's disc is inside the current crop (about dblclick + 440 ms at 1.0x, because the stage leaves off the top 48 CSS px). catch_point is the logged ball x at the catch.",
+  "anchors": "<event>[:<pet>][+ms|-ms], for example pets_ready+240, src:rex:swipe, mouseup:rex, catch+2000. Every in, out, caption, camera move and sfx time is an anchor. No beat cuts on a fixed clock time. mouse:<mousedown|mouseup|click|dblclick>[+ms|-ms] resolves to the first observed event of that kind, whatever the pet (for example mouse:dblclick+90). Edit-only anchors, resolved by the edit, not the recorder: in, end, cursor_depart, ball_in_frame, catch_point.",
+  "camera": {
+   "holds": [
+    1.0,
+    2.0
+   ],
+   "fractional_zoom": "mid-move only",
+   "crop": "At zoom z the crop is 1920/z by 1080/z stage px and its bottom edge sits at stage y 984 + 96/z, so the floor line stays 96 output px above the frame bottom at every zoom. At 2.0x the crop shows page CSS y 294-540 plus 48 stage px of band. Horizontally it centres on the focus and clamps to the page edges.",
+   "focus": "page = the whole stage; pet:<id> = centred on that pet, following the box track with 400 ms smoothing; between:<a>,<b> = centred between two pets; catch_point = centred on the logged catch x.",
+   "checks": [
+    "Fail the render if a crop edge comes within 16 stage px (8 CSS px) of a visible pet box on any frame, unless that edge is the page edge.",
+    "Fail the render if any caption, name tag, clock, brand line or CTA comes within 80 output px of a pet box, or inside the particle column (the box's x range widened by 24 CSS px, extended 80 CSS px up) of a pet that can emit particles in that span: from a hover, feed or catch until its particles fade. Sleeping pets emit none, so the s4 brand line and CTA may sit above them.",
+    "s2_review push: if the ball leaves the crop between ball_in_frame and the catch, or Rex breaks the margin, fall back to a 1.0x hold and a hard cut to 2.0x on the catch frame.",
+    "s2b_shelter: fail the render if any shown frame of the popup take is not exactly one declared crop, or if a crop meets a forbidden cell's DOMRect on that frame."
+   ],
+   "sample": "camera.sample is the zoom of the steady hold that a beat's master_t samples (1.0 or 2.0). b1a_open, b3a_throw, b4a_hi and b5_lights_out sample a 1.0x hold (their 2.0x push is short or has not finished); every other beat samples a 2.0x hold. The edit puts master_t in the middle of that hold and the eval classifies beats by it. New in the adoption pass: 'card' marks the s2b popup beats (b3c_shelter, b3d_pick, b3e_add). They have no page stage, so SSIM, margin and aim do not apply; they are checked by crop disjointness from the forbidden cells and by caption presence at caption_at."
+  },
+  "cursor": "Never recorded. Drawn in Remotion from the logged path: a black arrow with a 2 px white outline, 22 CSS px tall, in page space, so it scales with the camera. A click on the page draws one ring (250 ms, up to 18 CSS px radius) stroked #484848 with a 1 px cream inner stroke; a double-click draws two rings 90 ms apart. A click inside a pet box draws no ring. cursor_start.visible false keeps the cursor hidden until its first move.",
+  "captions": "VT323 72 px, lowercase, #484848 on a cream #FFE3B0 pill with a 3 px olive #A4B859 border, 6 px radius, 12/22 px padding, at most 30 characters. One caption on screen at a time, and the name tag counts as a caption; the clock, the brand line and the CTA are separate layers. Placed in the band above the pet strip, beside the acting pet, at least 80 output px from its box and outside the particle column of any pet that can emit particles in that span (from a hover, feed or catch until they fade); when it does not fit beside, above that column with the same gap. Never a fixed corner.",
+  "clapperboard": "The recorder shows a 160 ms full-viewport magenta frame (inline all:initial; opacity:1) at the start and end of every page capture, and the edit trims it. Alignment is measured from the release edge of both clappers; never assume a start lag.",
+  "sfx_root": "video/assets",
+  "retry": "A take that fails accept is discarded and re-run with the next seed. Nothing is patched, re-clicked or faked in the edit."
+ },
+ "set_pages": [
+  {
+   "id": "inbox",
+   "title": "Inbox",
+   "url": "https://pixelpets.demo/inbox.html",
+   "theme": "light",
+   "fonts": [
+    "Inter"
+   ],
+   "description": "The inbox of an unnamed mail app on a weekday morning, list background #FAFAF7. Top 48 CSS px: plain background. Top bar at y 48-92: an envelope glyph with 'Inbox', a square-cornered search box and an 'AK' initials badge. Left rail at x 0-176 with a rectangular 'New message' button and five folders (Inbox 12, Flagged, Later, Sent, Drafts), all above y 286. Five mail rows at x 192-944, y 96-281, 37 px each: Priya (Re: Re: logo feedback), Build bot (Nightly build passed), Tomás (Lunch? (the good noodle place)), Calendar (Design review moved to 10:00), Mina (Q3 budget, v7 final (2): 'sorry, one more change to row 4'). One faint end note, 'That's everything for today.', at y 318-334, grey 13 px, user-select:none. Bottom 200 px (y 340-540): list background only. No reminder strip, floating compose button, toasts, chat bubbles, banners or footers."
+  },
+  {
+   "id": "review",
+   "title": "Reset chart zoom on double-click #212",
+   "url": "https://pixelpets.demo/review.html",
+   "theme": "dark (data-theme='dark' and an inline <html> background, so the first painted frame is dark)",
+   "fonts": [
+    "Inter",
+    "JetBrains Mono"
+   ],
+   "description": "A code review in an unnamed tool, in its own dark theme: diff background #1E2127, tree #191B20, app bar #16181D, text #C9D1D9, added lines on #1C3326, removed on #3B2328. Top 48 CSS px: plain background. App bar at y 48-92: a grey square mark, 'Review', the title, a '1 of 2 approvals' chip and an Approve button at top right. Description at y 98-130: 'Single click now selects a bar, so reset zoom moves to double-click.' File tree at x 0-260, y 138-286 with five file names. Diff panel at x 276-944: header at y 138-162 ('src/chart/interactions.ts +2 -1') and seven 17 px monospace lines (41-47) at y 166-285; line 44 is '+ chart.canvas.addEventListener(\"dblclick\", resetZoom);' and its token is span#dbl (the alternate target). Default double-click target: div#dbl-zone, an empty, transparent, user-select:none box at x 700-900, y 380-440. Bottom 200 px: empty diff and tree backgrounds only. On #1E2127 the ball's fill has about 10:1 contrast."
+  },
+  {
+   "id": "sheet",
+   "title": "Q3 budget, v7 final (2)",
+   "url": "https://pixelpets.demo/sheet.html",
+   "theme": "light",
+   "fonts": [
+    "Inter"
+   ],
+   "description": "The budget file from Mina's mail in an unnamed spreadsheet app. Top 48 CSS px: plain background. Title row at y 48-80 with the file name and three plain menu words (File, Edit, View), no star. Toolbar glyphs drawn as divs at y 80-104; formula bar at y 104-126 showing 'fx =SUM(C2:C5)'. Sheet tabs (Summary, Q3, Receipts) at the top, y 126-146. Column headers A-F at y 146-164, row numbers at x 0-40. Six 20 px rows at y 164-284: Item/Owner/Q3/Notes; Coffee beans/Tomás/240/the good ones; Plant care/Mina/36/ferns only; Printer ink/Priya/180/why; Team lunch/Tomás/310/noodles; Total//766, with C6 selected under a green outline. Below y 284: empty rows 7-18 with faint #EEF0F2 grid lines only. No text, sheet tabs, status bar or scroll bars there."
+  },
+  {
+   "id": "article",
+   "title": "A short history of the night light",
+   "url": "https://pixelpets.demo/article.html",
+   "theme": "dark (data-theme='dark' and an inline <html> background from the first frame; it never changes during the take)",
+   "fonts": [
+    "Inter",
+    "Source Serif 4"
+   ],
+   "description": "A long read on an unnamed reading site. Background #1B1D23. Top 48 CSS px: plain background. Top bar at y 48-84 ('Reading list', 'Aa'). Title in Source Serif 4, 28 px, #EDE6D6, at x 204, y 100-134; byline 'by R. Okafor, 9 min read' at y 142-160. Two paragraphs, 17 px on a 24 px line, #D8D4C8, at x 204-780: 'Before electricity, a night light was a candle in a jar, and someone had to stay up to watch it.' (y 172-220) and 'Later ones plugged into the wall and glowed just enough to find a door, and not enough to read by.' (y 230-278). No third paragraph and no end mark. Top right x 800-944, y 48-140 stays empty for the clock. Everything below y 286 is plain background. No next-article cards, newsletter box, comments, share bar, audio player or footer."
+  }
+ ],
+ "page_rules": [
+  "Fonts are bundled OFL files served through the same page.route (Inter, Source Serif 4, JetBrains Mono) with no system fallback; before the first action the recorder checks that each family has a FontFace in document.fonts with status 'loaded' (document.fonts.check() is true even for an undeclared family, so it is never the test).",
+  "Wide layout: the top 48 CSS px is plain page background, because the stage never shows it.",
+  "Wide layout: page text ends above CSS y 286, so the top edge of a 2.0x hold (y 294) cuts no line; assert that no text box crosses y 286-302.",
+  "Bottom 200 CSS px: nothing interactive and no text for the pets to stand on, except the inbox end note.",
+  "Narrow layout (below 600 px wide, for the 9:16): the top 125 CSS px carries nothing essential; the bottom 200 px (y 530-730) follows the rule above; text ends above y 357, where the 9:16's 2.0x crop begins."
+ ],
+ "shots": [
+  {
+   "id": "s1_inbox",
+   "page": "inbox",
+   "edit_position": 1,
+   "seed": {
+    "roster": [
+     {
+      "id": "rex",
+      "name": "Rex",
+      "type": "dog",
+      "color": "brown"
+     }
+    ],
+    "positions": {
+     "rex": {
+      "x": 700
+     }
+    },
+    "treats": 10,
+    "theme": "light",
+    "hour": 14,
+    "prng": {
+     "seed": null,
+     "sim_pass_rate": "12.1% of 2000",
+     "sim_candidates": [
+      7,
+      19,
+      23,
+      51
+     ],
+     "prefer": "Rex's walk starts closest to pets_ready+2300"
+    },
+    "visible": true,
+    "homeAnchorDaysAgo": 3
+   },
+   "cursor_start": {
+    "x": 950,
+    "y": 60,
+    "visible": false
+   },
+   "accept": [
+    "data-pp-shim reads 'v3;seed=<seed>' before the first action",
+    "Rex's first transition is walkLeft, 2000-2600 ms after pets_ready",
+    "Rex's box stays inside CSS x 8-952, and Rex never shows the lie sprite before out",
+    "the swipe src is observed within 600 ms of the hover entry",
+    "heart_on arrives within 400 ms of the mouseup, and exactly one feed heart appears in the take (treats go from 10 to 9 once)"
+   ],
+   "actions": [
+    {
+     "kind": "wait_state",
+     "state": "pets_ready",
+     "timeout_ms": 5000,
+     "note": "In point reference. The edit starts 160 ms earlier, on the empty inbox."
+    },
+    {
+     "kind": "assert_shim"
+    },
+    {
+     "kind": "hold",
+     "hold_ms": 3800,
+     "note": "The hook. Captions land at +240 and +2140 and the name tag at +3440. Rex starts walking left between +2000 and +2600 (accept)."
+    },
+    {
+     "kind": "glide",
+     "pet": "rex",
+     "dy": -130,
+     "duration_ms": 600,
+     "note": "From the top right to 130 px above Rex's live hover point, re-reading his box each step because he is walking. This departure is the edit anchor cursor_depart."
+    },
+    {
+     "kind": "hover_pet",
+     "pet": "rex",
+     "duration_ms": 250,
+     "note": "Drop onto the hover point, re-reading the live box each step."
+    },
+    {
+     "kind": "wait_state",
+     "pet": "rex",
+     "state": "swipe",
+     "timeout_ms": 600,
+     "note": "mouseenter fired: swipe plus one 👋. The state machine is frozen while hovered."
+    },
+    {
+     "kind": "hold",
+     "hold_ms": 1600,
+     "note": "Lets the 👋 fade before the treat. Costs no determinism, because hover freezes the state machine."
+    },
+    {
+     "kind": "click_pet",
+     "pet": "rex",
+     "note": "mousedown and mouseup 60 ms apart at the hover point. Never click twice."
+    },
+    {
+     "kind": "unhover",
+     "pet": "rex",
+     "dx": 40,
+     "y": 300,
+     "duration_ms": 90,
+     "note": "Leave within 100 ms of the mouseup, up and to the right, so the eat state shows the idle sprite under 🍖 and ❤️."
+    },
+    {
+     "kind": "wait_state",
+     "state": "heart_on",
+     "timeout_ms": 400,
+     "note": "Measured from the mouseup. On timeout, discard the take and run it again."
+    },
+    {
+     "kind": "wait_state",
+     "pet": "rex",
+     "state": "idle",
+     "timeout_ms": 800
+    },
+    {
+     "kind": "hold",
+     "hold_ms": 2000,
+     "note": "Covers the out point (heart_on+1900), then close the page."
+    }
+   ],
+   "beats": [
+    {
+     "name": "b1a_open",
+     "in": "pets_ready-160",
+     "caption": "there's a dog in my inbox.",
+     "caption_at": "pets_ready+240",
+     "caption_out": "pets_ready+2040",
+     "camera": {
+      "zoom": 1.0,
+      "focus": "page",
+      "move": "hold",
+      "sample": 1.0
+     },
+     "sfx": [
+      {
+       "file": "sfx/kenney_interface/Audio/tick_004.ogg",
+       "at": "first_paint"
+      },
+      {
+       "file": "sfx/kenney_interface/Audio/pluck_001.ogg",
+       "at": "pets_ready",
+       "peak_dbfs": -24
+      }
+     ],
+     "music": "Starts at frame 0, quiet: about -30 LUFS short-term."
+    },
+    {
+     "name": "b1b_not_helping",
+     "caption": "he's not helping.",
+     "caption_at": "pets_ready+2140",
+     "caption_out": "pets_ready+3340",
+     "camera": {
+      "zoom": 2.0,
+      "focus": "pet:rex",
+      "move": "At src:rex:walk, push from 1.0x to 2.0x over 450 ms (ease-out-expo, master.motion.pushes), floor-anchored, then follow the box track with 400 ms smoothing.",
+      "sample": 2.0
+     }
+    },
+    {
+     "name": "b1c_name",
+     "overlay": {
+      "name_tag": "name_tag",
+      "from": "pets_ready+3440",
+      "to": "src:rex:swipe",
+      "place": "the caption slot, alone"
+     },
+     "camera": {
+      "zoom": 2.0,
+      "focus": "pet:rex",
+      "move": "follow",
+      "sample": 2.0
+     }
+    },
+    {
+     "name": "b2a_hover",
+     "caption": "hover: he waves.",
+     "caption_at": "src:rex:swipe",
+     "caption_out": "heart_on-100",
+     "camera": {
+      "zoom": 2.0,
+      "focus": "pet:rex",
+      "move": "hold; Rex is still while hovered",
+      "sample": 2.0
+     },
+     "sfx": [
+      {
+       "file": "sfx/picks/04_wave_blip_toggle_001.ogg",
+       "at": "src:rex:swipe"
+      }
+     ],
+     "music": "Up to about -22 LUFS short-term over 1200 ms from src:rex:swipe."
+    },
+    {
+     "name": "b2b_treat",
+     "caption": "click: a treat.",
+     "caption_at": "heart_on",
+     "caption_out": "heart_on+1700",
+     "camera": {
+      "zoom": 2.0,
+      "focus": "pet:rex",
+      "move": "hold",
+      "sample": 2.0
+     },
+     "cursor_ring": "none; the click is inside Rex's box",
+     "sfx": [
+      {
+       "file": "sfx/kenney_interface/Audio/click_001.ogg",
+       "at": "mouseup:rex"
+      },
+      {
+       "file": "sfx/generated/blip_feed_chime.wav",
+       "at": "heart_on"
+      }
+     ],
+     "out": "heart_on+1900"
+    }
+   ]
+  },
+  {
+   "id": "s2_review",
+   "page": "review",
+   "edit_position": 2,
+   "seed": {
+    "roster": [
+     {
+      "id": "rex",
+      "name": "Rex",
+      "type": "dog",
+      "color": "brown"
+     },
+     {
+      "id": "bao",
+      "name": "Bao",
+      "type": "panda",
+      "color": "black",
+      "hidden": true
+     }
+    ],
+    "positions": {
+     "rex": {
+      "x": 520
+     },
+     "bao": {
+      "x": 16
+     }
+    },
+    "treats": 9,
+    "theme": "light",
+    "hour": 14,
+    "prng": {
+     "seed": null,
+     "sim_pass_rate": "81.2% of 2000 (median catch 1.12 s after the dblclick)",
+     "sim_candidates": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "prefer": "catch within 1300 ms of the dblclick (first landing), then the smallest abs(ball vx)"
+    },
+    "visible": true,
+    "homeAnchorDaysAgo": 3
+   },
+   "cursor_start": {
+    "x": 620,
+    "y": 250,
+    "visible": true
+   },
+   "accept": [
+    "data-pp-shim reads 'v3;seed=<seed>' before the first action",
+    "elementFromPoint at (800, 410) is div#dbl-zone and no pet box contains the point; the dblclick lands within 1600 ms of pets_ready",
+    "ball_on arrives within 800 ms of the dblclick",
+    "Rex shows run within 400 ms of the dblclick",
+    "a catch by Rex (conventions.states.catch) within 2600 ms of the dblclick",
+    "Rex's box stays inside CSS x 8-944 until out, and no pet shows the lie sprite before out",
+    "Bao never has an img on the page"
+   ],
+   "actions": [
+    {
+     "kind": "wait_state",
+     "state": "pets_ready",
+     "timeout_ms": 5000
+    },
+    {
+     "kind": "assert_shim"
+    },
+    {
+     "kind": "hold",
+     "hold_ms": 100
+    },
+    {
+     "kind": "glide",
+     "x": 800,
+     "y": 410,
+     "target": "#dbl-zone",
+     "duration_ms": 500,
+     "note": "Log every step."
+    },
+    {
+     "kind": "dblclick_empty",
+     "x": 800,
+     "y": 410,
+     "target": "#dbl-zone",
+     "note": "Assert that elementFromPoint is div#dbl-zone and that no pet box contains the point, then page.mouse.dblclick. It lands at about pets_ready+650 and must be within 1600 ms, while the spawn timers (at least 2 s) keep Rex still. Alternate target: the live centre of span#dbl."
+    },
+    {
+     "kind": "wait_state",
+     "state": "ball_on",
+     "timeout_ms": 800
+    },
+    {
+     "kind": "glide",
+     "x": 900,
+     "y": 80,
+     "duration_ms": 400,
+     "note": "Clear the ball's fall line, up and to the right, away from Rex."
+    },
+    {
+     "kind": "wait_state",
+     "pet": "rex",
+     "state": "run",
+     "timeout_ms": 400,
+     "note": "Measured from the dblclick."
+    },
+    {
+     "kind": "wait_state",
+     "pet": "rex",
+     "state": "catch",
+     "timeout_ms": 4000,
+     "note": "On timeout, discard the take and re-run with the next seed. Never ship a take where the ball just stops."
+    },
+    {
+     "kind": "hold",
+     "hold_ms": 2200
+    }
+   ],
+   "beats": [
+    {
+     "name": "b3a_throw",
+     "in": "first_paint",
+     "caption": "double-click: a ball.",
+     "caption_at": "mouse:dblclick",
+     "caption_out": "catch",
+     "camera": {
+      "zoom": 2.0,
+      "focus": "catch_point",
+      "move": "Hold 1.0x (page) until ball_on+400, then push to 2.0x centred on catch_point (clamped to the page), floor-anchored, ending at the first ball_floor or the catch, whichever comes first. See conventions.camera.checks for the fallback.",
+      "sample": 1.0
+     },
+     "cursor_ring": "two rings 90 ms apart at the dblclick point",
+     "sfx": [
+      {
+       "file": "sfx/kenney_interface/Audio/tick_004.ogg",
+       "at": "first_paint"
+      },
+      {
+       "file": "sfx/kenney_interface/Audio/click_001.ogg",
+       "at": "mouse:dblclick"
+      },
+      {
+       "file": "sfx/kenney_interface/Audio/click_001.ogg",
+       "at": "mouse:dblclick+90"
+      },
+      {
+       "file": "sfx/picks/01_ball_throw_drop_003.ogg",
+       "at": "ball_in_frame"
+      },
+      {
+       "file": "sfx/picks/01b_ball_bounce_impactSoft_medium_000.ogg",
+       "at": "ball_floor",
+       "rule": "each floor contact before the catch, 3 dB quieter each time"
+      }
+     ]
+    },
+    {
+     "name": "b3b_catch",
+     "caption": "good boy.",
+     "caption_at": "catch",
+     "caption_out": "catch+1600",
+     "camera": {
+      "zoom": 2.0,
+      "focus": "catch_point",
+      "move": "hold",
+      "sample": 2.0
+     },
+     "sfx": [
+      {
+       "file": "sfx/picks/02_catch_pop_bong_001.ogg",
+       "at": "catch"
+      },
+      {
+       "file": "sfx/generated/blip_feed_chime.wav",
+       "at": "catch+60"
+      }
+     ],
+     "out": "catch+2000"
+    }
+   ]
+  },
+  {
+   "id": "s2b_shelter",
+   "page": "popup",
+   "edit_position": 3,
+   "seed": {
+    "roster": [
+     {
+      "id": "rex",
+      "name": "Rex",
+      "type": "dog",
+      "color": "brown"
+     },
+     {
+      "id": "bao",
+      "name": "Bao",
+      "type": "panda",
+      "color": "black"
+     }
+    ],
+    "positions": {},
+    "treats": 9,
+    "theme": "light",
+    "prng": {
+     "seed": null,
+     "note": "No seed search. The popup draws no random numbers on camera and no content script runs in its tab (the shim is not asserted here). The first take that passes every accept rule ships."
+    },
+    "visible": true,
+    "homeAnchorDaysAgo": 9,
+    "note": "homeAnchorDaysAgo 9 gives capacity min(7, 1 + floor(9/3)) = 4 homes (src/settings.ts:16-17, 62-70), so the gate (src/popup/capacity-gate.ts canAddPet) allows a third pet."
+   },
+   "viewport": {
+    "width": 500,
+    "height": 960,
+    "device_scale_factor": 2
+   },
+   "open": "In the same persistent context: page.goto('chrome-extension://<extension id>/popup/popup.html'), the id taken from the service worker URL. The recording copy of dist is used, but the shim touches only content.js, so this is the shipped popup.",
+   "layout_expect": {
+    "type_order": [
+     "chicken",
+     "crab",
+     "dog",
+     "fox",
+     "miffy",
+     "monkey",
+     "panda",
+     "snail",
+     "totoro",
+     "turtle",
+     "cockatiel",
+     "rat",
+     "snake",
+     "horse"
+    ],
+    "type_order_source": "Object.keys(COLORS), src/popup/colors.ts:4-19, rendered by buildTypePickerHTML (src/popup/type-picker.ts)",
+    "columns": 6,
+    "columns_why": "body is border-box with 20 px padding (popup.css:1-5, 79-85) and the form has 16 px padding (popup.css:380-388), so at 500 CSS px the type grid is 428 px wide; repeat(auto-fill, minmax(64px, 1fr)) with a 6 px gap (popup.css:442-446) gives 6 columns of about 66.3 px. Rows: chicken crab dog fox miffy monkey / panda snail totoro turtle cockatiel rat / snake horse. 500 px is the width where chicken and panda share column 1 with only crab and snail beside them: at 420 px (5 columns) the monkey sits under the chicken, and at 560 px or wider the totoro or cockatiel sits under the chicken or crab.",
+    "forbidden_types": [
+     "totoro",
+     "miffy",
+     "fox",
+     "cockatiel",
+     "monkey",
+     "horse",
+     "dog"
+    ],
+    "no_scroll": "document.scrollingElement.scrollHeight <= innerHeight with the form expanded; otherwise discard the take (a scroll would move cells between crops). Measured on the shipped popup (da09dab, Playwright 1.63 headless, DPR 2, Nunito loaded, this seed): at 500x760 the expanded page is 936 px tall and Add Pet sits at CSS y 810-849, below the fold; at 500x960 scrollHeight = innerHeight = 960 and every control is on screen, so the take is 500x960 (native 1000x1920).",
+    "banner": "Opened as a tab, the popup's active-tab probe (popup.ts init) finds no content script on its own tab, so #special-page-banner shows and the ball button is disabled. Both sit above crop A and are never in frame.",
+    "measured_500x960": {
+     "type_cells_css": "66.3 x 63.5, columns at x 36, 108.3, 180.7, 253, 325.3, 397.7; rows at y 493.8, 563.3, 632.8 (form expanded)",
+     "after_add_pet": "addPet() re-renders #pets-list one row taller (137 -> 208 CSS px, +71) and then collapses #add-pet-form, within about 120 ms of the mouseup. A roster written straight into storage does neither: the popup's chrome.storage.onChanged listener (src/popup/popup.ts:78-85) re-renders only on settings changes. The new pet's id is crypto.randomUUID() (popup.ts:241).",
+     "background": "the popup body is #FFE3B0, the same cream as the card backdrop"
+    }
+   },
+   "crops": {
+    "A_list": {
+     "rect": "x 0-500; y from #pets-list top - 8 to #btn-add-toggle bottom + 4",
+     "shows": "the Rex and Bao rows and the Visit Shelter button",
+     "why_safe": "#add-pet-form starts 8 px below the button (.fab margin-bottom 8) and expands downward, below the crop",
+     "card_scale_native": 1,
+     "measured_native_500x960": {
+      "x": 0,
+      "y": 372,
+      "w": 1000,
+      "h": 397
+     }
+    },
+    "B_pick": {
+     "rect": "x from #add-pet-form left edge to the crab cell's right edge + 3 (column 3 starts 6 px later); y from #pet-name top - 8 to the panda cell's bottom + 3 (row 3 starts 6 px lower)",
+     "shows": "the Name field (cut at its right), 'Type', and the chicken, crab, panda and snail cells",
+     "card_scale_native": 2,
+     "measured_native_500x960": {
+      "x": 40,
+      "y": 793,
+      "w": 315,
+      "h": 467
+     }
+    },
+    "C_add": {
+     "rect": "x 0-500; y from #pet-color-label top - 4 to #btn-add bottom + 8",
+     "shows": "the Color row (the chicken's brown and white after the pick) and Add Pet",
+     "why_safe": "the last type-grid row ends 12 px above the Color label (.form-grid gap 12)",
+     "card_scale_native": 1,
+     "measured_native_500x960": {
+      "x": 0,
+      "y": 1417,
+      "w": 1000,
+      "h": 298
+     }
+    },
+    "rule": "Rects are computed per frame from the DOMRects the recorder logs, never hard-coded. Every frame the edit shows from this take is exactly one of these crops, and each crop must be disjoint from every forbidden cell's logged DOMRect on that frame, or the render fails. The eval recomputes each frame's crop from the logged DOMRects by these rules (native px = CSS x 2, each edge rounded) and requires the declared rect to equal it within 1 native px.",
+    "layout_shift_trap": "addPet() (src/popup/popup.ts:227-265) re-renders the pet list one row taller before it collapses the form, which pushes the type grid down into crop C for up to about 250 ms. Crop C therefore ends 160 ms after the Add Pet mousedown and the mouseup is sent at +240 (the click, and addPet, fire on mouseup): the press is on screen for 2-3 frames, the layout shift never is.",
+    "measured_note": "The measured rects are what the per-frame rule gives on the shipped popup at 500x960 (form expanded; A also collapsed). They size the card layout below; the render still computes each rect per frame from the logged DOMRects."
+   },
+   "cursor_start": {
+    "x": 250,
+    "y": "the middle of the Bao row",
+    "visible": true
+   },
+   "accept": [
+    "the type grid has 6 columns in the order of layout_expect.type_order, and the page does not scroll with the form expanded",
+    "Nunito is loaded (a FontFace with family Nunito has status 'loaded' in document.fonts) before the first action",
+    "every crop A, B and C rect is disjoint from every forbidden cell's DOMRect on every frame in its beat",
+    "type_selected fires with type chicken, and color_selected with white",
+    "the mouseup on Add Pet is sent at add_mousedown+240 or later, after crop C ends (b3e_add out is add_mousedown+160)",
+    "within 1000 ms of that mouseup, pixel-pets-v1 holds exactly Rex, Bao and a white chicken named Pip (chrome.storage.onChanged, src/store.ts:3, 43-49)",
+    "within 500 ms of the Add Pet mouseup, the logged #pets-list grows by at least 60 CSS px and #add-pet-form collapses (addPet's own re-render), and the saved Pip's id is a crypto.randomUUID() that is not a seeded id",
+    "every popup click and the Add Pet press log the CSS point they were sent at (x, y), and each point lies inside the crop on screen at that moment (A for shelter_click, B for name_click and type_selected, C for color_selected and add_mousedown), at least 4 CSS px inside its edges"
+   ],
+   "actions": [
+    {
+     "kind": "open_popup",
+     "note": "goto chrome-extension://<id>/popup/popup.html at 500x960; the form starts collapsed because the roster is not empty (setAddFormExpanded(pets.length === 0))."
+    },
+    {
+     "kind": "wait_popup_ready",
+     "timeout_ms": 5000,
+     "note": "popup_ready = two .pet-item rows rendered, 14 .type-cell buttons built, and Nunito loaded. Log every .type-cell DOMRect by data-type, and the six named elements #pets-list, #btn-add-toggle, #add-pet-form, #pet-name, #pet-color-label and #btn-add, on every frame from here to the end."
+    },
+    {
+     "kind": "hold",
+     "hold_ms": 300
+    },
+    {
+     "kind": "glide_to",
+     "selector": "#btn-add-toggle",
+     "duration_ms": 300
+    },
+    {
+     "kind": "click_at",
+     "selector": "#btn-add-toggle",
+     "event": "shelter_click",
+     "note": "At about popup_ready+600. The form expands over 200 ms (max-height transition), below crop A."
+    },
+    {
+     "kind": "hold",
+     "hold_ms": 250,
+     "note": "the form finishes its 200 ms expand; with the 250 ms glide that follows, the Name click lands 500 ms after Visit Shelter as before"
+    },
+    {
+     "kind": "glide_to",
+     "selector": "#pet-name",
+     "at": {
+      "from": "left",
+      "dx": 24,
+      "dy": "middle"
+     },
+     "duration_ms": 250
+    },
+    {
+     "kind": "click_at",
+     "selector": "#pet-name",
+     "event": "name_click",
+     "at": {
+      "from": "left",
+      "dx": 24,
+      "dy": "middle"
+     },
+     "note": "Aims 24 CSS px right of the field's left edge, vertically centred (about CSS (132, 422) on the shipped popup), so the click lands inside crop B (x 20-177.6). The live centre (x 286) is outside the card."
+    },
+    {
+     "kind": "type_text",
+     "text": "Pip",
+     "key_delay_ms": 100,
+     "event": "name_typed",
+     "note": "logged at the last key's keydown, with the CSS point typed into (the name_click point). The eval judges on the card that 'Pip' appears there (verify.mjs ACTION_EVENTS)."
+    },
+    {
+     "kind": "glide_to",
+     "selector": ".type-cell[data-type='chicken']",
+     "duration_ms": 300
+    },
+    {
+     "kind": "click_at",
+     "selector": ".type-cell[data-type='chicken']",
+     "event": "type_selected",
+     "note": "Selecting a type fires pet-type-changed (type-picker.ts) and re-renders the colour grid with brown auto-selected (color-picker.ts)."
+    },
+    {
+     "kind": "hold",
+     "hold_ms": 500
+    },
+    {
+     "kind": "glide_to",
+     "selector": ".color-cell:nth-child(2)",
+     "duration_ms": 200,
+     "note": "the white swatch"
+    },
+    {
+     "kind": "click_at",
+     "selector": ".color-cell:nth-child(2)",
+     "event": "color_selected"
+    },
+    {
+     "kind": "glide_to",
+     "selector": "#btn-add",
+     "duration_ms": 250
+    },
+    {
+     "kind": "hold",
+     "hold_ms": 30,
+     "note": "was 150: the press moved 120 ms earlier so crop C, which now ends at add_mousedown+160 to show the press, keeps its length"
+    },
+    {
+     "kind": "press",
+     "selector": "#btn-add",
+     "event": "add_mousedown",
+     "release_after_ms": 240,
+     "note": "page.mouse.down, then page.mouse.up 240 ms later. Crop C ends at add_mousedown+160: the recording shows the press about videoLagMs (~56 ms) after the log, so the pressed button is on screen for about 100 ms (2-3 frames) before the cut, and addPet (on the mouseup) never reaches the film."
+    },
+    {
+     "kind": "wait_state",
+     "state": "roster_saved",
+     "timeout_ms": 1000
+    }
+   ],
+   "beats": [
+    {
+     "name": "b3c_shelter",
+     "in": "popup_ready+200",
+     "caption": "adopt: pick one. name her.",
+     "caption_at": "popup_ready+280",
+     "caption_out": "add_mousedown+160",
+     "caption_note": "one caption across b3c, b3d and b3e: the fixed screen-space layer in overlays.popup_card.placement.<aspect>.caption_rect, at least 40 px from every card size",
+     "card": {
+      "crop": "A_list",
+      "scale_native": 1,
+      "motion": "springs in over 200 ms"
+     },
+     "camera": {
+      "zoom": 1.0,
+      "focus": "card",
+      "move": "the card springs in, then holds",
+      "sample": "card"
+     },
+     "sfx": [
+      {
+       "file": "sfx/kenney_interface/Audio/tick_004.ogg",
+       "at": "in"
+      },
+      {
+       "file": "sfx/kenney_interface/Audio/click_001.ogg",
+       "at": "shelter_click"
+      }
+     ],
+     "music": "the bed continues",
+     "out": "shelter_click+300"
+    },
+    {
+     "name": "b3d_pick",
+     "in": "shelter_click+300",
+     "card": {
+      "crop": "B_pick",
+      "scale_native": 2,
+      "motion": "the frame morphs from crop A's size over 160 ms; the content hard-cuts to crop B at the morph start"
+     },
+     "camera": {
+      "zoom": 2.0,
+      "focus": "card",
+      "move": "hold",
+      "sample": "card"
+     },
+     "sfx": [
+      {
+       "file": "sfx/kenney_interface/Audio/click_001.ogg",
+       "at": "name_click"
+      },
+      {
+       "file": "sfx/kenney_interface/Audio/click_001.ogg",
+       "at": "type_selected"
+      }
+     ],
+     "out": "type_selected+500"
+    },
+    {
+     "name": "b3e_add",
+     "in": "type_selected+500",
+     "card": {
+      "crop": "C_add",
+      "scale_native": 1,
+      "motion": "the frame morphs from crop B's size over 160 ms; the content hard-cuts to crop C at the morph start"
+     },
+     "camera": {
+      "zoom": 1.0,
+      "focus": "card",
+      "move": "hold",
+      "sample": "card"
+     },
+     "sfx": [
+      {
+       "file": "sfx/kenney_interface/Audio/click_001.ogg",
+       "at": "color_selected"
+      },
+      {
+       "file": "sfx/kenney_interface/Audio/pluck_001.ogg",
+       "at": "add_mousedown",
+       "peak_dbfs": -24
+      }
+     ],
+     "out": "add_mousedown+160",
+     "cut": "hard cut to s3_sheet at its first_paint"
+    }
+   ]
+  },
+  {
+   "id": "s3_sheet",
+   "page": "sheet",
+   "edit_position": 4,
+   "seed": {
+    "roster": [
+     {
+      "id": "rex",
+      "name": "Rex",
+      "type": "dog",
+      "color": "brown"
+     },
+     {
+      "id": "bao",
+      "name": "Bao",
+      "type": "panda",
+      "color": "black"
+     },
+     {
+      "id": "pip",
+      "name": "Pip",
+      "type": "chicken",
+      "color": "white"
+     }
+    ],
+    "positions": {
+     "rex": {
+      "x": 340
+     },
+     "pip": {
+      "x": 399
+     },
+     "bao": {
+      "x": 460
+     }
+    },
+    "treats": 9,
+    "theme": "light",
+    "hour": 14,
+    "prng": {
+     "seed": null,
+     "sim_pass_rate": "unknown with three pets (two pets: 28.8% of 2000); re-run the state-machine port with this roster",
+     "sim_candidates": [],
+     "prefer": "none"
+    },
+    "visible": true,
+    "homeAnchorDaysAgo": 9
+   },
+   "cursor_start": {
+    "visible": false
+   },
+   "accept": [
+    "data-pp-shim reads 'v3;seed=<seed>' right after pets_ready",
+    "greet_start arrives within 150 ms of pets_ready: Rex and Pip play swipe from the first frames, 59 px apart, neither hovered",
+    "Bao (61 px from Pip, 120 px from Rex) never plays swipe before out",
+    "all three pets show the idle sprite from greet_end until out (pets_ready+2950): no walk and no lie"
+   ],
+   "actions": [
+    {
+     "kind": "wait_state",
+     "state": "pets_ready",
+     "timeout_ms": 5000
+    },
+    {
+     "kind": "assert_shim"
+    },
+    {
+     "kind": "wait_state",
+     "state": "greet_start",
+     "timeout_ms": 300,
+     "note": "Roster order is rex, bao, pip, and tryGreetPairs (src/greet.ts) checks pairs in that order: rex-bao are 120 px apart, rex-pip 59 px (inside GREET_RANGE 60) and greet on the first tick, and bao-pip are 61 px apart and a greeting pet cannot start a second pair. Check that the widest dog and chicken swipe frames do not overlap at 59 px (open check 8). Nobody hovers and no cursor is drawn."
+    },
+    {
+     "kind": "wait_state",
+     "state": "greet_end",
+     "timeout_ms": 1500
+    },
+    {
+     "kind": "hold",
+     "hold_ms": 2000,
+     "note": "Covers the out point, pets_ready+2950."
+    }
+   ],
+   "beats": [
+    {
+     "name": "b4a_hi",
+     "in": "first_paint",
+     "caption": "pip says hi.",
+     "caption_at": "pets_ready+150",
+     "caption_out": "pets_ready+1350",
+     "camera": {
+      "zoom": 2.0,
+      "focus": "between:rex,bao",
+      "move": "Hold 1.0x (page) until pets_ready+400, then push to 2.0x between Rex and Bao (all three pets) over 450 ms, floor-anchored.",
+      "sample": 1.0
+     },
+     "sfx": [
+      {
+       "file": "sfx/kenney_interface/Audio/tick_004.ogg",
+       "at": "first_paint"
+      },
+      {
+       "file": "sfx/picks/04_wave_blip_toggle_001.ogg",
+       "at": "greet_start"
+      },
+      {
+       "file": "sfx/picks/04_wave_blip_toggle_001.ogg",
+       "at": "greet_start+80",
+       "rate": 1.12
+      }
+     ]
+    },
+    {
+     "name": "b4b_too",
+     "caption": "and now there are three.",
+     "caption_at": "pets_ready+1450",
+     "caption_out": "pets_ready+2850",
+     "camera": {
+      "zoom": 2.0,
+      "focus": "between:rex,bao",
+      "move": "hold",
+      "sample": 2.0
+     },
+     "out": "pets_ready+2950"
+    }
+   ]
+  },
+  {
+   "id": "s4_article_night",
+   "page": "article",
+   "edit_position": 5,
+   "seed": {
+    "roster": [
+     {
+      "id": "rex",
+      "name": "Rex",
+      "type": "dog",
+      "color": "brown"
+     },
+     {
+      "id": "bao",
+      "name": "Bao",
+      "type": "panda",
+      "color": "black"
+     },
+     {
+      "id": "pip",
+      "name": "Pip",
+      "type": "chicken",
+      "color": "white"
+     }
+    ],
+    "positions": {
+     "rex": {
+      "x": 560
+     },
+     "pip": {
+      "x": 480
+     },
+     "bao": {
+      "x": 400
+     }
+    },
+    "treats": 9,
+    "theme": "light",
+    "hour": 14,
+    "prng": {
+     "seed": 1,
+     "note": "Any seed works, because the flip happens inside the 2 s spawn window, before any random transition. The shim is still asserted."
+    },
+    "visible": true,
+    "homeAnchorDaysAgo": 9
+   },
+   "cursor_start": {
+    "visible": false
+   },
+   "accept": [
+    "data-pp-shim reads 'v3;seed=1' before the first action",
+    "all three pets are on the idle sprite at hour_set",
+    "all three show lie within 100 ms of hour_set",
+    "all three stay on lie until the take ends (sleep+8800)"
+   ],
+   "actions": [
+    {
+     "kind": "wait_state",
+     "state": "pets_ready",
+     "timeout_ms": 5000
+    },
+    {
+     "kind": "assert_shim"
+    },
+    {
+     "kind": "hold",
+     "hold_ms": 1700,
+     "note": "Both awake on idle. The clock overlay shows :58, then :59 at +700."
+    },
+    {
+     "kind": "set_hour",
+     "hour": 22,
+     "note": "page.evaluate(() => document.documentElement.dataset.ppHour = '22'). isNightHour is checked every frame, so force-sleep sets sleep with an infinite timer and the lie sprite. The producer's probe measured 9 ms."
+    },
+    {
+     "kind": "wait_state",
+     "pet": "rex",
+     "state": "lie",
+     "timeout_ms": 300
+    },
+    {
+     "kind": "wait_state",
+     "pet": "bao",
+     "state": "lie",
+     "timeout_ms": 300
+    },
+    {
+     "kind": "wait_state",
+     "pet": "pip",
+     "state": "lie",
+     "timeout_ms": 300,
+     "note": "The chicken has a lie sprite (HAS_LIE, src/renderer.ts)."
+    },
+    {
+     "kind": "hold",
+     "hold_ms": 9000,
+     "note": "The brand line and CTA play over the unchanged live page."
+    }
+   ],
+   "beats": [
+    {
+     "name": "b5_lights_out",
+     "in": "first_paint",
+     "caption": "lights out at 10. up at 6.",
+     "caption_at": "sleep+200",
+     "caption_out": "sleep+2200",
+     "overlay": {
+      "clock": [
+       {
+        "text": "21:59:58",
+        "from": "in"
+       },
+       {
+        "text": "21:59:59",
+        "from": "pets_ready+700"
+       },
+       {
+        "text": "22:00:00",
+        "from": "sleep"
+       }
+      ],
+      "clock_out": "sleep+2200",
+      "place": "top right in OUTPUT space: 16:9 x 1600-1888, y 24-168 (over the page's empty corner at 1.0x); 9:16 top right below y 250 and left of x 900. Drawn as a screen-space layer, never scaled or moved by the camera."
+     },
+     "camera": {
+      "zoom": 2.0,
+      "focus": "between:rex,bao",
+      "move": "Hold 1.0x until sleep+400, then push to 2.0x between the pets over 3000 ms, easing in and out, floor-anchored. At 2.0x only the dark background shows above the pets.",
+      "sample": 1.0
+     },
+     "sfx": [
+      {
+       "file": "sfx/kenney_interface/Audio/tick_001.ogg",
+       "at": "in"
+      },
+      {
+       "file": "sfx/kenney_interface/Audio/tick_001.ogg",
+       "at": "pets_ready+700"
+      },
+      {
+       "file": "sfx/kenney_interface/Audio/switch_002.ogg",
+       "at": "sleep"
+      }
+     ],
+     "music": "Stops with a 250 ms fade at sleep.",
+     "caption_sample": "sleep+300",
+     "caption_sample_note": "b5 carries two texts (the caption from sleep+200, the clock until sleep+2200). The one caption_t for the beat is sleep+300: inside both windows and before the night push starts at sleep+400, so the frame is still 1.0x."
+    },
+    {
+     "name": "b6_brand_line",
+     "caption": "They're not much, but they're yours.",
+     "caption_at": "sleep+2400",
+     "caption_out": "end",
+     "style": "brand_line",
+     "camera": {
+      "zoom": 2.0,
+      "focus": "between:rex,bao",
+      "move": "the push ends at sleep+3400, then hold",
+      "sample": 2.0
+     },
+     "music": "none (room tone)"
+    },
+    {
+     "name": "b7_cta",
+     "overlay": {
+      "cta": "cta_16x9",
+      "from": "sleep+4400",
+      "place": "under the brand line, at least 80 px above the pets"
+     },
+     "camera": {
+      "zoom": 2.0,
+      "focus": "between:rex,bao",
+      "move": "hold",
+      "sample": 2.0
+     },
+     "sfx": [
+      {
+       "file": "sfx/kenney_interface/Audio/tick_004.ogg",
+       "at": "sleep+4400"
+      }
+     ],
+     "out": "sleep+8800"
+    }
+   ]
+  }
+ ],
+ "overlays": {
+  "name_tag": {
+   "icon": "assets/icons/icon-128.png",
+   "icon_px": 64,
+   "text": "Pixel Pets",
+   "font": "Press Start 2P",
+   "size_px": 40,
+   "style": "the caption pill",
+   "note": "Shown alone. 30 px x-height, above the 72 px VT323 captions' 28.8 px. The icon is the product's front-facing dog face, not a frame from any pet sprite."
+  },
+  "clock": {
+   "font": "VT323",
+   "size_px": 60,
+   "colour": "#FFE3B0",
+   "pill": false,
+   "space": "output: a screen-space layer, never scaled or moved by the camera"
+  },
+  "brand_line": {
+   "text": "They're not much, but they're yours.",
+   "font": "VT323",
+   "size_px": 84,
+   "colour": "#FFE3B0",
+   "pill": false,
+   "align": "left at x 160",
+   "rule": "appears once per cut",
+   "space": "output: a screen-space layer, never scaled or moved by the camera"
+  },
+  "cta_16x9": {
+   "lines": [
+    {
+     "icon": "assets/icons/icon-128.png",
+     "icon_px": 128,
+     "text": "Pixel Pets",
+     "font": "Press Start 2P",
+     "size_px": 56,
+     "colour": "#FFE3B0"
+    },
+    {
+     "text": "add to Chrome. it's free.",
+     "font": "VT323",
+     "size_px": 64,
+     "colour": "#FFE3B0"
+    },
+    {
+     "text": "collects no data · 14 kinds of pet",
+     "font": "VT323",
+     "size_px": 52,
+     "colour": "rgb(210,226,138)"
+    },
+    {
+     "text": "sprites: dog by NVPH Studio (CC BY-ND 4.0); panda by Jessie Ferris",
+     "font": "VT323",
+     "size_px": 28,
+     "colour": "rgb(210,226,138)",
+     "role": "credit line 1, about 940 px wide"
+    },
+    {
+     "text": "and chicken by Gulnur Baimukhambetova (both MIT), via vscode-pets",
+     "font": "VT323",
+     "size_px": 28,
+     "colour": "rgb(210,226,138)",
+     "role": "credit line 2, about 925 px wide"
+    }
+   ],
+   "uploads": "one CTA for every 16:9 upload, the Chrome Web Store included",
+   "parameters": "'14 kinds of pet' counts the species the extension ships; re-render if that count changes",
+   "space": "output: a screen-space layer, never scaled or moved by the camera"
+  },
+  "popup_card": {
+   "backdrop": "#FFE3B0 across the whole frame (the floor band's cream); the page stage is not shown during s2b",
+   "card": "exactly one declared crop of the popup take (s2b_shelter.crops), at an integer scale of the native frame (A and C 1x, B 2x), nearest-neighbour, placed per placement below; 12 px corner mask and a soft shadow (0 12px 32px rgba(72,72,72,0.18)). Nothing is drawn over the crop's pixels except the cursor and its click rings.",
+   "in": "pops in: a scale spring from 0.94 to 1.0 and y +24 px to 0 over 200 ms, at FULL opacity (no fade: every frame shows only the declared crop's pixels)",
+   "between": "the card frame morphs to the next crop's output size with a 160 ms spring about the same placement anchor; the content hard-cuts to the next crop at the morph start and is that crop scaled UNIFORMLY (one factor for x and y, the largest that fits inside the frame's current size, nearest-neighbour when the factor is an integer), centred in the frame, with the rest of the frame in the popup's own cream #FFE3B0. The declared frames[].at/w/h is that content box, so w/rect.w equals h/rect.h. It is never a mask over a wider region of the popup, never panned, never stretched, and never shows popup outside the declared crop.",
+   "out": "none: a hard cut to s3_sheet's first_paint at b3e out",
+   "cursor": "the same arrow, in popup CSS space, scaled with the card (22 CSS px x 2 native x card scale); a click on a control draws the usual ring. The cursor and its rings are clipped to the card's current rect: they are never drawn on the backdrop or past the canvas. Every click is aimed inside the crop on screen (s2b_shelter.actions), so the tip is on the card at every click; during a glide that starts outside the next crop the clipped arrow is off the card for 2-3 frames, which is expected.",
+   "caption": "one caption for b3c-b3e, a fixed screen-space layer inside placement.<aspect>.caption_rect (it never moves with the morph), at least 40 px from every card size",
+   "placement": {
+    "sizes_output_px": "A_list 1000x397 (1x), B_pick 630x934 (2x), C_add 1000x298 (1x), from the measured rects",
+    "16x9": {
+     "card": "centred on (640, 540) at steady state, on even pixels (steady_at): A x 140-1140 y 342-739, B x 324-954 y 72-1006, C x 140-1140 y 390-688",
+     "caption_rect": {
+      "x": 1320,
+      "y": 380,
+      "w": 560,
+      "h": 320
+     },
+     "caption": "VT323 72 px on the olive-bordered pill, left-aligned in caption_rect and centred on y 540, two lines: 'adopt: pick one.' / 'name her.' (measured 461 / 259 px wide at 72 px, so the pill is about 511 x 190)",
+     "anchor": {
+      "cx": 640,
+      "cy": 540
+     }
+    },
+    "9x16": {
+     "card": "top edge at y 250, centred on x 540 at steady state: A x 40-1040 y 250-647, B x 224-854 y 250-1184, C x 40-1040 y 250-548. The card is the one element allowed past canvas x 960, for the 2.6 s of s2b (1x is the smallest integer scale).",
+     "caption_rect": {
+      "x": 60,
+      "y": 1224,
+      "w": 840,
+      "h": 236
+     },
+     "caption": "VT323 80 px pill, centred in caption_rect, the same two lines: below the tallest card (B ends at y 1184) by 40 px and above the bottom keep-clear band (y 1520)",
+     "anchor": {
+      "cx": 540,
+      "top": 250
+     }
+    },
+    "frames": "the timeline declares the card on EVERY master frame of b3c-b3e (card.frames[]: {t, rect, at, w, h}; rect in native popup px by the crop rule, at and w x h the content box in output px, integers, w/rect.w = h/rect.h), spring and morph frames included; the eval judges every one",
+    "anchor_rule": "at steady state (outside the 200 ms pop-in and the 160 ms morphs) the card's top-left is exactly steady_at.<aspect>.<crop> (even integers), which is the anchor rule rounded to even: centre x anchor.cx, and centre y anchor.cy (16:9) or top edge anchor.top (9:16), within 2 output px",
+    "steady_at": {
+     "note": "The exact top-left output px of each steady card: the anchor rule's position rounded to EVEN integers (a yuv420p master keeps a card on even pixels aligned with its 2x2 chroma blocks: round 7 measured B at (325,73) 0.918 SSIM against 0.994 at (324,72)). The composition renders these exact integers; every frame after the pop-in or morph uses them.",
+     "16x9": {
+      "A_list": {
+       "x": 140,
+       "y": 342
+      },
+      "B_pick": {
+       "x": 324,
+       "y": 72
+      },
+      "C_add": {
+       "x": 140,
+       "y": 390
+      }
+     },
+     "9x16": {
+      "A_list": {
+       "x": 40,
+       "y": 250
+      },
+      "B_pick": {
+       "x": 224,
+       "y": 250
+      },
+      "C_add": {
+       "x": 40,
+       "y": 250
+      }
+     }
+    }
+   }
+  }
+ },
+ "variants": {
+  "vertical_9x16": {
+   "viewport": {
+    "width": 540,
+    "height": 730,
+    "device_scale_factor": 2
+   },
+   "canvas": {
+    "width": 1080,
+    "height": 1920
+   },
+   "page_frame": {
+    "x": 0,
+    "y": 0,
+    "width": 1080,
+    "height": 1460,
+    "scale": 1,
+    "filter": "nearest"
+   },
+   "band": {
+    "colour": "#FFE3B0",
+    "y": [
+     1460,
+     1920
+    ]
+   },
+   "safe": {
+    "pets_canvas_y": [
+     1332,
+     1460
+    ],
+    "keep_clear": "the top 250 px (the page's own top bar may sit there), the bottom 400 px (band only) and canvas x 960 and up",
+    "max_pet_box_right_css": 444,
+    "overlays": "left of canvas x 900, below y 250"
+   },
+   "camera": {
+    "holds": [
+     1.0,
+     2.0
+    ],
+    "crop": "at zoom z the crop is 1080/z by 1920/z canvas px with its bottom edge at canvas y 1460 + 460/z, so the floor line keeps 460 output px below it; a 2.0x crop shows CSS y 365-730",
+    "moves": "as in the master: push to 2.0x on Rex's walk, hold through hover and treat, the fetch push to catch_point with the same checks and fallback, the push between the pair, and the night push"
+   },
+   "captions": {
+    "font": "VT323",
+    "size_px": 80,
+    "max_chars_per_line": 18,
+    "max_lines": 2,
+    "place": "the master's rule, inside the page frame"
+   },
+   "name_tag": {
+    "icon_px": 64,
+    "font": "Press Start 2P",
+    "size_px": 36,
+    "text": "Pixel Pets",
+    "width_px": 490,
+    "timing": "alone, from 'he's not helping.' leaving until src:rex:swipe"
+   },
+   "shots": {
+    "s1_inbox": {
+     "positions": {
+      "rex": {
+       "x": 380
+      }
+     },
+     "extra_accept": [
+      "Rex's box right edge stays at or under CSS x 444 for the whole take",
+      "no wall bounce (no direction flip at x 0) before out"
+     ],
+     "sim_pass_rate": "12.1% of 2000",
+     "sim_candidates": [
+      7,
+      19,
+      23,
+      51
+     ]
+    },
+    "s2_review": {
+     "roster_hidden": [
+      "bao"
+     ],
+     "positions": {
+      "rex": {
+       "x": 120
+      },
+      "bao": {
+       "x": 16
+      }
+     },
+     "dblclick_css": {
+      "x": 300,
+      "y": 500,
+      "target": "#dbl-zone (narrow layout)"
+     },
+     "extra_accept": [
+      "a catch by Rex within 2800 ms of the dblclick, replacing the 16:9 limit of 2600 ms (the 730 px page gives a 1.34 s fall)",
+      "the ball is at CSS x 380 or less at the catch",
+      "Rex's box right edge stays at or under CSS x 444 for the whole take",
+      "no wall bounce before out"
+     ],
+     "sim_pass_rate": "44.3% of 2000",
+     "sim_candidates": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ]
+    },
+    "s2b_shelter": {
+     "reuse": "the 16:9 popup take: the popup does not depend on the page viewport, so it is recorded once",
+     "card_scale_native": {
+      "A_list": 1,
+      "B_pick": 2,
+      "C_add": 1
+     },
+     "place": "overlays.popup_card.placement.9x16 (card top at y 250, centred on x 540; the caption in its fixed rect below)"
+    },
+    "s3_sheet": {
+     "positions": {
+      "rex": {
+       "x": 200
+      },
+      "pip": {
+       "x": 259
+      },
+      "bao": {
+       "x": 320
+      }
+     },
+     "extra_accept": [
+      "every pet box's right edge stays at or under CSS x 444 for the whole take"
+     ],
+     "sim_pass_rate": "unknown with three pets (two pets: 28.8% of 2000)",
+     "sim_candidates": []
+    },
+    "s4_article_night": {
+     "positions": {
+      "rex": {
+       "x": 250
+      },
+      "pip": {
+       "x": 180
+      },
+      "bao": {
+       "x": 110
+      }
+     },
+     "prng_seed": 1,
+     "extra_accept": [
+      "every pet box's right edge stays at or under CSS x 444 for the whole take"
+     ]
+    }
+   },
+   "brand_line": [
+    "They're not much,",
+    "but they're yours."
+   ],
+   "cta": [
+    {
+     "icon_px": 128,
+     "text": "Pixel Pets",
+     "font": "Press Start 2P",
+     "size_px": 44
+    },
+    {
+     "text": "free. link in bio.",
+     "font": "VT323",
+     "size_px": 72
+    },
+    {
+     "text": "for Chrome on your laptop",
+     "font": "VT323",
+     "size_px": 56
+    },
+    {
+     "text": "collects no data",
+     "font": "VT323",
+     "size_px": 48,
+     "colour": "rgb(210,226,138)"
+    },
+    {
+     "text": "sprites: dog by NVPH Studio (CC BY-ND 4.0)",
+     "font": "VT323",
+     "size_px": 28,
+     "colour": "rgb(210,226,138)"
+    },
+    {
+     "text": "panda by Jessie Ferris, chicken by",
+     "font": "VT323",
+     "size_px": 28,
+     "colour": "rgb(210,226,138)"
+    },
+    {
+     "text": "Gulnur Baimukhambetova (MIT), via vscode-pets",
+     "font": "VT323",
+     "size_px": 28,
+     "colour": "rgb(210,226,138)"
+    }
+   ],
+   "prerequisite": "Set the bio link on each platform before posting.",
+   "nominal_length_s": 29.2,
+   "accept_rule": "Each 9:16 re-record keeps its shot's 16:9 accept rules (shim, timing, catch, no lie before out) with these positions, adds extra_accept, and runs its own seed search."
+  },
+  "readme_gif": {
+   "size": {
+    "width": 960,
+    "height": 360
+   },
+   "fps": 12.5,
+   "frame_delay_cs": 8,
+   "source": "the 16:9 captures halved with nearest-neighbour, so every sprite pixel keeps a colour from its source GIF",
+   "camera": "none: a fixed crop, no zoom",
+   "scenes": [
+    {
+     "shot": "s1_inbox",
+     "crop_css": {
+      "x": 0,
+      "y": 180,
+      "w": 960,
+      "h": 360
+     },
+     "in": "cursor_depart-800",
+     "out": "heart_on+1500",
+     "captions": [
+      "hover: he waves.",
+      "click: a treat."
+     ]
+    },
+    {
+     "shot": "s2_review",
+     "crop_css": {
+      "x": 0,
+      "y": 180,
+      "w": 960,
+      "h": 360
+     },
+     "in": "pets_ready",
+     "out": "catch+2000",
+     "captions": [
+      "double-click: a ball.",
+      "good boy."
+     ]
+    }
+   ],
+   "cursor": "drawn, with the same ring rules",
+   "caption_style": "VT323 32 px on the cream pill, top left of the band",
+   "audio": "none",
+   "encode": "ffmpeg palettegen=max_colors=256:stats_mode=diff, paletteuse=dither=none, loop=0",
+   "colour_check": "every opaque Rex pixel is within 8 RGB units of a colour in his source GIF frame, or the encode fails",
+   "loop": "a hard cut from Rex sitting after the catch back to the inbox before the cursor arrives",
+   "max_bytes": 5000000,
+   "nominal_length_s": 8.6,
+   "readme_credit_line": "Dog sprites: NVPH Studio (CC BY-ND 4.0), via vscode-pets by Anthony Shaw. Full credits below."
+  },
+  "thumbnail": {
+   "size": {
+    "width": 1280,
+    "height": 720
+   },
+   "source": "a 1:1 cut from the master frame at src:rex:swipe+600 (the 2.0x hover hold: swipe pose and 👋), with captions and the name tag switched off",
+   "text": "the store icon and 'Pixel Pets' in Press Start 2P beside Rex, at least 80 px from his box, never on him",
+   "alternate": "the 2.0x catch frame at catch+100, with the ❤️",
+   "upload": "YouTube custom thumbnail; needs a verified account"
+  },
+  "x_poster": "Pick the thumbnail's frame as the poster in X's media editor if it offers one. If not, render the X file from pets_ready, dropping the 4 empty-inbox frames, so the first frame already shows Rex."
+ },
+ "note_on_approved_copy": "This is the approved shot list for epic pets-o3p: design/shots-final.json with the documented edits applied (asset paths, sfx_root, source icon path, camera.sample per beat, the conditional particle-column rule, the mouse anchor alias). video/shots.json must equal it exactly; verify.mjs checks."
+}
