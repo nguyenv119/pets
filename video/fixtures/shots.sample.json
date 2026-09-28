@@ -41,6 +41,7 @@
     { "kind": "wait_state", "pet": "rex", "state": "swipe", "timeout_ms": 600 },
     { "kind": "click_pet", "pet": "rex" },
     { "kind": "wait_state", "state": "heart_on", "timeout_ms": 400 },
+    { "kind": "hold", "hold_ms": 1800, "note": "feed() keeps Rex in eat for 2 s and chase cannot start during eat (src/pet.ts), so the ball drops after the meal." },
     { "kind": "dblclick_empty", "x": 800, "y": 410, "target": "#dbl-zone" },
     { "kind": "wait_state", "state": "ball_on", "timeout_ms": 800 },
     { "kind": "wait_state", "pet": "rex", "state": "catch", "timeout_ms": 4000 }
