@@ -139,6 +139,7 @@
    "shots": {
     "sample_hover_treat_catch": {
      "positions": { "rex": { "x": 300 } },
+     "dblclick_css": { "x": 220, "y": 500 },
      "extra_accept": ["Rex's box right edge stays at or under CSS x 444 for the whole take"]
     },
     "sample_greet_night": {
