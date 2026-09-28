@@ -35,7 +35,15 @@ export interface ShotBeat {
     move: string;
     sample: number | 'card';
   };
-  overlay?: { from?: string; to?: string };
+  overlay?: {
+    from?: string;
+    to?: string;
+    name_tag?: string;
+    clock?: { text: string; from: string }[];
+    clock_out?: string;
+    cta?: string;
+    place?: string;
+  };
   style?: string;
   card?: unknown;
 }
