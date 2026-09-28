@@ -4,11 +4,10 @@
 // as a gate. See vitest.smoke.config.ts for the 100 min timeout: the
 // recording lock alone can wait up to 90 min for another holder.
 //
-// Two separate launches, matching real usage: routeSet aborts every
-// non-pixelpets.demo host (conventions.routed_html), so a page shot (which
-// calls routeSet) and the popup take (which calls openPopup, never
-// routeSet) never share a context — sharing one would abort the popup's own
-// chrome-extension:// resource loads.
+// Two separate launches, matching real usage: a page shot calls routeSet
+// (which aborts every web host but pixelpets.demo, conventions.routed_html)
+// and the popup take calls openPopup, never routeSet, so the two never
+// share a context.
 
 import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
