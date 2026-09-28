@@ -169,5 +169,8 @@ body {
 
   .grid .row .cell {
     width: 84px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
 }
