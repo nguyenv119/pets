@@ -10,7 +10,7 @@
 // rather than its shipped code — this script re-derives the ffmpeg
 // flags, it does not import anything from bead 3).
 //
-// Usage: node scripts/colour-proof.mjs
+// Usage: node scripts/colour-proof.mjs --proof-dir <dir holding frames-lossless-rgb.mkv>
 
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
@@ -23,7 +23,13 @@ import { acquireLock } from '../lib/lock.mjs';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const videoRoot = join(__dirname, '..');
 const repoRoot = join(videoRoot, '..');
-const proofDir = '/Users/nguyenv/pets/pets/.claude/marketing-video/proof';
+// The lossless proof capture lives outside the repo (it is never committed): pass its directory.
+const proofDirArg = process.argv.indexOf('--proof-dir');
+if (proofDirArg < 0 || !process.argv[proofDirArg + 1]) {
+  console.error('colour-proof.mjs: pass --proof-dir <dir holding frames-lossless-rgb.mkv>');
+  process.exit(2);
+}
+const proofDir = process.argv[proofDirArg + 1];
 const SOURCE_MKV = join(proofDir, 'frames-lossless-rgb.mkv');
 
 const FRAME_START = 700; // review round 4's window
