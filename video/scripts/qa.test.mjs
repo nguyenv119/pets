@@ -364,20 +364,20 @@ const realFootage =
   createHash('sha256').update(readFileSync(runDemo)).digest('hex') === gifRun.sources?.s1_inbox;
 
 describe.skipIf(!realFootage)('provenance controls (real footage on disk)', () => {
-  it('separates this run from the synthetic run and the fixture over Rex\'s box, where the whole band could not', () => {
+  it('separates this run from the synthetic run, the fixture and its own neighbouring recording frames over Rex\'s box', () => {
     /**
-     * Why the check crops to Rex and compares single frames: measured on win
-     * attempts 3 and 4 (build/2026-10-03T11-53-50-213Z and
-     * build/2026-10-03T12-24-51-788Z), treat frame 35 at the moment it shows
-     * (7.440 s and 7.520 s), Rex's box 65x64 at band px (396, 296) and
-     * (392, 296):
-     *   over Rex's box      this run 0.992 / 1.000   synthetic = fixture 0.429 / 0.458
-     *                       this run 40 ms early 0.539 / 0.496   80 ms early 0.539 / 0.546
-     *   over the whole band synthetic 0.839 / 0.839
-     * The synthetic run's s1_inbox IS the fixture's demo.sample.mp4 (same
-     * sha256). The page background fills the band, so a band-wide 0.8 passed
-     * any footage of the inbox page; over Rex's box 0.8 sits 0.19 below the
-     * match and 0.34 above the wrong footage.
+     * The check must accept only this run's footage at the frame's own
+     * moment. v2 run 2026-10-03T15-20-57-905Z, treat frame 35 at 6.320 s,
+     * Rex's box 64x64 at band px (552, 296): this run 1.000; the synthetic
+     * run's and the fixture's footage 0.208 and 0.200; this run -80, -40,
+     * +40 and +80 ms 0.474, 1.000, 0.506, 0.499.
+     * One neighbouring frame can match: the sprites animate at 8 fps (125 ms
+     * a sprite frame), so a 40 ms step can land on the same sprite frame
+     * (v1 measured 0.539 there, v2 1.000). The time control is therefore the
+     * worst of the four neighbours: at least one must fail, or the check
+     * could not tell the right moment from the wrong one. (v1's band-wide
+     * synthetic control scored 0.839; the v2 dark inbox no longer looks like
+     * the fixture's page, so that blind spot is gone and is not asserted.)
      */
     // GIVEN — the treat frame of the GIF out/gif-frames holds, and Rex's box at that moment
     const { scenes, fps, eventsByShotId } = planScenes(runDir);
@@ -386,20 +386,16 @@ describe.skipIf(!realFootage)('provenance controls (real footage on disk)', () =
     const band = scenes.find((s) => s.shotId === 's1_inbox').cropCss;
     const rex = rexRegion(ev, t.demoMs, band);
     const png = join(FRAMES_DIR, `frame-${String(t.k).padStart(4, '0')}.png`);
-    const at = (demo, offsetS = 0, region = rex) => regionSsim(png, demo, t.demoMs / 1000 + offsetS, band, region);
+    const at = (demo, offsetS = 0) => regionSsim(png, demo, t.demoMs / 1000 + offsetS, band, rex);
     // WHEN
     const match = at(runDemo);
     const synthetic = at(syntheticDemo);
     const fixture = at(fixtureDemo);
-    const oneFrameEarly = at(runDemo, -0.04);
-    const early = at(runDemo, -0.08);
-    const wholeBandSynthetic = at(syntheticDemo, 0, { x: 0, y: 0, w: band.w, h: band.h });
+    const neighbours = [-0.08, -0.04, 0.04, 0.08].map((o) => at(runDemo, o));
     // THEN
     expect(match).toBeGreaterThanOrEqual(PROVENANCE_SSIM_MIN);
     expect(synthetic).toBeLessThan(PROVENANCE_SSIM_MIN);
     expect(fixture).toBeLessThan(PROVENANCE_SSIM_MIN);
-    expect(oneFrameEarly).toBeLessThan(PROVENANCE_SSIM_MIN);
-    expect(early).toBeLessThan(PROVENANCE_SSIM_MIN);
-    expect(wholeBandSynthetic).toBeGreaterThanOrEqual(PROVENANCE_SSIM_MIN); // the old crop's blind spot
+    expect(Math.min(...neighbours)).toBeLessThan(PROVENANCE_SSIM_MIN);
   });
 });

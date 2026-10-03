@@ -6,8 +6,9 @@ describe('buildGifScenes', () => {
   const shots = {
     fps: 25,
     edit_order: ['s1'],
+    viewport: { width: 960, height: 436 },
     shots: [{ id: 's1', beats: [{ name: 'b2a', caption: 'hover: he waves.', caption_at: 'heart_on-1000', caption_out: 'heart_on-100', camera: { zoom: 2, focus: 'pet:rex', move: 'hold', sample: 2 } }] }],
-    variants: { readme_gif: { fps: 12.5, scenes: [{ shot: 's1', crop_css: { x: 0, y: 180, w: 960, h: 360 }, in: 'pets_ready', out: 'heart_on+1500', captions: ['hover: he waves.'] }] } },
+    variants: { readme_gif: { fps: 12.5, scenes: [{ shot: 's1', crop_css: { x: 0, y: 76, w: 960, h: 360 }, in: 'pets_ready', out: 'heart_on+1500', captions: ['hover: he waves.'] }] } },
   };
   const events = makeEvents({ trimBeforeMs: 1000, videoLagMs: 56, observed: [{ t: 1000, kind: 'pets_ready' }, { t: 5000, kind: 'heart_on' }] });
   const { scenes, totalFrames } = buildGifScenes(shots, { s1: events }, { s1: 's1/demo.mp4' });
@@ -24,5 +25,18 @@ describe('buildGifScenes', () => {
     expect(c.fromFrame).toBe(Math.round((5000 - 1000 + 56 - 1000) / 80));
     expect(c.toFrame).toBe(Math.round((5000 - 100 + 56 - 1000) / 80));
     expect(c.fontPx).toBe(32);
+  });
+
+  it('throws when a scene crop reaches past the capture viewport', () => {
+    /**
+     * The GIF crops the raw capture (960x436 CSS in v2). A crop sized for the
+     * v1 540 px viewport (CSS y 180-540) would leave the band's bottom 104 CSS
+     * rows with no footage, showing the composition's background instead of
+     * the page. Failing at plan time keeps that from ever reaching the GIF.
+     */
+    // GIVEN — the v1 crop (y 180, h 360) against the 436 px v2 viewport
+    const v1Crop = { ...shots, variants: { readme_gif: { ...shots.variants.readme_gif, scenes: [{ ...shots.variants.readme_gif.scenes[0], crop_css: { x: 0, y: 180, w: 960, h: 360 } }] } } };
+    // WHEN / THEN
+    expect(() => buildGifScenes(v1Crop, { s1: events }, { s1: 's1/demo.mp4' })).toThrow(/crop .* outside the 960x436 capture/);
   });
 });

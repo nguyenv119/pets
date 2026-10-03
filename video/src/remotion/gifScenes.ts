@@ -1,5 +1,5 @@
 // gifScenes.ts: the README GIF's scenes resolved to frames (epic pets-o3p,
-// bead pets-o3p.4). Pure. video/shots.json variants.readme_gif: scene
+// bead pets-o3p.4). Pure. Each scene's crop must lie inside the capture viewport. video/shots.json variants.readme_gif: scene
 // in/out anchors on each shot's own events, 12.5 fps, and each scene's two
 // captions shown over their own beats' caption windows (the beat in that
 // shot whose caption is that text), shifted by videoLagMs like the master.
@@ -28,13 +28,17 @@ interface GifSpec {
   scenes: { shot: string; crop_css: { x: number; y: number; w: number; h: number }; in: string; out: string; captions: string[] }[];
 }
 
-export function buildGifScenes(shots: ShotsDoc & { variants?: { readme_gif?: GifSpec } }, eventsByShotId: Record<string, Events>, stagedByShotId: Record<string, string>): { scenes: GifScene[]; fps: number; totalFrames: number } {
+export function buildGifScenes(shots: ShotsDoc & { viewport: { width: number; height: number }; variants?: { readme_gif?: GifSpec } }, eventsByShotId: Record<string, Events>, stagedByShotId: Record<string, string>): { scenes: GifScene[]; fps: number; totalFrames: number } {
   const spec = shots.variants?.readme_gif;
   if (!spec) throw new Error('gif: shots.json has no variants.readme_gif');
   const fps = spec.fps;
   const frameMs = 1000 / fps;
   let cursor = 0;
+  const vp = shots.viewport;
   const scenes = spec.scenes.map((sc) => {
+    const c = sc.crop_css;
+    // the raw capture is the only footage under the band: a crop past it would show the composition's background
+    if (c.x < 0 || c.y < 0 || c.x + c.w > vp.width || c.y + c.h > vp.height) throw new Error(`gif: scene ${sc.shot} crop ${JSON.stringify(c)} reaches outside the ${vp.width}x${vp.height} capture`);
     const ev = eventsByShotId[sc.shot];
     const inMs = resolveAnyAnchor(sc.in, { events: ev });
     const outMs = resolveAnyAnchor(sc.out, { events: ev });
