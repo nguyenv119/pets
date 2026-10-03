@@ -2,13 +2,32 @@ import { describe, expect, it } from 'vitest';
 import { rectDistance, rectsIntersect } from './checks';
 import type { FrameView } from './framePets';
 import { STAGE_16X9, STAGE_9X16 } from './camera';
-import { buildOverlays, placeBesidePets, textWidth, wrapCaption } from './overlays';
+import { buildOverlays, placeBesidePets, textBounds, textWidth, wrapCaption } from './overlays';
 import { runRenderChecks } from './renderChecks';
 import { loadShots, loadSyntheticPopupEvents, makeEvents, stillPets } from './testEvents';
 import { buildTimeline } from './timeline';
 
-const AREA = { x: 48, y: 48, w: 1824, h: 936 };
+const AREA = textBounds('16x9', STAGE_16X9);
 const view = (pets: FrameView['pets']): FrameView => ({ beat: {} as FrameView['beat'], k: 0, unitsPerCss: 2, pets });
+
+describe('textBounds', () => {
+  it('keeps every text layer in the page area, below the chrome', () => {
+    /**
+     * What: the 16:9 text area starts 48 px under the chrome (stage y 256) and ends 48 px above the frame bottom;
+     * the 9:16 one starts at canvas y 250, also below the 208 px chrome.
+     * Why: shots.json: captions, the name tag, the clock, the brand line and the CTA sit inside the page area,
+     * never over the drawn browser chrome.
+     * What breaks: a caption lands on the tab strip or the address bar.
+     */
+    // GIVEN / WHEN
+    const land = textBounds('16x9', STAGE_16X9);
+    const port = textBounds('9x16', STAGE_9X16);
+    // THEN
+    expect(land).toEqual({ x: 48, y: 256, w: 1824, h: 776 });
+    expect(port.y).toBeGreaterThan(STAGE_9X16.pageY);
+    expect(port.y + port.h).toBe(1872);
+  });
+});
 
 describe('wrapCaption', () => {
   it('wraps a 9:16 caption at 18 characters a line, on word boundaries', () => {
@@ -75,7 +94,7 @@ describe('buildOverlays: the popup caption', () => {
       const sheet = makeEvents({
         roster: [{ id: 'rex', name: 'Rex', type: 'dog', color: 'brown' }, { id: 'pip', name: 'Pip', type: 'chicken', color: 'white' }, { id: 'bao', name: 'Bao', type: 'panda', color: 'black' }],
         durationMs: 5000,
-        tracks: stillPets({ rex: 200, pip: 260, bao: 320 }, 5000),
+        tracks: stillPets({ rex: 200, pip: 260, bao: 320 }, 5000, aspect === '9x16' ? 792 : 372),
         observed: [{ t: 0, kind: 'first_paint' }, { t: 500, kind: 'pets_ready' }],
       });
       const eventsByShotId = { s2b_shelter: { ...loadSyntheticPopupEvents(), videoLagMs: 100 }, s3_sheet: sheet };

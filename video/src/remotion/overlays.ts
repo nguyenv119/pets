@@ -86,9 +86,11 @@ export function wrapCaption(text: string, max: number): string[] {
   return lines;
 }
 
-function bounds(aspect: Aspect, stage: StageConfig): Rect {
-  // 16:9: inside a 48 px margin, above the floor band. 9:16: shots.json safe zones (below y 250, left of x 900, above the band).
-  return aspect === '16x9' ? { x: 48, y: 48, w: 1920 - 96, h: stage.floorLine - 48 } : { x: 60, y: 250, w: 840, h: stage.floorLine - 250 };
+/** Where text may go: the page area under the chrome (stage y pageY and down), never over the chrome. */
+export function textBounds(aspect: Aspect, stage: StageConfig): Rect {
+  // 16:9: inside a 48 px margin of the page area. 9:16: shots.json safe zones (below y 250, left of x 900), 48 px above the frame bottom.
+  const top = aspect === '16x9' ? stage.pageY + 48 : 250;
+  return aspect === '16x9' ? { x: 48, y: top, w: stage.width - 96, h: stage.height - 48 - top } : { x: 60, y: top, w: 840, h: stage.height - 48 - top };
 }
 
 /** Whether a text rect keeps clear of every pet on every frame (80 px from boxes; outside particle columns, `strict`: 80 px from them too). */
@@ -138,7 +140,7 @@ export function placeBesidePets(w: number, h: number, views: readonly FrameView[
 export function buildOverlays(input: OverlayInput): TextItem[] {
   const { edit, shots, eventsByShotId, stage, aspect, outputWidth, noCaptions } = input;
   const port = aspect === '9x16';
-  const area = bounds(aspect, stage);
+  const area = textBounds(aspect, stage);
   const items: TextItem[] = [];
   const beatSpec = (name: string): { beat: ShotBeat; shotId: string } => {
     for (const s of shots.shots) {
@@ -214,8 +216,8 @@ export function buildOverlays(input: OverlayInput): TextItem[] {
     if (ov?.clock && ov.clock_out) {
       const ticks = ov.clock.map((c) => ({ text: c.text, fromFrame: frameOf(c.from, eb) }));
       const w = textWidth('22:00:00', 'VT323', 60);
-      // 16:9: inside x 1600-1888, y 24-168, right-aligned; 9:16: top right below y 250, left of x 900.
-      const rect = port ? { x: 880 - w, y: 270, w, h: 60 } : { x: 1888 - w, y: 66, w, h: 60 };
+      // Top right of the page area, under the chrome: 16:9 right edge x 1888 at stage y pageY + 24 (the article keeps CSS x 800-944, y 0-96 empty for it); 9:16 below y 250, left of x 900.
+      const rect = port ? { x: 880 - w, y: 270, w, h: 60 } : { x: 1888 - w, y: stage.pageY + 24, w, h: 60 };
       items.push({ kind: 'clock', beat: beat.name, lines: [ticks[0].text], fontPx: 60, fromFrame: ticks[0].fromFrame, toFrame: frameOf(ov.clock_out, eb), rect, align: 'left', ticks });
     }
 

@@ -14,6 +14,7 @@ import {
   checkCardEndsAfterMousedown,
   checkCardFrameContent,
   checkCardSteadyAnchor,
+  checkCropOnFrameBottom,
   checkCropPetMargin,
   checkInsideRect,
   checkOverlayPetDistance,
@@ -67,7 +68,7 @@ export function runRenderChecks(input: RenderCheckInput): FrameViolation[] {
   const page: Rect = { x: 0, y: 0, w: stage.width, h: stage.height };
   const add = (frame: number, element: string, vs: CheckViolation[]) => vs.forEach((v) => out.push({ ...v, frame, element }));
 
-  // 1. Page frames: no crop edge within the margin of (or through) a visible pet box, unless it is the page edge.
+  // 1. Page frames: every crop ends on the frame bottom, and no crop edge within the margin of (or through) a visible pet box, unless it is the page edge.
   //    The same boxes the camera frames: tracks, else the click rects of the roster's visible pets (the fixture).
   for (const b of edit.beats) {
     if (!b.frameCrops) continue;
@@ -75,6 +76,7 @@ export function runRenderChecks(input: RenderCheckInput): FrameViolation[] {
     for (let k = b.k0; k < b.k1; k++) {
       const boxes = visiblePetBoxesStage(events, loggedMsAt(events, k * frameMs - b.shiftMs), stage).map((p) => p.box);
       add(k, `${b.name} camera crop`, checkCropPetMargin(b.frameCrops[k - b.k0], boxes, page));
+      add(k, `${b.name} camera crop`, checkCropOnFrameBottom(b.frameCrops[k - b.k0], stage.height));
     }
   }
 
@@ -128,8 +130,8 @@ export function runRenderChecks(input: RenderCheckInput): FrameViolation[] {
   return out;
 }
 
-/** The 16:9 capture as the GIF reads it: native px, nothing hidden above the band. */
-const GIF_SOURCE_STAGE: StageConfig = { width: 1920, height: 1080, floorLine: 1080, pageTopNative: 0 };
+/** The 16:9 capture as the GIF reads it: native px (stage y = 2 x CSS y), no chrome above it. */
+const GIF_SOURCE_STAGE: StageConfig = { width: 1920, height: 872, pageY: 0 };
 
 /**
  * The README GIF's text checks (variants.readme_gif): on every GIF frame

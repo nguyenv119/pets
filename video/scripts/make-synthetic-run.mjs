@@ -13,7 +13,7 @@
 //
 // Usage: node scripts/make-synthetic-run.mjs
 
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -29,6 +29,7 @@ import {
 } from './synthetic/page-events.mjs';
 import { buildPopupEvents } from './synthetic/popup-events.mjs';
 import { capturePopupTake } from './synthetic/popup-take.mjs';
+import { isMain } from './stage-io.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const VIDEO_DIR = join(__dirname, '..');
@@ -39,13 +40,16 @@ const OUT_DIR = join(VIDEO_DIR, '.cache', 'synthetic-run');
 // popup take s2b_shelter, which gets its own real capture below).
 const PAGE_SHOT_IDS = ['s1_inbox', 's2_review', 's3_sheet', 's4_article_night'];
 
-// v916 (9:16) page-shot stand-in geometry (bead step 6): crop the fixture
-// to device x 840-1920 (full height), pad 380 device px of the page
-// colour #faf6ef on top. dx/dy are the matching CSS-px shift for events
-// (device px / 2, since the fixture's DPR is 2).
-const V916_CROP = { x: 840, y: 0, w: 1080, h: 1080 };
-const V916_PAD = { w: 1080, h: 1460, y: 380, color: '0xfaf6ef' };
-const V916_SHIFT = { dx: -420, dy: 190 };
+// Page-shot stand-in geometry. The fixture is a v1 960x540 take (1920x1080
+// device px, pets at CSS y 476-540); the v2 captures are shorter, so each
+// stand-in is a real crop (+ pad) of it, and its events move by the matching
+// CSS shift (device px / 2, the fixture's DPR is 2) so Rex stands at
+// innerHeight - 64 again. Exported for the test that pins them to shots.json.
+// 16:9: the bottom 1920x872 (CSS y 104-540) -> the 960x436 viewport.
+export const LAND = { crop: { x: 0, y: 208, w: 1920, h: 872 }, pad: { w: 1920, h: 872, y: 0, color: '0xfaf6ef' }, shift: { dx: 0, dy: -104 }, viewport: { width: 960, height: 436 } };
+// 9:16: device x 840-1920, full height, padded with 632 device px of the page
+// colour on top -> the 540x856 narrow viewport (1080x1712).
+export const V916 = { crop: { x: 840, y: 0, w: 1080, h: 1080 }, pad: { w: 1080, h: 1712, y: 632, color: '0xfaf6ef' }, shift: { dx: -420, dy: 316 }, viewport: { width: 540, height: 856 } };
 
 function loadJson(path) {
   return JSON.parse(readFileSync(path, 'utf-8'));
@@ -99,28 +103,13 @@ async function buildPageShots(shotsDoc) {
     const shot = findShot(shotsDoc, shotId);
     const events = buildPageEvents(shotId, shot, template);
 
-    const shotDir = join(OUT_DIR, shotId);
-    mkdirSync(shotDir, { recursive: true });
-    const demoPath = join(shotDir, 'demo.mp4');
-    cpSync(fixtureMp4, demoPath);
-    writeEvents(shotDir, events);
-    written.push({ label: shotId, path: demoPath });
-
-    // v916 stand-in: real crop+pad of the same fixture (bead step 6), not a reused 16:9 copy.
-    const v916Dir = join(OUT_DIR, 'v916', shotId);
-    mkdirSync(v916Dir, { recursive: true });
-    const v916Path = join(v916Dir, 'demo.mp4');
-    buildPortraitStandin({
-      srcPath: fixtureMp4,
-      outPath: v916Path,
-      crop: V916_CROP,
-      padW: V916_PAD.w,
-      padH: V916_PAD.h,
-      padY: V916_PAD.y,
-      padColor: V916_PAD.color,
-    });
-    writeEvents(v916Dir, shiftPortraitEvents(events, V916_SHIFT));
-    written.push({ label: `v916/${shotId}`, path: v916Path });
+    for (const [g, dir] of [[LAND, join(OUT_DIR, shotId)], [V916, join(OUT_DIR, 'v916', shotId)]]) {
+      mkdirSync(dir, { recursive: true });
+      const demoPath = join(dir, 'demo.mp4');
+      buildPortraitStandin({ srcPath: fixtureMp4, outPath: demoPath, crop: g.crop, padW: g.pad.w, padH: g.pad.h, padY: g.pad.y, padColor: g.pad.color });
+      writeEvents(dir, { ...shiftPortraitEvents(events, g.shift), viewport: g.viewport });
+      written.push({ label: g === LAND ? shotId : `v916/${shotId}`, path: demoPath });
+    }
   }
 
   return written;
@@ -171,7 +160,9 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (isMain(import.meta.url)) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

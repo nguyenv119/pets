@@ -92,7 +92,7 @@ export function focusPets(focus: string, events: Events): string[] {
 /**
  * A pet's box in STAGE px at logged time `loggedMs`: the nearest track
  * frame's box, or (no tracks, as in the fixture) the nearest click rect on
- * that pet. CSS -> native (x2) -> stage (minus the hidden top strip).
+ * that pet. CSS -> native (x2) -> stage (plus the chrome above the page, stage.pageY).
  * Mirrors verify.mjs's petBoxStage.
  */
 export function petBoxStage(events: Events, petId: string, loggedMs: number, stage: StageConfig): Rect | null {
@@ -110,7 +110,7 @@ export function petBoxStage(events: Events, petId: string, loggedMs: number, sta
     const clicks = events.clicks.filter((c) => c.pet === petId && c.rect).sort((a, b) => Math.abs(a.tMs - loggedMs) - Math.abs(b.tMs - loggedMs));
     if (clicks[0]) box = clicks[0].rect;
   }
-  return box ? { x: box.x * 2, y: box.y * 2 - stage.pageTopNative, w: box.w * 2, h: box.h * 2 } : null;
+  return box ? { x: box.x * 2, y: stage.pageY + box.y * 2, w: box.w * 2, h: box.h * 2 } : null;
 }
 
 /** Every visible pet's box in stage px at logged time (tracks, else the click rects of the roster's visible pets). */
@@ -125,8 +125,16 @@ export function visiblePetBoxesStage(events: Events, loggedMs: number, stage: St
   return out;
 }
 
-const contains = (crop: Rect, box: Rect, m: number): boolean =>
-  box.x >= crop.x + m && box.y >= crop.y + m && box.x + box.w <= crop.x + crop.w - m && box.y + box.h <= crop.y + crop.h - m;
+/**
+ * Whether `box` lies inside `crop` with `m` stage px to spare on every crop edge that is not the page's own
+ * edge (the same exemption as checks.ts checkCropPetMargin): the pets stand on the stage bottom, which every
+ * crop shares, so no margin is asked for below them.
+ */
+const contains = (crop: Rect, box: Rect, m: number, page: Rect): boolean =>
+  box.x >= crop.x + (crop.x <= page.x ? 0 : m) &&
+  box.y >= crop.y + (crop.y <= page.y ? 0 : m) &&
+  box.x + box.w <= crop.x + crop.w - (crop.x + crop.w >= page.x + page.w ? 0 : m) &&
+  box.y + box.h <= crop.y + crop.h - (crop.y + crop.h >= page.y + page.h ? 0 : m);
 
 /**
  * The crop on every master frame of every beat of one shot (page shots
@@ -156,7 +164,7 @@ export function shotFrameCrops(input: ShotCameraInput): Rect[][] {
     }
     return boxes;
   };
-  const framesFocus = (crop: Rect, boxes: readonly Rect[]) => boxes.every((b) => contains(crop, b, SHARE_MARGIN_STAGE_PX));
+  const framesFocus = (crop: Rect, boxes: readonly Rect[]) => boxes.every((b) => contains(crop, b, SHARE_MARGIN_STAGE_PX, full));
 
   // Pass 1: each beat's resting crop (where it holds), sharing the previous beat's when it still frames the focus.
   const rest: (Rect | null)[] = [];
@@ -184,7 +192,7 @@ export function shotFrameCrops(input: ShotCameraInput): Rect[][] {
     if (prev && pb && zoomOf(pb) === zoomOf(s.beat) && pb.camera.focus === s.beat.camera.focus) {
       const mid = loggedMsAt(events, (s.sourceIn + s.sourceOut) / 2);
       const midBoxes = focusPets(s.beat.camera.focus, events).map((p) => petBoxStage(events, p, mid, stage));
-      if (midBoxes.every((b) => b && contains(prev, b, SHARE_MARGIN_STAGE_PX)) && framesFocus(prev, boxes)) {
+      if (midBoxes.every((b) => b && contains(prev, b, SHARE_MARGIN_STAGE_PX, full)) && framesFocus(prev, boxes)) {
         rest.push(prev);
         return;
       }
@@ -205,8 +213,8 @@ export function shotFrameCrops(input: ShotCameraInput): Rect[][] {
     if (move.kind !== 'hold_until' && move.kind !== 'push_then_hold') return;
     if (classifyMove(n.beat.camera.move).kind !== 'hold' || zoomOf(n.beat) === 1 || zoomOf(n.beat) !== zoomOf(s.beat) || n.beat.camera.focus !== s.beat.camera.focus) return;
     const pushFrom = anchor(move.kind === 'hold_until' ? move.untilAnchor! : move.pushEndAnchor!, s) + lag;
-    const held = focusBoxesOver(s, pushFrom).filter((b) => contains(own, b, SHARE_MARGIN_STAGE_PX));
-    if (held.every((b) => contains(next, b, SHARE_MARGIN_STAGE_PX))) rest[i] = next;
+    const held = focusBoxesOver(s, pushFrom).filter((b) => contains(own, b, SHARE_MARGIN_STAGE_PX, full));
+    if (held.every((b) => contains(next, b, SHARE_MARGIN_STAGE_PX, full))) rest[i] = next;
   });
 
   // Pass 2: every frame.
@@ -228,7 +236,7 @@ export function shotFrameCrops(input: ShotCameraInput): Rect[][] {
       if (d < from || d > to) continue;
       const crop = d < p.startMs ? full : d < p.endMs ? eased(p, d) : p.to;
       const bx = f.ball.x * 2;
-      const by = f.ball.y * 2 - stage.pageTopNative;
+      const by = stage.pageY + f.ball.y * 2;
       if (bx < crop.x || bx > crop.x + crop.w || by < crop.y || by > crop.y + crop.h) return true;
     }
     return false;

@@ -42,7 +42,7 @@ export interface CursorProps {
   loggedMs: number;
   /** CSS px -> the layer's px (2: native) */
   cssToLayer: number;
-  /** layer y of CSS y 0 (the 16:9 stage hides the top 96 native px) */
+  /** layer y of CSS y 0 (the page stage: stage.pageY, below the chrome) */
   offsetY: number;
 }
 

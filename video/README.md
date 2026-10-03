@@ -49,6 +49,11 @@ Only stage 9 deletes old recordings. If you record on your own
 `build/<timestamp>/` and nothing removes the old ones, so run
 `npx tsx scripts/prune.mjs` afterwards to keep only the two newest.
 
+The drawn browser chrome above each page (`set/chrome/<page>.png` and
+`<page>-narrow.png`) is committed. After editing `set/chrome/chrome.html` or
+`chrome.css`, regenerate the PNGs with `npx tsx scripts/chrome-png.mjs`; it
+fails if the pinned Pixel Pets icon moves from where `shots.json` puts it.
+
 ### How long it takes
 
 The recording dominates. Each page shot repeats until a seed passes all of

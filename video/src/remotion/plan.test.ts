@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { sampleCursor } from './Cursor';
-import { popupCursor, withSharpFrame, type PlanBeat } from './plan';
-import { makeEvents } from './testEvents';
+import { STAGE_16X9, STAGE_9X16 } from './camera';
+import { buildPromoPlan, popupCursor, withSharpFrame, type PlanBeat } from './plan';
+import { makeEvents, stillPets } from './testEvents';
+import { buildTimeline, type ShotsDoc } from './timeline';
 
 describe('popupCursor', () => {
   // GIVEN — a popup take that logs its clicks but no cursor path (the synthetic stand-in)
@@ -53,5 +55,45 @@ describe('withSharpFrame', () => {
     // THEN
     expect(out.beats.map((b) => b.sharpFrames)).toEqual([[3], [12, 15]]);
     expect(plan.beats[1].sharpFrames).toEqual([12]); // the input plan is not mutated
+  });
+});
+
+describe('buildPromoPlan: the chrome strip per page beat', () => {
+  const roster = [{ id: 'rex', name: 'Rex', type: 'dog', color: 'brown' }];
+  const shotsWith = (page?: string): ShotsDoc => ({
+    fps: 25,
+    edit_order: ['s1'],
+    shots: [{ id: 's1', page, beats: [{ name: 'b_hold', in: 'pets_ready', out: 'pets_ready+800', camera: { zoom: 1, focus: 'page', move: 'hold', sample: 1 } }] }],
+  });
+  const plan = (shots: ShotsDoc, aspect: '16x9' | '9x16') => {
+    const stage = aspect === '16x9' ? STAGE_16X9 : STAGE_9X16;
+    const eventsByShotId = { s1: makeEvents({ roster, tracks: stillPets({ rex: 100 }, 20000, aspect === '16x9' ? 372 : 792), observed: [{ t: 500, kind: 'pets_ready' }] }) };
+    const edit = buildTimeline({ shots, stage, aspect, eventsByShotId, sourceByShotId: { s1: '/r/s1.mp4' }, music: 'm' });
+    return buildPromoPlan({ edit, shots, eventsByShotId, stagedByShotId: { s1: 's1/demo.mp4' }, stage, aspect, outputWidth: stage.width, outputHeight: stage.height, musicSrc: 'm', iconPath: 'i' });
+  };
+
+  it("names the shot page's chrome PNG, wide in the 16:9 and narrow in the 9:16", () => {
+    /**
+     * What: a review shot's page beat draws set/chrome/review.png in the 16:9 and set/chrome/review-narrow.png in
+     * the 9:16 (shots.json master.stage.chrome.png and variants.vertical_9x16.chrome.png).
+     * Why: the active tab and the URL in the chrome name the page being filmed.
+     * What breaks: the review shot shows the inbox's tab and address, or the 9:16 shows a 1920-wide strip squeezed.
+     */
+    // GIVEN / WHEN
+    const land = plan(shotsWith('review'), '16x9');
+    const port = plan(shotsWith('review'), '9x16');
+    // THEN
+    expect(land.beats.map((b) => b.chromeSrc)).toEqual(['set/chrome/review.png']);
+    expect(port.beats.map((b) => b.chromeSrc)).toEqual(['set/chrome/review-narrow.png']);
+  });
+
+  it('refuses a page shot that names no page', () => {
+    /**
+     * What: planning a page shot with no `page` throws, naming the shot.
+     * Why: the stage has no chrome to draw without it; an empty strip would pass every plan check.
+     * What breaks: a master renders with a blank strip over the page.
+     */
+    // GIVEN / WHEN / THEN
+    expect(() => plan(shotsWith(undefined), '16x9')).toThrow(/page shot s1 declares no page/);
   });
 });

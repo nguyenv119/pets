@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Rect } from '../schema';
 import { STAGE_16X9 } from './camera';
 import {
+  checkCropOnFrameBottom,
   CHECK_THRESHOLDS,
   checkCardCaptionGap,
   checkCardEndsAfterMousedown,
@@ -557,5 +558,22 @@ describe('CHECK_THRESHOLDS', () => {
       CARD_CONTENT_ROUNDING_PX: 0.5,
       PARTICLE_LIFETIME_MS: 1500,
     });
+  });
+});
+
+describe('checkCropOnFrameBottom', () => {
+  it('passes a crop that ends on the frame bottom and fails one that ends above it', () => {
+    /**
+     * What: {y 540, h 540} on a 1080 stage passes; {y 492, h 540} (the v1 band-era 2.0x crop) fails, naming
+     * both bottoms.
+     * Why: shots.json master.stage: no floor band, pets stand on the frame bottom at every zoom.
+     * What breaks: a crop above the frame bottom shows the pets floating, or cuts their feet off.
+     */
+    // GIVEN / WHEN
+    const ok = checkCropOnFrameBottom({ x: 0, y: 540, w: 960, h: 540 }, 1080);
+    const bad = checkCropOnFrameBottom({ x: 0, y: 492, w: 960, h: 540 }, 1080);
+    // THEN
+    expect(ok).toEqual([]);
+    expect(bad).toEqual([{ check: 'crop-frame-bottom', detail: 'crop bottom at stage y 1032, not the frame bottom 1080' }]);
   });
 });
