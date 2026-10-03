@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { rectDistance, rectsIntersect } from './checks';
 import type { FrameView } from './framePets';
-import { placeBesidePets, textWidth, wrapCaption } from './overlays';
+import { STAGE_16X9, STAGE_9X16 } from './camera';
+import { buildOverlays, placeBesidePets, textWidth, wrapCaption } from './overlays';
+import { runRenderChecks } from './renderChecks';
+import { loadShots, loadSyntheticPopupEvents, makeEvents, stillPets } from './testEvents';
+import { buildTimeline } from './timeline';
 
 const AREA = { x: 48, y: 48, w: 1824, h: 936 };
 const view = (pets: FrameView['pets']): FrameView => ({ beat: {} as FrameView['beat'], k: 0, unitsPerCss: 2, pets });
@@ -48,4 +52,41 @@ describe('placeBesidePets', () => {
     const { problem } = placeBesidePets(500, 102, [view([{ id: 'rex', box: wall }])], ['rex'], AREA, 'b1a caption');
     expect(problem).toMatch(/no spot for b1a caption/);
   });
+});
+
+describe('buildOverlays: the popup caption', () => {
+  for (const aspect of ['16x9', '9x16'] as const) {
+    it(`ends with the last card beat when a page shot follows, whatever the take's video lag (${aspect})`, () => {
+      /**
+       * What: the card caption (one layer across b3c-b3e) is on screen only on card frames, even when its
+       * caption_out anchor ("add_mousedown+160", shifted by the take's videoLagMs and rounded) lands after
+       * the last card beat's own end (the same anchor on the beat clock, which carries no lag).
+       * Why: the caption sits in screen space where the card was; one frame later the next page shot's
+       * pets stand there. Win attempt 1 (9:16) drew it on b4a_hi's first frame, 0 px from Rex's box, and
+       * the render aborted.
+       * What breaks: the 9:16 render aborts on overlay-pet-distance, or (unchecked) the pill flashes over
+       * the pets for a frame after the hard cut.
+       */
+      // GIVEN — the synthetic popup take shown 100 ms late (VIDEO_LAG_MAX is 120), then s3_sheet with three pets on the floor
+      const full = loadShots();
+      const shots = { ...full, edit_order: ['s2b_shelter', 's3_sheet'] };
+      const stage = aspect === '16x9' ? STAGE_16X9 : STAGE_9X16;
+      const sheet = makeEvents({
+        roster: [{ id: 'rex', name: 'Rex', type: 'dog', color: 'brown' }, { id: 'pip', name: 'Pip', type: 'chicken', color: 'white' }, { id: 'bao', name: 'Bao', type: 'panda', color: 'black' }],
+        durationMs: 5000,
+        tracks: stillPets({ rex: 200, pip: 260, bao: 320 }, 5000),
+        observed: [{ t: 0, kind: 'first_paint' }, { t: 500, kind: 'pets_ready' }],
+      });
+      const eventsByShotId = { s2b_shelter: { ...loadSyntheticPopupEvents(), videoLagMs: 100 }, s3_sheet: sheet };
+      const edit = buildTimeline({ shots, stage, aspect, eventsByShotId, sourceByShotId: { s2b_shelter: '/r/s2b.mp4', s3_sheet: '/r/s3.mp4' }, music: 'm' });
+      // WHEN
+      const items = buildOverlays({ edit, shots, eventsByShotId, stage, aspect, outputWidth: stage.width, outputHeight: stage.height });
+      // THEN
+      const cards = edit.beats.filter((b) => b.card);
+      const caption = items.find((i) => i.kind === 'card_caption')!;
+      expect(caption.fromFrame).toBeGreaterThanOrEqual(cards[0].k0);
+      expect(caption.toFrame).toBe(cards[cards.length - 1].k1);
+      expect(runRenderChecks({ edit, shots, eventsByShotId, stage, aspect, outputWidth: stage.width, items: [caption] })).toEqual([]);
+    });
+  }
 });
