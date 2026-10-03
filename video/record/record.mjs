@@ -17,9 +17,11 @@ import { buildExtension, launchWithExtension, routeSet, seedStorage } from '../l
 import { evaluateShotRules } from './accept.mjs';
 import { assembleFrames, generateSignalStats, probeVideo } from './assemble.mjs';
 import { DiscardTake, runActions } from './choreo.mjs';
+import { installClap } from './clap.js';
 import { deriveEvents } from './derive.mjs';
 import { installObservers } from './observe.js';
 import { recordPopupTake } from './popup.mjs';
+import { startScreencast } from './screencast.mjs';
 import { computeSync, HEART_MASK_FILTER, measureVideoLagFromHeart } from './sync.mjs';
 import { fallbackVideoLagMs, keptHeartLagsMs } from './video-lag.mjs';
 
@@ -144,20 +146,13 @@ async function captureOneTake({ shot, aspect, viewport, seedValue, ext, setDir, 
 
     const page = await context.newPage();
     const cdp = await context.newCDPSession(page);
-    const frames = [];
-    const pending = [];
-    cdp.on('Page.screencastFrame', (f) => {
-      cdp.send('Page.screencastFrameAck', { sessionId: f.sessionId }).catch(() => {});
-      const file = join(framesDir, `f${String(frames.length).padStart(5, '0')}.png`);
-      frames.push({ file, ts: f.metadata.timestamp });
-      pending.push(writeFile(file, f.data));
-    });
-    await cdp.send('Page.startScreencast', { format: 'png', everyNthFrame: 1 });
+    const screencast = await startScreencast(cdp, framesDir);
 
     const setPage = shot.page === 'popup' ? undefined : shot.page;
     const url = `https://pixelpets.demo/${setPage}.html`;
     await page.goto(url, { waitUntil: 'load' });
     await page.evaluate(installObservers, seedDoc.roster);
+    await page.evaluate(installClap);
     // recordStartT anchors t=0 for the derived Events document: the moment
     // observation begins, not the clap's release edge. A shot with no
     // initial hold can reach pets_ready (and any immediate reaction, e.g.
@@ -175,18 +170,17 @@ async function captureOneTake({ shot, aspect, viewport, seedValue, ext, setDir, 
       // always mark the end clapper, even on discard, so the frames dir stays inspectable
       await page.evaluate(([label, ms]) => window.__clap(label, ms), ['end', CLAP_MS]).catch(() => {});
     }
-    const clapEnd = await page.evaluate(() => window.__pp.marks.filter((m) => m.kind === 'clap' && m.label === 'end').pop());
+    const clapEnd = await page.evaluate(() => window.__clapMarks.filter((m) => m.label === 'end').pop());
     const shim = await page.evaluate(() => document.documentElement.dataset.ppShim);
 
     await new Promise((r) => setTimeout(r, 100));
-    await cdp.send('Page.stopScreencast');
-    await Promise.all(pending);
+    await screencast.stop();
 
     const pp = await page.evaluate(() => window.__pp);
 
     return {
       workDir,
-      frames,
+      frames: screencast.frames,
       raw: {
         recordStartT,
         clapStart,
@@ -212,11 +206,6 @@ async function captureOneTake({ shot, aspect, viewport, seedValue, ext, setDir, 
   } finally {
     await context.close().catch(() => {});
   }
-}
-
-async function writeFile(path, base64) {
-  const { writeFile: wf } = await import('node:fs/promises');
-  return wf(path, Buffer.from(base64, 'base64'));
 }
 
 function pruneOldRuns() {

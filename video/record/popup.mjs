@@ -10,6 +10,8 @@ import { join } from 'node:path';
 import { launchWithExtension, logPopupRects, openPopup, seedStorage } from '../lib/browser.mjs';
 import { evaluateRules } from './accept.mjs';
 import { assembleFrames, generateSignalStats, probeVideo } from './assemble.mjs';
+import { installClap } from './clap.js';
+import { startScreencast } from './screencast.mjs';
 import { computeSync } from './sync.mjs';
 import { fallbackVideoLagMs } from './video-lag.mjs';
 
@@ -80,26 +82,6 @@ function installPopupObserver() {
       window.__ppPopup.rosterSaved = { t: performance.timeOrigin + performance.now(), roster: changes['pixel-pets-v1'].newValue?.roster ?? [] };
     }
   });
-
-  // The same clapperboard record/observe.js installs for page shots
-  // (magenta, all:initial so the popup's own CSS can't leak into it), so
-  // sync.mjs's signalstats detection works identically for this take.
-  window.__clap = (label, holdMs) =>
-    new Promise((resolve) => {
-      const div = document.createElement('div');
-      div.style.cssText =
-        'all:initial;position:fixed;inset:0;display:block;background:#ff00ff;opacity:1;z-index:2147483647;pointer-events:none;';
-      document.documentElement.appendChild(div);
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          div.remove();
-          requestAnimationFrame(() => {
-            const tOff = performance.timeOrigin + performance.now();
-            resolve({ label, tOff, tOn: tOff - holdMs });
-          });
-        }, holdMs);
-      });
-    });
 }
 
 async function waitPopupReady(page, layoutExpect, timeoutMs) {
@@ -234,17 +216,10 @@ async function captureOnePopupTake({ shot, ext, timezoneId, homeDaysOverride, do
 
     const { page } = await openPopup(context, extensionId, shot.viewport);
     const cdp = await context.newCDPSession(page);
-    const frames = [];
-    const pending = [];
-    cdp.on('Page.screencastFrame', (f) => {
-      cdp.send('Page.screencastFrameAck', { sessionId: f.sessionId }).catch(() => {});
-      const file = join(framesDir, `f${String(frames.length).padStart(5, '0')}.png`);
-      frames.push({ file, ts: f.metadata.timestamp });
-      pending.push(import('node:fs/promises').then(({ writeFile }) => writeFile(file, Buffer.from(f.data, 'base64'))));
-    });
-    await cdp.send('Page.startScreencast', { format: 'png', everyNthFrame: 1 });
+    const screencast = await startScreencast(cdp, framesDir);
 
     await page.evaluate(installPopupObserver);
+    await page.evaluate(installClap);
     const recordStartT = await pageNow(page);
 
     await waitPopupReady(page, shot.layout_expect, 5000);
@@ -268,15 +243,14 @@ async function captureOnePopupTake({ shot, ext, timezoneId, homeDaysOverride, do
     }
 
     await sleep(100);
-    await cdp.send('Page.stopScreencast');
-    await Promise.all(pending);
+    await screencast.stop();
 
     const rawTracks = await page.evaluate(() => window.__ppTracks ?? []);
     const tracks = rawTracks.map((f) => ({ ...f, t: tracksInstallEpoch + f.t }));
 
     return {
       workDir,
-      frames,
+      frames: screencast.frames,
       extensionId,
       recordStartT,
       clapStart,

@@ -37,17 +37,40 @@ describe('deriveEvents', () => {
   });
 
   it('derives a catch with the catching pet and the ball position at heart_on', () => {
-    // GIVEN — the recorded ball_off/heart_on pair in the proof render (a real catch)
+    // GIVEN — the recorded ball_off/heart_on pair in the proof render (a real catch): the heart is drawn at x=730,
+    // the ball's last tracked position before it is (706, 487), and Rex (roster id "a") is the pet under the heart
     const raw = fromLegacyProofRaw(rawSample);
 
     // WHEN — events are derived
     const events = deriveEvents(raw, baseContext());
 
-    // THEN — a catch event names a catcher and carries the ball's last tracked x/y, not the heart centroid
+    // THEN — the catch names Rex and carries the tracked ball position, not the heart centroid (730)
     const catchEvent = events.observed.find((e) => e.kind === 'catch');
     expect(catchEvent).toBeDefined();
-    expect(catchEvent.pet).toBeTruthy();
-    expect(typeof catchEvent.x).toBe('number');
+    expect(catchEvent.pet).toBe('a');
+    expect(catchEvent.x).toBe(706);
+    expect(catchEvent.y).toBe(487);
+  });
+
+  it('derives the recorded greet: dog/brown and panda/black both go walk to swipe at the same instant', () => {
+    // GIVEN — the proof render, where Rex ("a", dog/brown) and Bao ("b", panda/black) both switch walk->swipe at
+    // t=1790454917337.5 unhovered, then both switch swipe->walk at t=1790454918388.9 (absolute page ms)
+    const raw = fromLegacyProofRaw(rawSample);
+    const t0 = raw.recordStartT ?? raw.clapStart.tOff;
+
+    // WHEN — events are derived
+    const events = deriveEvents(raw, baseContext());
+
+    // THEN — greet_start and greet_end fire once for each of the two pets, at those two instants, and greet marks both
+    const of = (kind) => events.observed.filter((e) => e.kind === kind);
+    expect(of('greet_start').map((e) => e.pet).sort()).toEqual(['a', 'b']);
+    expect(of('greet_end').map((e) => e.pet).sort()).toEqual(['a', 'b']);
+    for (const e of of('greet_start')) expect(e.t).toBeCloseTo(1790454917337.5 - t0, 3);
+    for (const e of of('greet_end')) expect(e.t).toBeCloseTo(1790454918388.9 - t0, 3);
+    const greets = of('greet').map((e) => e.t);
+    expect(greets).toHaveLength(2);
+    expect(greets[0]).toBeCloseTo(1790454917337.5 - t0, 3);
+    expect(greets[1]).toBeCloseTo(1790454918388.9 - t0, 3);
   });
 
   it('discards a feed with no heart_on inside the 400ms acceptance window', () => {

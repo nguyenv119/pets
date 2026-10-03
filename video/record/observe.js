@@ -161,27 +161,4 @@ export function installObservers(roster) {
   }
 
   requestAnimationFrame(scanFrame);
-
-  // -- clapperboard --
-  window.__clap = (label, holdMs) =>
-    new Promise((resolve) => {
-      const div = document.createElement('div');
-      div.style.cssText =
-        'all:initial;position:fixed;inset:0;display:block;background:#ff00ff;opacity:1;z-index:2147483647;pointer-events:none;';
-      const tInsert = now();
-      document.documentElement.appendChild(div);
-      requestAnimationFrame(() => {
-        const tOn = now();
-        setTimeout(() => {
-          const tRemove = now();
-          div.remove();
-          requestAnimationFrame(() => {
-            const tOff = now();
-            const mark = { label, tInsert, tOn, tRemove, tOff };
-            pp.marks.push({ kind: 'clap', ...mark });
-            resolve(mark);
-          });
-        }, holdMs);
-      });
-    });
 }

@@ -57,6 +57,34 @@ function rosterOf(...names) {
 
 const CLICK = { label: 'x', tDepartMs: 0, tDownMs: 0, x: 0, y: 0, rect: { x: 0, y: 0, w: 1, h: 1 } };
 
+const SEEDED_ROSTER = [
+  { id: '6f1c2a4e-1b2c-4d3e-8f40-0a1b2c3d4e5f', name: 'Rex', type: 'dog', color: 'brown' },
+  { id: '7a2d3b5f-2c3d-4e4f-9051-1b2c3d4e5f60', name: 'Bao', type: 'panda', color: 'black' },
+];
+const FRESH_PIP_ID = '3c9e1d2a-5b6c-4d7e-a8f9-0a1b2c3d4e5f';
+
+/**
+ * An s2b_shelter Add Pet log: the press at t=200, the mouseup at t=450, the
+ * list 137px tall and the form 300px tall before the press, and (by default)
+ * addPet's re-render 100ms after the mouseup: the list 210px, the form 40px,
+ * and a saved Pip with a fresh v4 UUID. Each option edits one clause.
+ */
+function addPetLog({ grownListH = 210, collapsedFormH = 40, pipId = FRESH_PIP_ID, reRenderAt = 550 } = {}) {
+  const rect = (h) => ({ x: 0, y: 0, w: 1, h });
+  return wrap({
+    roster: SEEDED_ROSTER,
+    observed: [
+      { t: 200, kind: 'add_mousedown' },
+      { t: 450, kind: 'add_mouseup' },
+      { t: 600, kind: 'roster_saved', roster: [...SEEDED_ROSTER, { id: pipId, name: 'Pip', type: 'chicken', color: 'white' }] },
+    ],
+    tracks: [
+      { t: 100, els: { pets_list: rect(137), add_pet_form: rect(300) } },
+      { t: reRenderAt, els: { pets_list: rect(grownListH), add_pet_form: rect(collapsedFormH) } },
+    ],
+  });
+}
+
 // One {good, bad} events-document builder per accept.mjs evaluator (its
 // function name, from familyNameForRule). Each builder reads the rule's own
 // regex captures so the fixture matches the literal rule's numbers/pets.
@@ -189,8 +217,8 @@ const BUILDERS = {
     bad: () => wrap({ observed: [{ t: 0, kind: 'add_mousedown' }, { t: 1500, kind: 'roster_saved', roster: [{ name: 'Rex' }, { name: 'Bao' }, { name: 'Pip' }] }] }),
   },
   evalPopupListGrowsFormCollapses: {
-    good: () => wrap({ observed: [{ t: 200, kind: 'add_mousedown' }], tracks: [{ t: 100, els: { pets_list: { x: 0, y: 0, w: 1, h: 137 } } }, { t: 300, els: { pets_list: { x: 0, y: 0, w: 1, h: 210 } } }] }),
-    bad: () => wrap({ observed: [{ t: 200, kind: 'add_mousedown' }], tracks: [{ t: 100, els: { pets_list: { x: 0, y: 0, w: 1, h: 137 } } }, { t: 300, els: { pets_list: { x: 0, y: 0, w: 1, h: 150 } } }] }),
+    good: () => addPetLog(),
+    bad: () => addPetLog({ grownListH: 150 }),
   },
   evalPopupClicksInsideCrop: {
     good: () => wrap({ observed: [{ t: 0, kind: 'shelter_click', x: 10, y: 10 }, { t: 0, kind: 'name_click', x: 10, y: 10 }, { t: 0, kind: 'type_selected', x: 10, y: 10 }, { t: 0, kind: 'color_selected', x: 10, y: 10 }, { t: 0, kind: 'add_mousedown', x: 10, y: 10 }] }),
@@ -238,6 +266,77 @@ describe('accept.mjs rule coverage', () => {
       expect(result.pass, 'predicate is always-true: it passed a log edited to violate it').toBe(false);
     });
   }
+});
+
+describe('evalPopupListGrowsFormCollapses: one violating log per clause', () => {
+  const rule = "within 500 ms of the Add Pet mouseup, the logged #pets-list grows by at least 60 CSS px and #add-pet-form collapses (addPet's own re-render), and the saved Pip's id is a crypto.randomUUID() that is not a seeded id";
+
+  it('passes the unedited Add Pet log (control for the cases below)', () => {
+    // GIVEN — a log where all three clauses hold
+    // WHEN — the rule is evaluated
+    const result = evaluateRule(rule, addPetLog());
+    // THEN — it passes, so each failure below is caused by its one edit
+    expect(result.pass, result.detail).toBe(true);
+  });
+
+  it('fails when #add-pet-form never collapses to half height', () => {
+    // GIVEN — the list grows but the form stays at 200px (over half of 300px)
+    // WHEN — the rule is evaluated
+    const result = evaluateRule(rule, addPetLog({ collapsedFormH: 200 }));
+    // THEN — it fails on the form clause
+    expect(result.pass).toBe(false);
+    expect(result.detail).toMatch(/#add-pet-form never collapsed/);
+  });
+
+  it('fails when the list and form change only after the 500ms window', () => {
+    // GIVEN — the re-render lands 600ms after the mouseup
+    // WHEN — the rule is evaluated
+    const result = evaluateRule(rule, addPetLog({ reRenderAt: 1050 }));
+    // THEN — it fails: a late change is not addPet's own re-render
+    expect(result.pass).toBe(false);
+  });
+
+  it("fails when the saved Pip's id is not a crypto.randomUUID()", () => {
+    // GIVEN — Pip saved with a hand-written id (a roster written straight into storage)
+    // WHEN — the rule is evaluated
+    const result = evaluateRule(rule, addPetLog({ pipId: 'pip' }));
+    // THEN — it fails on the UUID clause
+    expect(result.pass).toBe(false);
+    expect(result.detail).toMatch(/not a crypto\.randomUUID\(\)/);
+  });
+
+  it("fails when the saved Pip's id is one of the seeded ids", () => {
+    // GIVEN — Pip saved under Rex's seeded v4 id
+    // WHEN — the rule is evaluated
+    const result = evaluateRule(rule, addPetLog({ pipId: SEEDED_ROSTER[0].id }));
+    // THEN — it fails on the not-seeded clause
+    expect(result.pass).toBe(false);
+    expect(result.detail).toMatch(/matches a seeded pet id/);
+  });
+});
+
+describe('frame-window rules fail when no tracked frame falls in the window', () => {
+  it('evalAllIdleUntilOut fails with no tracked frame between greet_end and out', () => {
+    // GIVEN — greet_end at 50, out at pets_ready+2950, and the only tracked frame after out
+    const rule = 'all three pets show the idle sprite from greet_end until out (pets_ready+2950): no walk and no lie';
+    const events = wrap({ observed: [{ t: 0, kind: 'pets_ready' }, { t: 50, kind: 'greet_end' }], tracks: [{ t: 4000, pets: [{ id: 'a', x: 0, y: 0, w: 1, h: 1, src: 'x_idle_y' }] }] });
+    // WHEN — the rule is evaluated
+    const result = evaluateRule(rule, events);
+    // THEN — it fails instead of passing on zero frames
+    expect(result.pass).toBe(false);
+    expect(result.detail).toMatch(/no tracked frame/);
+  });
+
+  it('evalAllLieUntilEnd fails with no tracked frame between sleep and the take end', () => {
+    // GIVEN — sleep at 0 and no tracked frame at all
+    const rule = 'all three stay on lie until the take ends (sleep+8800)';
+    const events = wrap({ observed: [{ t: 0, kind: 'sleep' }], tracks: [] });
+    // WHEN — the rule is evaluated
+    const result = evaluateRule(rule, events);
+    // THEN — it fails instead of passing on zero frames
+    expect(result.pass).toBe(false);
+    expect(result.detail).toMatch(/no tracked frame/);
+  });
 });
 
 describe('9:16 base-rule replacement (mergeAcceptRules / evaluateShotRules)', () => {

@@ -192,12 +192,11 @@ export function deriveEvents(raw, context) {
 
   const observedSrc = r.src.map((e) => ({ t: e.t, kind: 'src', pet: e.pet, from: e.from, to: e.to }));
   const observedMouse = r.mouse.map((e) => ({ t: e.t, kind: e.kind, x: e.x, y: e.y }));
-  // 'clap' marks are synthesized separately below from clapStartMs/clapEndMs
-  // (their own {tInsert,tOn,tRemove,tOff} shape has no single `t`, unlike
-  // every other mark); heart_off is internal-only (feeds debounce, never a
-  // schema ObservedKind).
+  // heart_off is internal-only (feeds debounce, never a schema
+  // ObservedKind). Clap events are synthesized below from
+  // clapStartMs/clapEndMs; clap.js keeps its marks out of window.__pp.
   const observedMarks = r.marks
-    .filter((m) => m.kind !== 'heart_off' && m.kind !== 'clap')
+    .filter((m) => m.kind !== 'heart_off')
     .map((m) => ({ t: m.t, kind: m.kind, ...(m.x !== undefined ? { x: m.x, y: m.y } : {}) }));
 
   const waveGreet = deriveWaveGreet(r.src, r.hover);

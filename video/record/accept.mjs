@@ -257,8 +257,10 @@ function evalAllIdleUntilOut(rule, m, events) {
   const greetEndT = firstObserved(events, 'greet_end')?.t;
   if (greetEndT === undefined) return fail(rule, 'no greet_end observed');
   const outT = readyT + outOffset;
-  const badFrame = (events.tracks ?? []).find(
-    (f) => f.t >= greetEndT && f.t <= outT && f.pets?.some((p) => p.src && (p.src.includes('_walk_') || p.src.includes('_lie_'))),
+  const inRange = (events.tracks ?? []).filter((f) => f.t >= greetEndT && f.t <= outT);
+  if (inRange.length === 0) return fail(rule, `no tracked frame between greet_end (${greetEndT}) and out (${outT})`);
+  const badFrame = inRange.find(
+    (f) => f.pets?.some((p) => p.src && (p.src.includes('_walk_') || p.src.includes('_lie_'))),
   );
   if (badFrame) return fail(rule, `a pet walked or lay down at t=${badFrame.t}`);
   return pass(rule);
@@ -299,9 +301,9 @@ function evalAllLieUntilEnd(rule, m, events) {
   const sleepT = firstObserved(events, 'sleep')?.t;
   if (sleepT === undefined) return fail(rule, 'no sleep observed');
   const untilT = sleepT + untilOffset;
-  const badFrame = (events.tracks ?? []).find(
-    (f) => f.t >= sleepT && f.t <= untilT && f.pets?.some((p) => p.src && !p.src.includes('_lie_')),
-  );
+  const inRange = (events.tracks ?? []).filter((f) => f.t >= sleepT && f.t <= untilT);
+  if (inRange.length === 0) return fail(rule, `no tracked frame between sleep (${sleepT}) and the take end (${untilT})`);
+  const badFrame = inRange.find((f) => f.pets?.some((p) => p.src && !p.src.includes('_lie_')));
   if (badFrame) return fail(rule, `a pet left the lie sprite at t=${badFrame.t}`);
   return pass(rule);
 }
@@ -424,13 +426,34 @@ function evalPopupRosterSaved(rule, _m, events) {
   return pass(rule, `${saved.t - down.t}ms`);
 }
 
+// The rule has three clauses (shots.json s2b_shelter.accept): #pets-list
+// grows at least 60 CSS px, #add-pet-form collapses to half height or less
+// (both addPet's own re-render, within 500ms of the mouseup — not the
+// mousedown: the press itself is still on screen through the mouseup), and
+// the saved Pip is a fresh crypto.randomUUID(), never one of the seeded
+// ids. Mirrors verify.mjs's rederive() (loop-evals/pets-o3p/verify.mjs).
+const RE_UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function evalPopupListGrowsFormCollapses(rule, _m, events) {
   const down = events.observed.find((e) => e.kind === 'add_mousedown');
+  const up = events.observed.find((e) => e.kind === 'add_mouseup');
   if (!down) return fail(rule, 'no add_mousedown observed');
-  const before = [...(events.tracks ?? [])].reverse().find((f) => f.t <= down.t && f.els?.pets_list);
-  const after = (events.tracks ?? []).find((f) => f.t >= down.t && f.t <= down.t + 500 && f.els?.pets_list && f.els.pets_list.h >= (before?.els.pets_list.h ?? 0) + 60);
-  if (!before) return fail(rule, 'no pre-press #pets-list rect logged');
-  if (!after) return fail(rule, '#pets-list never grew by 60px within 500ms of the mouseup');
+  if (!up) return fail(rule, 'no add_mouseup observed');
+  const tracks = events.tracks ?? [];
+  const before = [...tracks].reverse().find((f) => f.t < down.t && f.els?.pets_list && f.els?.add_pet_form);
+  if (!before) return fail(rule, 'no pre-press #pets-list/#add-pet-form rect logged');
+  const after = tracks.filter((f) => f.t > up.t && f.t <= up.t + 500 && f.els);
+  const grown = after.find((f) => f.els.pets_list?.h >= before.els.pets_list.h + 60);
+  if (!grown) return fail(rule, '#pets-list never grew by 60px within 500ms of the mouseup');
+  const collapsed = after.find((f) => f.els.add_pet_form?.h <= before.els.add_pet_form.h * 0.5);
+  if (!collapsed) return fail(rule, '#add-pet-form never collapsed to half height within 500ms of the mouseup');
+  const saved = events.observed.find((e) => e.kind === 'roster_saved');
+  if (!saved) return fail(rule, 'no roster_saved observed to check Pip\'s id');
+  const pip = (saved.roster ?? []).find((p) => p.name === 'Pip');
+  if (!pip) return fail(rule, 'no Pip in the saved roster');
+  if (!RE_UUID_V4.test(pip.id ?? '')) return fail(rule, `Pip's id "${pip.id}" is not a crypto.randomUUID()`);
+  const seededIds = (events.roster ?? []).map((p) => p.id);
+  if (seededIds.includes(pip.id)) return fail(rule, `Pip's id "${pip.id}" matches a seeded pet id`);
   return pass(rule);
 }
 
