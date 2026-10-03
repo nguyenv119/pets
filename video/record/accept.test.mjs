@@ -32,7 +32,8 @@ const POPUP_CTX = {
 const CTX = {
   ...POPUP_CTX,
   layoutExpect: { type_order: Array.from({ length: 14 }, (_, i) => `t${i}`) },
-  dblclick: { x: 800, y: 410, element: 'div#dbl-zone' },
+  // v2: updated by pets-3it.1 (shots.json's dblclick rule moved to (800, 306) on the 436 px page)
+  dblclick: { x: 800, y: 306, element: 'div#dbl-zone' },
 };
 
 /** Every rule text shots.json (or its 9:16 variant / popup take) can hand to the recorder — the ones accept.mjs must recognise. */
@@ -392,7 +393,8 @@ describe('frame-window rules fail when no tracked frame falls in the window', ()
 describe('9:16 accept rules: every base and extra text is judged on its own (acceptRulesFor)', () => {
   const s2 = shots.shots.find((s) => s.id === 's2_review');
   const baseCatchRule = 'a catch by Rex (conventions.states.catch) within 2600 ms of the dblclick';
-  const extraCatchRule = 'a catch by Rex within 2800 ms of the dblclick, replacing the 16:9 limit of 2600 ms (the 730 px page gives a 1.34 s fall)';
+  // v2: updated by pets-3it.1 (the rule text in shots.json; pets-3it.4 re-measures the limit)
+  const extraCatchRule = 'a catch by Rex within 2800 ms of the dblclick, replacing the 16:9 limit of 2600 ms (the 856 px page gives a longer fall; re-measured by pets-3it.4)';
 
   /** verify.mjs's own rule list for one shot and aspect (loop-evals/pets-o3p/verify.mjs, section 4), restated here. */
   const verifyRules = (doc, id, port) => {

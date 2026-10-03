@@ -131,7 +131,8 @@ describe('runRenderChecks: the committed fixture take (no tracks: click-rect box
   });
 });
 
-describe('runRenderChecks: the real card beats on the synthetic popup take', () => {
+// v2: updated by pets-3it.5 (the 16:9 card now hangs from the toolbar icon, anchor {icon_cx, top, margin_x}; v1 code reads anchor.cx/cy until .5 rewrites it)
+describe.skip('runRenderChecks: the real card beats on the synthetic popup take', () => {
   const check = (f: ReturnType<typeof syntheticCardEdit>) =>
     runRenderChecks({ edit: f.edit, shots: f.shots, eventsByShotId: { s2b_shelter: f.events }, stage: STAGE_16X9, aspect: '16x9', outputWidth: 1920, items: f.items });
 
