@@ -187,9 +187,11 @@ export function computeSync({ signalStatsText, startClapLoggedMs, endClapLoggedM
   const videoDurationMs = endRun.releaseT * 1000 - startRun.releaseT * 1000;
   const loggedDurationMs = endClapLoggedMs - startClapLoggedMs;
   // Positive means the logged (page-clock) gap between the two claps is
-  // wider than the video's own gap between their release edges — i.e. the
-  // video render lagged the page clock, which videoLagMs (measured
-  // separately from a heart's on-screen delay) is expected to explain.
+  // wider than the video's own gap between their release edges. videoLagMs
+  // is measured on demo.mp4's axis (trimBeforeMs + t) from a heart or the
+  // typed "P", so the start clap cancels out of the corrected residual:
+  // what the 40 ms gate really tests is that the lag event and the end clap
+  // render with the same delay.
   const endClapResidualMs = loggedDurationMs - videoDurationMs;
   const correctedResidualMs = endClapResidualMs + videoLagMs;
 
