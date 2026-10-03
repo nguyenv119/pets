@@ -1,4 +1,4 @@
-# Licences for video/assets and video/fixtures/set/fonts
+# Licences for video/assets, video/set/fonts and video/fixtures/set/fonts
 
 One row per shipped file. "Trimmed"/"looped" notes the one processing step
 applied; nothing else was changed.
@@ -27,6 +27,12 @@ applied; nothing else was changed.
 | `video/assets/sfx/kenney_interface/Audio/switch_002.ogg` | Interface Sounds: `Audio/switch_002.ogg` | Kenney (kenney.nl) | CC0 | https://kenney.nl/assets/interface-sounds | — |
 | `video/assets/sfx/generated/blip_feed_chime.wav` | blip_feed_chime.wav | generated in-house (no third-party material) | N/A (original work) | — | Made with `gen_blips.sh` (ffmpeg lavfi sine synthesis) |
 | `video/assets/sfx/generated/gen_blips.sh` | — | — | — | — | Regenerates the generated blip(s) above; not itself a licensed asset |
+| `video/set/fonts/Inter[opsz,wght].ttf` | Inter (variable) | The Inter Project Authors | SIL OFL 1.1 | https://github.com/google/fonts/tree/main/ofl/inter | Interface text on every set page |
+| `video/set/fonts/OFL-Inter.txt` | Inter licence text | The Inter Project Authors | SIL OFL 1.1 | https://github.com/google/fonts/tree/main/ofl/inter | — |
+| `video/set/fonts/SourceSerif4[opsz,wght].ttf` | Source Serif 4 (variable) | The Source Serif 4 Project Authors | SIL OFL 1.1 | https://github.com/google/fonts/tree/main/ofl/sourceserif4 | The article page's title |
+| `video/set/fonts/OFL-SourceSerif4.txt` | Source Serif 4 licence text | The Source Serif 4 Project Authors | SIL OFL 1.1 | https://github.com/google/fonts/tree/main/ofl/sourceserif4 | — |
+| `video/set/fonts/JetBrainsMono[wght].ttf` | JetBrains Mono (variable) | The JetBrains Mono Project Authors | SIL OFL 1.1 | https://github.com/google/fonts/tree/main/ofl/jetbrainsmono | The review page's diff lines |
+| `video/set/fonts/OFL-JetBrainsMono.txt` | JetBrains Mono licence text | The JetBrains Mono Project Authors | SIL OFL 1.1 | https://github.com/google/fonts/tree/main/ofl/jetbrainsmono | — |
 | `video/fixtures/set/fonts/VT323-Regular.ttf` | VT323 | VT323 Project Authors | SIL OFL 1.1 | https://github.com/google/fonts/tree/main/ofl/vt323 | Fixture copy, byte-identical to `video/assets/fonts/VT323-Regular.ttf` |
 | `video/fixtures/set/fonts/PressStart2P-Regular.ttf` | Press Start 2P | Press Start 2P Project Authors | SIL OFL 1.1 | https://github.com/google/fonts/tree/main/ofl/pressstart2p | Fixture copy, byte-identical to `video/assets/fonts/PressStart2P-Regular.ttf` |
 | `video/fixtures/set/fonts/OFL-VT323.txt` | VT323 licence text | VT323 Project Authors | SIL OFL 1.1 | https://github.com/google/fonts/tree/main/ofl/vt323 | — |
