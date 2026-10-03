@@ -98,7 +98,7 @@ export function cardBeatFrameIndices(masterIn: number, masterOut: number, fps: n
  * minus 1 ms, minus trimBeforeMs. Mirrored exactly so the declared rect is
  * the rect the eval recomputes.
  */
-function trackMsForFrame(events: Events, k: number, frameMs: number, shiftMs: number): number {
+export function trackMsForFrame(events: Events, k: number, frameMs: number, shiftMs: number): number {
   return k * frameMs - shiftMs - 1 - events.trimBeforeMs;
 }
 

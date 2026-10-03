@@ -6,7 +6,8 @@
 //
 // Pure — no Remotion/React/Node imports — so it is unit-testable without a
 // render. renderChecks.ts applies them to every master frame before a
-// render, and render.mjs aborts naming the frame and the element.
+// render, and render.mjs aborts on ANY violation, in every mode and every
+// variant, naming the frame and the element.
 
 import type { Rect } from '../schema';
 
@@ -21,7 +22,12 @@ export const CHECK_THRESHOLDS = {
   PARTICLE_COLUMN_UP_CSS_PX: 80,
   /** A caption below the popup card must clear the card by at least this many output px. */
   CARD_CAPTION_GAP_PX: 40,
-  /** A steady card must sit within this many output px of its declared `steady_at` anchor. */
+  /**
+   * A card's `steady_at` spot must sit within this many output px of the
+   * placement anchor rule (centre x on anchor.cx; centre y on anchor.cy in
+   * 16:9, top edge on anchor.top in 9:16). Every steady FRAME must then
+   * sit on `steady_at` exactly (no tolerance there).
+   */
   CARD_ANCHOR_TOLERANCE_PX: 2,
   /** b3e's last frame must be no later than this many ms after the logged add_mousedown. */
   CARD_END_MOUSEDOWN_OFFSET_MS: 160,
@@ -56,11 +62,13 @@ export function rectsIntersect(a: Rect, b: Rect): boolean {
  * `PARTICLE_COLUMN_WIDEN_CSS_PX` on each side and extended
  * `PARTICLE_COLUMN_UP_CSS_PX` upward from its top (storyboard: "the
  * particle column (box x widened by 24 CSS px, extended 80 CSS px up) of a
- * pet that can emit particles").
+ * pet that can emit particles"). `unitsPerCss` is the size of one CSS px
+ * in the box's own units (1 for a CSS box; 2 x the camera scale for an
+ * output-px box), so the column is the same CSS size at every zoom.
  */
-export function particleColumn(petBox: Rect, thresholds: CheckThresholds = CHECK_THRESHOLDS): Rect {
-  const widen = thresholds.PARTICLE_COLUMN_WIDEN_CSS_PX;
-  const up = thresholds.PARTICLE_COLUMN_UP_CSS_PX;
+export function particleColumn(petBox: Rect, unitsPerCss = 1, thresholds: CheckThresholds = CHECK_THRESHOLDS): Rect {
+  const widen = thresholds.PARTICLE_COLUMN_WIDEN_CSS_PX * unitsPerCss;
+  const up = thresholds.PARTICLE_COLUMN_UP_CSS_PX * unitsPerCss;
   return {
     x: petBox.x - widen,
     y: petBox.y - up,
@@ -148,13 +156,14 @@ export function checkOverlayPetDistance(
 export function checkParticleColumnOverlap(
   overlayRect: Rect,
   emittingPetBoxes: readonly Rect[],
+  unitsPerCss = 1,
   thresholds: CheckThresholds = CHECK_THRESHOLDS,
 ): CheckViolation[] {
   const violations: CheckViolation[] = [];
   for (const pet of emittingPetBoxes) {
-    const column = particleColumn(pet, thresholds);
+    const column = particleColumn(pet, unitsPerCss, thresholds);
     if (rectsIntersect(overlayRect, column)) {
-      violations.push({ check: 'particle-column-overlap', detail: 'overlay intersects an emitting pet\'s particle column' });
+      violations.push({ check: 'particle-column-overlap', detail: `overlay intersects the particle column ${JSON.stringify(column)} of an emitting pet` });
     }
   }
   return violations;
@@ -181,30 +190,56 @@ export function checkInsideRect(inner: Rect, outer: Rect, element: string): Chec
 }
 
 /**
- * A steady card must sit within CARD_ANCHOR_TOLERANCE_PX of its declared
- * `steady_at` anchor, AND land on an EVEN output pixel on both axes.
+ * Every steady card frame (after the pop-in or morph) sits EXACTLY on its
+ * declared `steady_at` spot, as verify.mjs v10 requires (`f.at.x ===
+ * c.at.x && f.at.y === c.at.y`), and that spot is on even output pixels.
  *
- * The even-pixel requirement is separate from (and independent of) the
- * distance tolerance: round 7 measured card B at (325, 73) — only 1.41px
- * from the even (324, 72), well inside a 2px distance tolerance — scoring
- * 0.918 SSIM against 0.994 at the even spot, because the master is
- * yuv420p and an odd-pixel placement straddles the 2x2 chroma blocks. A
- * distance-only check would have let that regression through.
+ * No tolerance here: the master is yuv420p, and round 7 measured card B
+ * at (325, 73), 1.41 px from the even (324, 72), scoring 0.918 SSIM
+ * against 0.994. A 2 px allowance would also pass (326, 72), a card the
+ * eval rejects as off its steady spot. The 2 px tolerance belongs to
+ * `checkSteadyAtOnAnchor`, between `steady_at` and the placement rule.
  */
-export function checkCardSteadyAnchor(
-  cardAt: { x: number; y: number },
-  steadyAt: { x: number; y: number },
-  thresholds: CheckThresholds = CHECK_THRESHOLDS,
-): CheckViolation[] {
+export function checkCardSteadyAnchor(cardAt: { x: number; y: number }, steadyAt: { x: number; y: number }): CheckViolation[] {
   const violations: CheckViolation[] = [];
-  const dist = Math.hypot(cardAt.x - steadyAt.x, cardAt.y - steadyAt.y);
-  if (dist > thresholds.CARD_ANCHOR_TOLERANCE_PX) {
-    violations.push({ check: 'card-steady-anchor', detail: `steady card ${dist.toFixed(2)}px from steady_at (tol ${thresholds.CARD_ANCHOR_TOLERANCE_PX})` });
+  if (cardAt.x !== steadyAt.x || cardAt.y !== steadyAt.y) {
+    violations.push({ check: 'card-steady-anchor', detail: `steady card at (${cardAt.x}, ${cardAt.y}) is not on steady_at (${steadyAt.x}, ${steadyAt.y})` });
   }
-  if (!Number.isInteger(cardAt.x / 2) || !Number.isInteger(cardAt.y / 2)) {
+  if (cardAt.x % 2 !== 0 || cardAt.y % 2 !== 0) {
     violations.push({ check: 'card-steady-anchor', detail: `steady card at (${cardAt.x}, ${cardAt.y}) is not on an even output pixel` });
   }
   return violations;
+}
+
+/** overlays.popup_card.placement.<aspect>.anchor: the card's centre x, and its centre y (16:9) or top edge (9:16). */
+export interface CardAnchorRule {
+  cx: number;
+  cy?: number;
+  top?: number;
+}
+
+/**
+ * A card's `steady_at` spot lies within CARD_ANCHOR_TOLERANCE_PX of the
+ * placement anchor rule for its steady size (shots.json anchor_rule:
+ * "the anchor rule rounded to even... within 2 output px"), the same test
+ * verify.mjs's PLACE_TOL applies.
+ */
+export function checkSteadyAtOnAnchor(
+  steadyAt: { x: number; y: number },
+  size: { w: number; h: number },
+  anchor: CardAnchorRule,
+  thresholds: CheckThresholds = CHECK_THRESHOLDS,
+): CheckViolation[] {
+  const tol = thresholds.CARD_ANCHOR_TOLERANCE_PX;
+  const dx = steadyAt.x + size.w / 2 - anchor.cx;
+  let dy: number;
+  if (anchor.cy !== undefined) dy = steadyAt.y + size.h / 2 - anchor.cy;
+  else if (anchor.top !== undefined) dy = steadyAt.y - anchor.top;
+  else return [{ check: 'card-anchor-rule', detail: 'the placement anchor names neither cy nor top' }];
+  if (Math.abs(dx) > tol || Math.abs(dy) > tol) {
+    return [{ check: 'card-anchor-rule', detail: `steady_at (${steadyAt.x}, ${steadyAt.y}) for a ${size.w}x${size.h} card is (${dx}, ${dy}) px off the anchor ${JSON.stringify(anchor)} (tol ${tol})` }];
+  }
+  return [];
 }
 
 /**

@@ -4,7 +4,7 @@ import type { FrameView } from './framePets';
 import { placeBesidePets, textWidth, wrapCaption } from './overlays';
 
 const AREA = { x: 48, y: 48, w: 1824, h: 936 };
-const view = (pets: FrameView['pets']): FrameView => ({ beat: {} as FrameView['beat'], k: 0, pets });
+const view = (pets: FrameView['pets']): FrameView => ({ beat: {} as FrameView['beat'], k: 0, unitsPerCss: 2, pets });
 
 describe('wrapCaption', () => {
   it('wraps a 9:16 caption at 18 characters a line, on word boundaries', () => {
