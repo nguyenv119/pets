@@ -26,8 +26,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildExtension, launchWithExtension, routeSet, seedStorage } from '../lib/browser.mjs';
 import {
-  BOTTOM_ZONE,
-  STRADDLE_Y,
+  deriveRules,
   findBottomZoneViolation,
   findStraddleViolation,
   gridPoints,
@@ -50,9 +49,22 @@ async function main() {
   }
 
   const narrow = shots.variants.vertical_9x16;
+  const { straddleY, bottomZone } = deriveRules(shots);
   const layouts = [
-    { name: 'wide', viewport: { width: shots.viewport.width, height: shots.viewport.height }, dbl: dblclickPoint(shots) },
-    { name: 'narrow', viewport: { width: narrow.viewport.width, height: narrow.viewport.height }, dbl: narrow.shots.s2_review.dblclick_css },
+    {
+      name: 'wide',
+      viewport: { width: shots.viewport.width, height: shots.viewport.height },
+      dbl: dblclickPoint(shots),
+      line: straddleY.wide,
+      zone: bottomZone.wide,
+    },
+    {
+      name: 'narrow',
+      viewport: { width: narrow.viewport.width, height: narrow.viewport.height },
+      dbl: narrow.shots.s2_review.dblclick_css,
+      line: straddleY.narrow,
+      zone: bottomZone.narrow,
+    },
   ];
 
   const ext = await buildExtension();
@@ -90,6 +102,7 @@ async function checkPage(ext, pageSpec, layout, failures) {
   const { context, serviceWorker } = await launchWithExtension({ ext, viewport: layout.viewport });
   try {
     const routeLog = await routeSet(context, SET_DIR, { seed: '1', hour: 14 });
+    // A deliberately neutral seed (2 visible pets) for page checks, not a shot seed.
     await seedStorage(serviceWorker, {
       roster: [
         { id: 'rex', name: 'Rex', type: 'dog', color: 'brown' },
@@ -120,10 +133,10 @@ async function checkPage(ext, pageSpec, layout, failures) {
       failures.push(`${label}: unrouted requests: ${routeLog.unrouted.join(', ')}`);
     }
 
-    if (CONTROL) await addControlRow(page, STRADDLE_Y[layout.name]);
+    if (CONTROL) await addControlRow(page, layout.line);
 
     checkFonts(await getFontStatus(page, pageSpec.fonts), label, failures);
-    checkText(await getTextRects(page), pageSpec.fonts, layout.name, label, failures);
+    checkText(await getTextRects(page), pageSpec.fonts, layout, label, failures);
 
     await page.evaluate(() => {
       document.getElementById('pixel-pets-host').style.display = 'none';
@@ -222,25 +235,24 @@ async function getTextRects(page) {
   });
 }
 
-function checkText(rects, allowedFonts, layoutName, label, failures) {
-  const line = STRADDLE_Y[layoutName];
-  const zone = BOTTOM_ZONE[layoutName];
+function checkText(rects, allowedFonts, layout, label, failures) {
+  const { line, zone } = layout;
   for (const rect of rects) {
     const at = `(top=${rect.top.toFixed(1)}, bottom=${rect.bottom.toFixed(1)})`;
     if (!isFontAllowed(rect.fontFamily, allowedFonts)) {
       failures.push(`${label}: text uses disallowed font "${rect.fontFamily}" (allowed: ${allowedFonts.join(', ')})`);
     }
-    if (findStraddleViolation(rect, layoutName)) {
+    if (findStraddleViolation(rect, line)) {
       failures.push(`${label}: text straddles y ${line} ${at}`);
     }
-    if (findBottomZoneViolation(rect, layoutName)) {
+    if (findBottomZoneViolation(rect, zone)) {
       failures.push(`${label}: text in the bottom-150 zone y ${zone.top}-${zone.bottom} ${at}`);
     }
   }
 }
 
 async function sweepInteractive(page, layout) {
-  const zone = BOTTOM_ZONE[layout.name];
+  const { zone } = layout;
   const points = gridPoints(layout.viewport.width, zone.top, zone.bottom, 20);
   return page.evaluate((pts) => {
     const found = [];

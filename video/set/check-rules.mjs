@@ -3,17 +3,39 @@
 // here takes plain data (numbers, strings) and returns plain data — no DOM,
 // no Playwright.
 
-// The top edge of a 2.0x hold, in page CSS y: 166 in the wide 960x436
-// layout, 376 in the narrow 540x856 layout (video/shots.json page_rules).
-// No text box may straddle it.
-export const STRADDLE_Y = { wide: 166, narrow: 376 };
+// The bottom-150 rule: no text and nothing interactive in the bottom 150 CSS
+// px of each viewport, where the pets stand.
+// ponytail: the 150 is not a number anywhere in shots.json; it comes from
+// the page_rules prose ("Bottom 150 CSS px ..."), so it lives here once.
+export const BOTTOM_ZONE_PX = 150;
 
-// The bottom 150 CSS px of each viewport, where the pets stand: no text and
-// nothing interactive (review's empty div#dbl-zone is the one exception).
-export const BOTTOM_ZONE = {
-  wide: { top: 286, bottom: 436 },
-  narrow: { top: 706, bottom: 856 },
-};
+/**
+ * The page rules for both layouts, derived from video/shots.json numbers so
+ * they cannot drift from the shot contract:
+ *   - crop line: the top edge of a 2.0x hold, bottom-anchored. A 2.0x hold
+ *     shows canvas.height / 2 output px = canvas.height / 4 page CSS px (at
+ *     device_scale_factor 2), so the line is viewport.height - canvas.height / 4
+ *     (wide 436 - 1080/4 = 166; narrow 856 - 1920/4 = 376).
+ *   - bottom zone: [viewport.height - 150, viewport.height].
+ * Returns { straddleY: {wide, narrow}, bottomZone: {wide, narrow} }.
+ */
+export function deriveRules(shots) {
+  const narrow = shots.variants.vertical_9x16;
+  const layouts = {
+    wide: { viewportH: shots.viewport.height, canvasH: shots.master.height },
+    narrow: { viewportH: narrow.viewport.height, canvasH: narrow.canvas.height },
+  };
+  const straddleY = {};
+  const bottomZone = {};
+  for (const [name, { viewportH, canvasH }] of Object.entries(layouts)) {
+    if (!Number.isFinite(viewportH) || !Number.isFinite(canvasH)) {
+      throw new Error(`shots.json is missing the ${name} viewport or canvas height`);
+    }
+    straddleY[name] = viewportH - canvasH / 4;
+    bottomZone[name] = { top: viewportH - BOTTOM_ZONE_PX, bottom: viewportH };
+  }
+  return { straddleY, bottomZone };
+}
 
 /**
  * True if the closed interval [rectTop, rectBottom) overlaps
@@ -39,17 +61,17 @@ export function isFontAllowed(computedFontFamily, allowedFamilies) {
   return allowedFamilies.includes(firstFontFamily(computedFontFamily));
 }
 
-/** True if a text rect is cut by `layout`'s 2.0x crop line (touching it is fine). */
-export function findStraddleViolation(rect, layout) {
-  const y = STRADDLE_Y[layout];
-  if (y === undefined) throw new Error(`unknown layout "${layout}"`);
-  return rect.top < y && rect.bottom > y;
+/** True if a text rect is cut by the crop line at `lineY` (touching it is fine). */
+export function findStraddleViolation(rect, lineY) {
+  if (!Number.isFinite(lineY)) throw new Error(`crop line must be a number, got ${lineY}`);
+  return rect.top < lineY && rect.bottom > lineY;
 }
 
-/** True if a text rect sits in the bottom-150 zone for `layout`. */
-export function findBottomZoneViolation(rect, layout) {
-  const zone = BOTTOM_ZONE[layout];
-  if (!zone) throw new Error(`unknown layout "${layout}"`);
+/** True if a text rect overlaps the bottom zone `{top, bottom}`. */
+export function findBottomZoneViolation(rect, zone) {
+  if (!zone || !Number.isFinite(zone.top) || !Number.isFinite(zone.bottom)) {
+    throw new Error(`bottom zone must be {top, bottom} numbers, got ${JSON.stringify(zone)}`);
+  }
   return rectsOverlap(rect.top, rect.bottom, zone.top, zone.bottom);
 }
 
