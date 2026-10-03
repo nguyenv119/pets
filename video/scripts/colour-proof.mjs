@@ -4,11 +4,8 @@
 // recording within 8 RGB units of the source GIF colours, and that an
 // UNTAGGED encode (the FAIL control) does not.
 //
-// Recipe source: `.claude/marketing-video/plan-review/B3.final.md`
-// (bead 3's finalised recording-assembly recipe; bead 3 was not merged
-// at the time this ran, so the recipe was read from its plan review
-// rather than its shipped code — this script re-derives the ffmpeg
-// flags, it does not import anything from bead 3).
+// Recipe source: the recorder's record/assemble.mjs (BT709_VF, BT709_TAGS,
+// LOSSLESS_H264), the single source for every encode Remotion decodes.
 //
 // Usage: node scripts/colour-proof.mjs --proof-dir <dir holding frames-lossless-rgb.mkv>
 
@@ -19,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { bundle } from '@remotion/bundler';
 import { renderStill, selectComposition } from '@remotion/renderer';
 import { acquireLock } from '../lib/lock.mjs';
+import { BT709_TAGS, BT709_VF, LOSSLESS_H264 } from '../record/assemble.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const videoRoot = join(__dirname, '..');
@@ -160,9 +158,9 @@ async function main() {
   const taggedPath = join(tmpDir, 'tagged.mp4');
   ffmpeg([
     '-i', SOURCE_MKV,
-    '-vf', `${selectExpr},setpts=N/FRAME_RATE/TB,scale=out_color_matrix=bt709:out_range=tv,format=yuv444p`,
-    '-c:v', 'libx264', '-qp', '0',
-    '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv',
+    '-vf', `${selectExpr},setpts=N/FRAME_RATE/TB,${BT709_VF}`,
+    ...LOSSLESS_H264,
+    ...BT709_TAGS,
     taggedPath,
   ]);
 
@@ -170,7 +168,7 @@ async function main() {
   ffmpeg([
     '-i', SOURCE_MKV,
     '-vf', `${selectExpr},setpts=N/FRAME_RATE/TB,format=yuv444p`,
-    '-c:v', 'libx264', '-qp', '0',
+    ...LOSSLESS_H264,
     untaggedPath,
   ]);
 

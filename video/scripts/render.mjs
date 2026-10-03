@@ -16,7 +16,7 @@
 //   --variant 16x9  out/pixel-pets-16x9.mp4 + out/timeline.json
 //   --variant 9x16  out/pixel-pets-9x16.mp4 + out/timeline-9x16.json
 //   --variant gif   out/gif-frames/frame-NNNN.png (1920x720, 12.5 fps)
-//   --variant still out/still.png (from the 16:9 plan, at --at <anchor>)
+//   --variant still out/still.png (from the 16:9 plan, at --at <anchor>) + out/still.json (its frame and pet boxes)
 //   every variant   out/render-manifest.json {run, variants: {<v>: {run, sources: {<shot>: sha256}}}}
 
 import { existsSync, mkdirSync, copyFileSync, writeFileSync, readFileSync, readdirSync, unlinkSync, renameSync } from 'node:fs';
@@ -26,12 +26,14 @@ import { fileURLToPath } from 'node:url';
 import { bundle } from '@remotion/bundler';
 import { renderFrames, renderMedia, renderStill, selectComposition } from '@remotion/renderer';
 import { acquireLock } from '../lib/lock.mjs';
+import { shotDir } from '../record/layout.mjs';
 import { findAnchorMasterFrame, timelineJson } from '../src/remotion/timeline.ts';
 import { planMaster } from '../src/remotion/planMaster.ts';
 import { withSharpFrame } from '../src/remotion/plan.ts';
 import { runGifChecks } from '../src/remotion/renderChecks.ts';
 import { enforceRenderChecks, describeViolation } from '../src/remotion/checkGate.ts';
 import { buildGifScenes } from '../src/remotion/gifScenes.ts';
+import { framePets } from '../src/remotion/framePets.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const videoRoot = join(__dirname, '..');
@@ -40,7 +42,6 @@ const outDir = join(videoRoot, 'out');
 const syntheticRunDir = join(videoRoot, '.cache', 'synthetic-run');
 const MUSIC = 'music/cat_caffe.ogg';
 const ICON = 'icons/icon-128.png';
-const POPUP_SHOT_ID = 's2b_shelter';
 /** PromoGif's frame width (Root.tsx): the native 16:9 capture, 1920x720 band. */
 const GIF_WIDTH = 1920;
 const RENDER_OPTS = { imageFormat: 'png', chromiumOptions: { gl: 'angle' } };
@@ -94,7 +95,7 @@ function loadRun(rootDir, shots, port) {
   const eventsByShotId = {};
   const sourceByShotId = {};
   for (const id of shots.edit_order) {
-    const dir = port && id !== POPUP_SHOT_ID ? join(rootDir, 'v916', id) : join(rootDir, id);
+    const dir = shotDir(rootDir, id, port ? '9:16' : '16:9');
     const demo = join(dir, 'demo.mp4');
     if (!existsSync(demo)) throw new Error(`render.mjs: missing ${demo}; did the run record every shot?`);
     eventsByShotId[id] = readJson(join(dir, 'events.json'));
@@ -105,7 +106,7 @@ function loadRun(rootDir, shots, port) {
 
 /** Each shot's demo.mp4 path inside the public dir (where stageShots copies it; the plan names it before anything is copied). */
 function stagedPaths(sourceByShotId, port) {
-  return Object.fromEntries(Object.keys(sourceByShotId).map((id) => [id, `${port && id !== POPUP_SHOT_ID ? 'v916/' : ''}${id}/demo.mp4`]));
+  return Object.fromEntries(Object.keys(sourceByShotId).map((id) => [id, `${shotDir('', id, port ? '9:16' : '16:9')}/demo.mp4`]));
 }
 
 function stageShots(sourceByShotId, stagedByShotId) {
@@ -221,7 +222,10 @@ async function main() {
     const frame = args.at ? frameAtAnchor(edit, eventsByShotId, args.at) : 0;
     const still = withSharpFrame(plan, frame); // the thumbnail frame is never motion-blurred, even mid-move
     await withBundle('Promo16x9', still, (serveUrl, composition) => renderStill({ composition, serveUrl, inputProps: still, frame, output: join(outDir, 'still.png'), ...RENDER_OPTS }));
-    console.log(`rendered out/still.png at master frame ${frame}${args.at ? ` (${args.at})` : ''}`);
+    // thumbnail.mjs crops and brands around the pets: where they stand on this frame, in output px
+    const view = framePets(edit, eventsByShotId, plan.stage, plan.stage.width, frame);
+    writeFileAtomic(join(outDir, 'still.json'), JSON.stringify({ run, frame, at: args.at ?? null, pets: (view?.pets ?? []).map(({ id, box }) => ({ id, box })) }, null, 1));
+    console.log(`rendered out/still.png + out/still.json at master frame ${frame}${args.at ? ` (${args.at})` : ''}`);
     updateManifest('still', run, sources);
     return;
   }

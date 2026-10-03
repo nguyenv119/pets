@@ -2,15 +2,28 @@
 // tagged BT.709 mp4 the bead's step 3 specifies. ffmpeg's concat demuxer
 // consumes the frames at their own (variable, ~59fps) cadence, one entry
 // per frame with that frame's own on-screen duration, and re-times the
-// result to a constant 25fps. See the bead's plan-review round 4 fix for
-// why the encode must be colour-tagged (an untagged yuv444p clip shifted a
-// pet colour 13 RGB units through Remotion's OffthreadVideo decode).
+// result to a constant 25fps. The encode must be colour-tagged: an untagged
+// yuv444p clip shifted a pet colour 13 RGB units through Remotion's
+// OffthreadVideo decode.
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const MIN_FRAME_S = 1 / 120;
+
+/**
+ * The BT.709 encode recipe, shared by every encode that Remotion's
+ * OffthreadVideo later decodes (the recorder here, scripts/synthetic's 9:16
+ * stand-in, scripts/colour-proof.mjs and the GIF gate control): convert
+ * through the BT.709 matrix into limited-range yuv444p, then tag all four
+ * colour fields. Without the tags, Remotion's decode shifted a sprite colour
+ * about 13 RGB units when measured.
+ */
+export const BT709_VF = 'scale=out_color_matrix=bt709:out_range=tv,format=yuv444p';
+export const BT709_TAGS = ['-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv'];
+/** Lossless x264 (qp 0): the recorder's master encode. */
+export const LOSSLESS_H264 = ['-c:v', 'libx264', '-qp', '0'];
 
 /**
  * Writes an ffmpeg concat-demuxer list from CDP screencast frames.
@@ -61,13 +74,9 @@ export function assembleFrames({ frames, outPath, fps = 25, workDir }) {
       '-f', 'concat',
       '-safe', '0',
       '-i', listPath,
-      '-vf', `scale=out_color_matrix=bt709:out_range=tv,format=yuv444p,fps=${fps}`,
-      '-c:v', 'libx264',
-      '-qp', '0',
-      '-colorspace', 'bt709',
-      '-color_primaries', 'bt709',
-      '-color_trc', 'bt709',
-      '-color_range', 'tv',
+      '-vf', `${BT709_VF},fps=${fps}`,
+      ...LOSSLESS_H264,
+      ...BT709_TAGS,
       outPath,
     ],
     { stdio: 'inherit' },
@@ -105,12 +114,12 @@ export function extractGrayCrop(mp4Path, { x, y, w, h }) {
   );
 }
 
-/** ffprobe's `color_space`/`width`/`height` for the acceptance check's `color_space=bt709` assertion. */
+/** ffprobe's `color_space`/`width`/`height`/`r_frame_rate` for the acceptance check's `color_space=bt709` assertion and run logs. */
 export function probeVideo(path) {
   const out = execFileSync('ffprobe', [
     '-v', 'error',
     '-select_streams', 'v:0',
-    '-show_entries', 'stream=width,height,color_space',
+    '-show_entries', 'stream=width,height,color_space,r_frame_rate',
     '-of', 'json',
     path,
   ]).toString();

@@ -5,20 +5,18 @@
 // the shot spec declares (crops.rule: "computed per frame from the
 // logged DOMRects", never a hard-coded rect).
 //
-// This mirrors the recorder's proven mechanics (pets-o3p.3's popup.mjs,
-// read for reference, never imported — this worktree stands alone) with
-// one deliberate difference: the Add Pet button is pressed and held, NEVER
-// released, so addPet() never runs and chrome.storage.local is never
-// written beyond the seed (this bead's constraint: "must never write real
-// storage beyond the seed"). Bead 3's take, by contrast, releases the
-// press for the real film, because that shot needs to show Pip actually
-// get added.
+// The screencast capture is the recorder's own (record/screencast.mjs). One
+// deliberate difference from the recorder's take (record/popup.mjs): by
+// default the Add Pet button is pressed and held, NEVER released, so
+// addPet() never runs and chrome.storage.local is never written beyond the
+// seed (pets-o3p.4's constraint: "must never write real storage beyond the
+// seed"). `releaseAddPet: true` finishes the click, as the real film does.
 
 import { mkdirSync, mkdtempSync } from 'node:fs';
-import { writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { launchWithExtension, logPopupRects, openPopup, seedStorage } from '../../lib/browser.mjs';
+import { startScreencast } from '../../record/screencast.mjs';
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -75,9 +73,10 @@ async function waitPopupReady(page, expectedCells, timeoutMs) {
  * per this bead's step 6, instead of one still per crop) and the same
  * per-frame DOMRect tracks lib/browser.mjs's logPopupRects logs for the
  * real recorder. Returns everything callers need to assemble demo.mp4 and
- * write events.json: never releases Add Pet, never awaits roster_saved.
+ * write events.json. Releases Add Pet only when `releaseAddPet` is true
+ * (logging add_mouseup); never awaits roster_saved.
  */
-export async function capturePopupTake({ shot, ext, expectedTypeCells }) {
+export async function capturePopupTake({ shot, ext, expectedTypeCells, releaseAddPet = false }) {
   const { context, serviceWorker, extensionId } = await launchWithExtension({ ext, viewport: shot.viewport });
   const workDir = mkdtempSync(join(tmpdir(), 'pixel-pets-synthetic-popup-'));
   const framesDir = join(workDir, 'frames');
@@ -88,15 +87,7 @@ export async function capturePopupTake({ shot, ext, expectedTypeCells }) {
     const { page } = await openPopup(context, extensionId, shot.viewport);
 
     const cdp = await context.newCDPSession(page);
-    const frames = [];
-    const pending = [];
-    cdp.on('Page.screencastFrame', (f) => {
-      cdp.send('Page.screencastFrameAck', { sessionId: f.sessionId }).catch(() => {});
-      const file = join(framesDir, `f${String(frames.length).padStart(5, '0')}.png`);
-      frames.push({ file, ts: f.metadata.timestamp });
-      pending.push(writeFile(file, Buffer.from(f.data, 'base64')));
-    });
-    await cdp.send('Page.startScreencast', { format: 'png', everyNthFrame: 1 });
+    const screencast = await startScreencast(cdp, framesDir);
 
     await waitPopupReady(page, expectedTypeCells, 5000);
     const recordStartT = await pageNow(page);
@@ -158,12 +149,18 @@ export async function capturePopupTake({ shot, ext, expectedTypeCells }) {
       observed.push({ t: await pageNow(page), kind: 'add_mousedown', x, y });
     }
     // Hold well past b3e_add's out (add_mousedown+160) so the press is on
-    // screen for several frames, then stop — the mouse is never released,
-    // so addPet() (bound to mouseup) never runs.
+    // screen for several frames. By default the mouse is never released, so
+    // addPet() (bound to mouseup) never runs; releaseAddPet lets a caller
+    // finish the click the way the recorder's real take does.
     await sleep(500);
+    if (releaseAddPet) {
+      await page.mouse.up();
+      observed.push({ t: await pageNow(page), kind: 'add_mouseup', x: cursor.x, y: cursor.y });
+      await sleep(500);
+    }
 
-    await cdp.send('Page.stopScreencast');
-    await Promise.all(pending);
+    await screencast.stop();
+    const frames = screencast.frames;
 
     const rawTracks = await page.evaluate(() => window.__ppTracks ?? []);
     const tracks = rawTracks.map((f) => ({ t: tracksInstallEpoch + f.t, cells: f.cells, els: f.els }));

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { STAGE_16X9, STAGE_9X16 } from './camera';
-import { shotFrameCrops, type CameraBeatSpan } from './cameraPath';
+import { demoMsShowing, loggedMsAt, shotFrameCrops, type CameraBeatSpan } from './cameraPath';
 import { makeEvents, stillPets } from './testEvents';
 import type { ShotBeat } from './timeline';
 
@@ -187,5 +187,23 @@ describe('shotFrameCrops: a push lands on the next hold\'s crop', () => {
     const [c4a] = plan(900);
     // THEN
     expect(c4a[c4a.length - 1]).toMatchObject({ x: 464, w: 960 });
+  });
+});
+
+describe('loggedMsAt / demoMsShowing', () => {
+  it('are each other\'s inverse: the screen shows a logged event trimBeforeMs + videoLagMs later', () => {
+    /**
+     * The camera, the GIF gate and qa's provenance frame all convert between
+     * the recorder's log clock and demo.mp4's. If the two directions
+     * disagreed, qa would compare the GIF with the wrong moment of the
+     * recording and fail (or pass) for the wrong reason.
+     */
+    // GIVEN — a take trimmed at 760 ms whose screen lags the log by 40 ms
+    const events = makeEvents({ trimBeforeMs: 760, videoLagMs: 40 });
+    // WHEN
+    const demo = demoMsShowing(events, 1500);
+    // THEN
+    expect(demo).toBe(2300);
+    expect(loggedMsAt(events, demo)).toBe(1500);
   });
 });
