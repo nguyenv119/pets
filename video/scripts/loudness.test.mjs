@@ -3,7 +3,7 @@
 // would not show that the measured values reach the second pass).
 
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -78,5 +78,26 @@ describe('normalise (real ffmpeg)', () => {
     const v = probe(f).streams.find((s) => s.codec_type === 'video');
     expect([a.codec_name, a.sample_rate, a.channels]).toEqual(['aac', '48000', 2]);
     expect(v.codec_name).toBe('h264');
+    expect(readdirSync(tmp)).toEqual(['clip.mp4']); // the temp encode sat beside the clip and is gone; out/ was never needed
+  });
+});
+
+describe('normalise (real ffmpeg), a too-loud clip', () => {
+  it('turns a loud clip down into the window', () => {
+    /**
+     * Normalising is two-way: a bed mixed too hot must come down, or the
+     * cut fails qa's -18..-14 window (and YouTube turns it down unevenly).
+     */
+    // GIVEN — a 4 s clip with a near-full-scale 440 Hz tone (lavfi's sine is 1/8 scale; x7)
+    tmp = mkdtempSync(join(tmpdir(), 'loudness-test-'));
+    const f = join(tmp, 'loud.mp4');
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=gray:s=64x64:d=4:r=25', '-f', 'lavfi', '-i', 'sine=f=440:d=4:sample_rate=44100', '-filter:a', 'volume=7', '-c:v', 'libx264', '-c:a', 'aac', '-shortest', f]);
+    const before = measureLufs(f);
+    // WHEN
+    const r = normalise(f);
+    // THEN
+    expect(before).toBeGreaterThan(-10);
+    expect(r.after).toBeGreaterThanOrEqual(-18);
+    expect(r.after).toBeLessThanOrEqual(-14);
   });
 });

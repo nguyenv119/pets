@@ -73,6 +73,11 @@ export function loggedMsAt(events: Events, demoMs: number): number {
   return demoMs - events.trimBeforeMs - events.videoLagMs;
 }
 
+/** The demo time at which the recording shows logged-clock ms `loggedMs`: loggedMsAt's inverse. */
+export function demoMsShowing(events: Events, loggedMs: number): number {
+  return loggedMs + events.trimBeforeMs + events.videoLagMs;
+}
+
 /** The pets a focus string names (pet:<id>, between:<a>,<b>, catch_point -> the catching pet). */
 export function focusPets(focus: string, events: Events): string[] {
   if (focus.startsWith('pet:')) return [focus.slice(4)];

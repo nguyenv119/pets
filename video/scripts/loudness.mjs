@@ -9,13 +9,12 @@
 // Usage: npx tsx scripts/loudness.mjs [files...]   (default: both cuts in out/)
 
 import { renameSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
-import { ffmpeg, isMain, OUT_DIR } from './stage-io.mjs';
+import { basename, dirname, join } from 'node:path';
+import { CUT_FILES, ffmpeg, isMain, OUT_DIR } from './stage-io.mjs';
 
 export const TARGET = { I: -16, TP: -1, LRA: 11 };
 /** The epic eval's integrated-loudness window (verify.mjs LUFS). */
 export const LUFS_WINDOW = [-20, -12];
-export const CUTS = ['pixel-pets-16x9.mp4', 'pixel-pets-9x16.mp4'];
 
 /** loudnorm's print_format=json block (the last {...} in its stderr) as numbers. */
 export function parseLoudnormJson(stderr) {
@@ -50,7 +49,8 @@ export function measureLufs(file) {
 /** Normalises one file in place; returns { before, after } integrated LUFS. Throws when the result is outside LUFS_WINDOW. */
 export function normalise(file) {
   const m = parseLoudnormJson(ffmpeg(['-nostats', '-i', file, '-af', `loudnorm=I=${TARGET.I}:TP=${TARGET.TP}:LRA=${TARGET.LRA}:print_format=json`, '-f', 'null', '-']));
-  const tmp = join(OUT_DIR, `.loudness-${file.split('/').pop()}`);
+  // beside the file, so normalising never depends on out/ existing
+  const tmp = join(dirname(file), `.loudness-${basename(file)}`);
   try {
     ffmpeg(['-y', '-i', file, '-map', '0:v:0', '-map', '0:a:0', '-c:v', 'copy', '-af', secondPassFilter(m), '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2', '-movflags', '+faststart', tmp]);
     renameSync(tmp, file);
@@ -63,10 +63,10 @@ export function normalise(file) {
 }
 
 export function main(argv) {
-  const files = argv.length ? argv : CUTS.map((f) => join(OUT_DIR, f));
+  const files = argv.length ? argv : Object.values(CUT_FILES).map((f) => join(OUT_DIR, f));
   for (const f of files) {
     const { before, after } = normalise(f);
-    console.log(`loudness: ${f.split('/').pop()} ${before} -> ${after} LUFS integrated`);
+    console.log(`loudness: ${basename(f)} ${before} -> ${after} LUFS integrated`);
   }
 }
 

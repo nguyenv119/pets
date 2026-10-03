@@ -10,7 +10,7 @@
 //              still, with each source's sha256 = this run's demo.mp4; and the
 //              GIF's first treat frame (out/gif-frames/ at the inbox scene's
 //              heart_on) matches THIS run's s1_inbox recording at the same
-//              moment, cropped to the GIF band, SSIM >= 0.8
+//              moment over Rex's tracked box, SSIM >= 0.8
 //   recorder   wave, chase_start, catch, eat, greet and sleep observed across
 //              the 16:9 shots and, separately, the 9:16 shots; the popup take
 //              logs type_selected (chicken), color_selected (white) and
@@ -22,21 +22,36 @@ import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { FRAMES_DIR, gifFrameAt, planScenes } from './gif.mjs';
+import { POPUP_SHOT_ID, shotDir } from '../record/layout.mjs';
+import { demoMsShowing, loggedMsAt } from '../src/remotion/cameraPath.ts';
+import { checkGif, FRAMES_DIR, GIF_PATH, gifFrameAt, planScenes, rexAt } from './gif.mjs';
 import { measureLufs } from './loudness.mjs';
-import { isMain, OUT_DIR, probe, readJson, runArg, VIDEO_DIR } from './stage-io.mjs';
+import { CUT_FILES, isMain, OUT_DIR, probe, readJson, runArg, VIDEO_DIR } from './stage-io.mjs';
 
 export const CUTS = {
-  '16x9': { file: 'pixel-pets-16x9.mp4', width: 1920, height: 1080, seconds: [28.3, 31.0] },
-  '9x16': { file: 'pixel-pets-9x16.mp4', width: 1080, height: 1920, seconds: [28.3, 31.5] },
+  '16x9': { file: CUT_FILES['16x9'], width: 1920, height: 1080, seconds: [28.3, 31.0] },
+  '9x16': { file: CUT_FILES['9x16'], width: 1080, height: 1920, seconds: [28.3, 31.5] },
 };
 export const LUFS = [-18, -14];
-export const GIF = { maxBytes: 5_000_000, width: 960, height: 360, seconds: [7.0, 10.5] };
+/**
+ * The GIF's treat frame against this run's recording, over Rex's tracked box
+ * at that moment. Measured on the dry run (qa.test.mjs "provenance
+ * controls"): this run 0.952; the synthetic run's and the fixture's footage
+ * (the same file) 0.450; this run 80 ms early 0.455. Over the whole GIF band
+ * the same footage scored 0.994 and 0.977, so a band-wide 0.8 passed
+ * anything filmed on the inbox page.
+ */
 export const PROVENANCE_SSIM_MIN = 0.8;
+/** A region smaller than this (CSS px, either side) is too small for SSIM to mean anything. */
+export const MIN_REGION_PX = 16;
 export const REQUIRED_KINDS = ['wave', 'chase_start', 'catch', 'eat', 'greet', 'sleep'];
+/**
+ * A copy of NEVER_CAST_TYPES in src/species.node.ts (frozen, and only
+ * reachable through the async loadSpeciesAllowlist); qa.test.mjs fails if the
+ * two ever differ.
+ */
 export const FORBIDDEN = ['totoro', 'miffy', 'fox', 'cockatiel', 'monkey', 'horse'];
 export const VARIANTS = ['16x9', '9x16', 'gif', 'still'];
-const POPUP = 's2b_shelter';
 
 /** A cut's ffprobe result against its spec: failure strings. */
 export function checkCut(tag, p, spec) {
@@ -52,16 +67,6 @@ export function checkCut(tag, p, spec) {
 
 export function checkLufs(tag, lufs) {
   return lufs >= LUFS[0] && lufs <= LUFS[1] ? [] : [`${tag}: ${lufs} LUFS integrated, want ${LUFS.join('..')}`];
-}
-
-export function checkGif(bytes, p) {
-  const v = p?.streams?.find((s) => s.codec_type === 'video');
-  const d = Number(p?.format?.duration);
-  const bad = [];
-  if (!(bytes < GIF.maxBytes)) bad.push(`GIF: ${bytes} bytes, want under ${GIF.maxBytes}`);
-  if (v?.width !== GIF.width || v?.height !== GIF.height) bad.push(`GIF: ${v?.width}x${v?.height}, want ${GIF.width}x${GIF.height}`);
-  if (!(d >= GIF.seconds[0] && d <= GIF.seconds[1])) bad.push(`GIF: ${Number.isFinite(d) ? d.toFixed(2) : '?'} s, want ${GIF.seconds.join('-')} s`);
-  return bad;
 }
 
 /**
@@ -112,22 +117,60 @@ export function forbiddenInRosters(eventsList) {
 export function treatMoment(scenes, fps, events, shotId = 's1_inbox') {
   for (const o of events?.observed ?? []) {
     if (o.kind !== 'heart_on') continue;
-    const demoMs = events.trimBeforeMs + o.t + events.videoLagMs;
+    const demoMs = demoMsShowing(events, o.t);
     const k = gifFrameAt(scenes, fps, shotId, demoMs);
     if (k !== null) return { k, demoMs };
   }
   return null;
 }
 
-/** SSIM of a GIF source frame (1920x720 PNG) against demo.mp4 at `seconds`, cropped to the band `crop` (CSS px, DPR 2). */
-export function bandSsim(png, demoMp4, seconds, crop) {
+/**
+ * SSIM of `region` (CSS px inside the GIF band) between a GIF source frame
+ * (the band drawn at DPR 2) and demo.mp4 at `seconds`, where the band sits at
+ * `band` (CSS px of the page). NaN when ffmpeg cannot compare them.
+ */
+export function regionSsim(png, demoMp4, seconds, band, region) {
+  const [x, y, w, h] = [region.x, region.y, region.w, region.h].map((n) => Math.round(n * 2));
   const r = spawnSync('ffmpeg', [
     '-nostdin', '-hide_banner', '-i', png, '-ss', String(seconds), '-i', demoMp4,
-    '-lavfi', `[1:v]crop=${crop.w * 2}:${crop.h * 2}:${crop.x * 2}:${crop.y * 2},format=rgb24[b];[0:v]format=rgb24[a];[a][b]ssim`,
+    '-lavfi', `[0:v]crop=${w}:${h}:${x}:${y},format=rgb24[a];[1:v]crop=${w}:${h}:${x + band.x * 2}:${y + band.y * 2},format=rgb24[b];[a][b]ssim`,
     '-frames:v', '1', '-f', 'null', '-',
   ]);
   const m = /All:([0-9.]+)/.exec(r.stderr.toString());
   return m ? Number(m[1]) : NaN;
+}
+
+/** Rex's tracked box at demo ms `demoMs`, in band px, clipped to the band; null when he is untracked or under MIN_REGION_PX inside it. */
+export function rexRegion(events, demoMs, band) {
+  const rex = rexAt(events, loggedMsAt(events, demoMs), band);
+  if (!rex) return null;
+  const x0 = Math.max(0, Math.floor(rex.box.x));
+  const y0 = Math.max(0, Math.floor(rex.box.y));
+  const x1 = Math.min(band.w, Math.ceil(rex.box.x + rex.box.w));
+  const y1 = Math.min(band.h, Math.ceil(rex.box.y + rex.box.h));
+  if (x1 - x0 < MIN_REGION_PX || y1 - y0 < MIN_REGION_PX) return null;
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
+/**
+ * The GIF is this run's footage: its first treat frame (in `framesDir`)
+ * against `demoMp4` (this run's s1_inbox recording) at the same moment, over
+ * Rex's box. Returns { bad, info }; every missing input is a failure, never a
+ * pass.
+ */
+export function checkGifProvenance({ scenes, fps, events, framesDir, demoMp4 }) {
+  const t = treatMoment(scenes, fps, events);
+  if (!t) return { bad: ['GIF provenance: the inbox scene shows no heart_on'], info: null };
+  const png = join(framesDir, `frame-${String(t.k).padStart(4, '0')}.png`);
+  if (!existsSync(png)) return { bad: [`GIF provenance: ${png} is missing`], info: null };
+  if (!existsSync(demoMp4)) return { bad: [`GIF provenance: ${demoMp4} is missing`], info: null };
+  const band = scenes.find((sc) => sc.shotId === 's1_inbox').cropCss;
+  const region = rexRegion(events, t.demoMs, band);
+  if (!region) return { bad: [`GIF provenance: Rex is not tracked inside the GIF band at the treat (${(t.demoMs / 1000).toFixed(3)} s)`], info: null };
+  const s = regionSsim(png, demoMp4, t.demoMs / 1000, band, region);
+  const info = `GIF treat frame ${t.k} vs s1_inbox/demo.mp4 @ ${(t.demoMs / 1000).toFixed(3)} s over Rex (${region.w}x${region.h} at ${region.x},${region.y}): SSIM ${s}`;
+  const bad = s >= PROVENANCE_SSIM_MIN ? [] : [`GIF provenance: treat frame ${t.k} matches this run's s1_inbox at SSIM ${s}, want >= ${PROVENANCE_SSIM_MIN}`];
+  return { bad, info };
 }
 
 const sha256 = (f) => (existsSync(f) ? createHash('sha256').update(readFileSync(f)).digest('hex') : null);
@@ -138,9 +181,9 @@ export function main(argv) {
   const shots = readJson(join(VIDEO_DIR, 'shots.json'));
   const bad = [];
   const info = [];
-  const shotDir = (id, port) => join(runDir, port && id !== POPUP ? 'v916' : '', id);
+  const dirOf = (id, port) => shotDir(runDir, id, port ? '9:16' : '16:9');
   const eventsOf = (id, port) => {
-    const f = join(shotDir(id, port), 'events.json');
+    const f = join(dirOf(id, port), 'events.json');
     return existsSync(f) ? readJson(f) : null;
   };
 
@@ -154,31 +197,22 @@ export function main(argv) {
     info.push(`${tag} ${Number(p.format.duration).toFixed(2)} s ${lufs} LUFS`);
   }
 
-  const gif = join(OUT_DIR, 'pixel-pets.gif');
-  if (!existsSync(gif)) bad.push('GIF: out/pixel-pets.gif missing');
+  if (!existsSync(GIF_PATH)) bad.push('GIF: out/pixel-pets.gif missing');
   else {
-    const p = probe(gif);
-    bad.push(...checkGif(statSync(gif).size, p));
-    info.push(`GIF ${(statSync(gif).size / 1e6).toFixed(2)} MB ${Number(p.format.duration).toFixed(2)} s`);
+    const p = probe(GIF_PATH);
+    bad.push(...checkGif(statSync(GIF_PATH).size, p).map((b) => `GIF: ${b}`));
+    info.push(`GIF ${(statSync(GIF_PATH).size / 1e6).toFixed(2)} MB ${Number(p.format.duration).toFixed(2)} s`);
   }
 
   const mf = join(OUT_DIR, 'render-manifest.json');
   const manifest = existsSync(mf) ? readJson(mf) : null;
-  bad.push(...checkManifest(manifest, runId, (v, id) => sha256(join(shotDir(id, v === '9x16'), 'demo.mp4'))));
+  bad.push(...checkManifest(manifest, runId, (v, id) => sha256(join(dirOf(id, v === '9x16'), 'demo.mp4'))));
 
-  // the GIF is this run's footage: its first treat frame against this run's s1_inbox recording at the same moment
   try {
-    const { scenes, fps } = planScenes(runDir);
-    const inbox = eventsOf('s1_inbox', false);
-    const t = treatMoment(scenes, fps, inbox);
-    if (!t) bad.push('GIF provenance: the inbox scene shows no heart_on');
-    else {
-      const png = join(FRAMES_DIR, `frame-${String(t.k).padStart(4, '0')}.png`);
-      const crop = scenes.find((s) => s.shotId === 's1_inbox').cropCss;
-      const s = bandSsim(png, join(shotDir('s1_inbox', false), 'demo.mp4'), t.demoMs / 1000, crop);
-      info.push(`GIF treat frame ${t.k} vs s1_inbox/demo.mp4 @ ${(t.demoMs / 1000).toFixed(3)} s: SSIM ${s}`);
-      if (!(s >= PROVENANCE_SSIM_MIN)) bad.push(`GIF provenance: treat frame ${t.k} matches this run's s1_inbox at SSIM ${s}, want >= ${PROVENANCE_SSIM_MIN}`);
-    }
+    const { scenes, fps, eventsByShotId } = planScenes(runDir);
+    const p = checkGifProvenance({ scenes, fps, events: eventsByShotId.s1_inbox, framesDir: FRAMES_DIR, demoMp4: join(dirOf('s1_inbox', false), 'demo.mp4') });
+    bad.push(...p.bad);
+    if (p.info) info.push(p.info);
   } catch (err) {
     bad.push(`GIF provenance: ${err.message}`);
   }
@@ -193,7 +227,7 @@ export function main(argv) {
     const forb = forbiddenInRosters(evs);
     if (forb.length) bad.push(`${tag}: uncast species in a roster: ${forb.join(', ')}`);
   }
-  bad.push(...checkAdoption(eventsOf(POPUP, false)));
+  bad.push(...checkAdoption(eventsOf(POPUP_SHOT_ID, false)));
 
   for (const line of info) console.log(`qa: ${line}`);
   if (bad.length) {

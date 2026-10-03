@@ -13,6 +13,9 @@ export const OUT_DIR = join(VIDEO_DIR, 'out');
 export const BUILD_DIR = join(VIDEO_DIR, 'build');
 export const REPO_DIR = join(VIDEO_DIR, '..');
 
+/** The two rendered cuts in out/ (render.mjs writes them; loudness and qa read them). */
+export const CUT_FILES = { '16x9': 'pixel-pets-16x9.mp4', '9x16': 'pixel-pets-9x16.mp4' };
+
 export const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
 
 /** True when `metaUrl`'s module is the script node was started with. */
