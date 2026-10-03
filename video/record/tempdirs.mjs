@@ -1,4 +1,4 @@
-// Temp-dir bookkeeping for the recorder. lib/browser.mjs (frozen) makes a
+// Temp-dir bookkeeping for the recorder. lib/browser.mjs (frozen; v2 pets-3it.4 changed only seedStorage) makes a
 // fresh Chromium profile dir in $TMPDIR for every launch and never removes
 // it, nor returns its path; one shakedown session left 1.7 GB of them.
 
