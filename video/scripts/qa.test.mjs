@@ -219,7 +219,7 @@ describe('treatMoment', () => {
   });
 });
 
-describe('regionSsim', () => {
+describe('regionSsim', { timeout: 30_000 }, () => { // real ffmpeg: slow under a loaded machine
   it('compares the still with the one recording frame at `seconds`, not an average with the next', () => {
     /**
      * ffmpeg's ssim filter repeats a still input against every video frame
@@ -245,7 +245,7 @@ describe('regionSsim', () => {
   });
 });
 
-describe('checkGifProvenance (real ffmpeg, made-up footage)', () => {
+describe('checkGifProvenance (real ffmpeg, made-up footage)', { timeout: 30_000 }, () => {
   // GIVEN (shared) — the inbox scene starts at demo 0 ms; the heart is logged at 1000 ms with no trim or lag,
   // so GIF frame 13 (12.5 rounded up) shows demo 1.040 s; Rex is tracked at CSS (400, 400), band px (400, 220)
   const BAND = { x: 0, y: 180, w: 960, h: 360 };
@@ -363,7 +363,7 @@ const realFootage =
   !!runDemo && existsSync(runDemo) && existsSync(syntheticDemo) && existsSync(FRAMES_DIR) &&
   createHash('sha256').update(readFileSync(runDemo)).digest('hex') === gifRun.sources?.s1_inbox;
 
-describe.skipIf(!realFootage)('provenance controls (real footage on disk)', () => {
+describe.skipIf(!realFootage)('provenance controls (real footage on disk)', { timeout: 30_000 }, () => {
   it('separates this run from the synthetic run, the fixture and its own neighbouring recording frames over Rex\'s box', () => {
     /**
      * The check must accept only this run's footage at the frame's own
