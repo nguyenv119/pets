@@ -264,3 +264,73 @@ describe('deriveEvents time origin', () => {
     expect(events.observed.find((e) => e.kind === 'shim')?.t).toBe(0);
   });
 });
+
+describe('pets_ready and first_paint from the page log', () => {
+  const EPOCH = 1791021866672.8; // the real probe's start clapper release (epoch ms)
+  const box = (id, gif, x) => ({ id, x, y: 476, w: 64, h: 64, src: `chrome-extension://ext/assets/${gif}_8fps.gif` });
+  /** The s3 boot a real probe logged (seed 25), in epoch ms: attached at +324.5, pets drawn at +355.6, page first paint at +353.6. */
+  function s3BootRaw(overrides = {}) {
+    return {
+      clapStart: { tOff: EPOCH },
+      clapEnd: { tOn: EPOCH + 4000, tOff: EPOCH + 4160 },
+      src: [],
+      hover: [],
+      mouse: [],
+      cursor: [],
+      marks: [],
+      clicks: [],
+      tracks: [
+        { t: EPOCH + 324.5, pets: [] },
+        { t: EPOCH + 355.6, pets: [box('rex', 'dog/brown_idle', 340), box('bao', 'panda/black_idle', 460), box('pip', 'chicken/white_idle', 399)] },
+        { t: EPOCH + 384.0, pets: [box('rex', 'dog/brown_swipe', 340), box('bao', 'panda/black_idle', 460), box('pip', 'chicken/white_swipe', 399)] },
+      ],
+      firstPaintT: EPOCH + 353.6,
+      // what the choreography read: later than the real first draw
+      petsReadyT: EPOCH + 1050,
+      ...overrides,
+    };
+  }
+  const roster = [
+    { id: 'rex', name: 'Rex', type: 'dog', color: 'brown' },
+    { id: 'bao', name: 'Bao', type: 'panda', color: 'black' },
+    { id: 'pip', name: 'Pip', type: 'chicken', color: 'white' },
+  ];
+
+  it('puts pets_ready on the first tracked frame with every visible pet drawn', () => {
+    /**
+     * pets_ready must be when the pets appear on film. The shakedown logged
+     * it at least 690 ms late (when the choreography looked), which made
+     * s3's 150 ms greet window and s4's +1700 ms night flip unreachable.
+     */
+    // GIVEN — the real s3 boot log, tracked from before the pets were drawn
+    const raw = s3BootRaw();
+
+    // WHEN — events are derived
+    const events = deriveEvents(raw, baseContext({ roster }));
+
+    // THEN — pets_ready is the frame the pets were drawn, 355.6 ms after the clapper
+    expect(events.observed.find((e) => e.kind === 'pets_ready').t).toBeCloseTo(355.6, 1);
+  });
+
+  it('logs first_paint from the page paint timing', () => {
+    /** s2/s3/s4 cut in at first_paint (shots.json beats); the recorder never logged it before. */
+    // GIVEN / WHEN
+    const events = deriveEvents(s3BootRaw(), baseContext({ roster }));
+
+    // THEN
+    expect(events.observed.find((e) => e.kind === 'first_paint').t).toBeCloseTo(353.6, 1);
+  });
+
+  it("keeps the choreography's pets_ready for a log tracked only after the pets were drawn", () => {
+    /** A log whose first tracked frame already has the pets cannot prove when they appeared (the legacy proof log). */
+    // GIVEN — the same log without its pre-pet frames
+    const raw = s3BootRaw();
+    raw.tracks = raw.tracks.slice(1);
+
+    // WHEN
+    const events = deriveEvents(raw, baseContext({ roster }));
+
+    // THEN — the choreography's own time is used
+    expect(events.observed.find((e) => e.kind === 'pets_ready').t).toBeCloseTo(1050, 1);
+  });
+});

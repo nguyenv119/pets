@@ -11,17 +11,19 @@
 
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildExtension, launchWithExtension, routeSet, seedStorage } from '../lib/browser.mjs';
 import { evaluateShotRules } from './accept.mjs';
 import { assembleFrames, generateSignalStats, probeVideo } from './assemble.mjs';
 import { DiscardTake, runActions } from './choreo.mjs';
+import { createRepeatGuard, isFixedSeed, seedCandidates } from './search.mjs';
+import { ownProfileDir, profileDirs } from './tempdirs.mjs';
 import { installClap } from './clap.js';
 import { deriveEvents } from './derive.mjs';
 import { installObservers } from './observe.js';
 import { recordPopupTake } from './popup.mjs';
-import { startScreencast } from './screencast.mjs';
+import { dropLeadingMisSizedFrames, startScreencast } from './screencast.mjs';
 import { computeSync, demoMsOf, findTrimBeforeMs, HEART_MASK_FILTER, measureVideoLagFromHeart } from './sync.mjs';
 import { fallbackVideoLagMs, keptHeartLagsMs, VIDEO_LAG_MAX_MS } from './video-lag.mjs';
 
@@ -31,6 +33,29 @@ const BUILD_DIR = join(VIDEO_DIR, 'build');
 const SEED_BUDGET = 60;
 const CLAP_MS = 160;
 const KEPT_RUNS = 2;
+// The start clapper flashes on the page's initial about:blank document, and
+// the set page loads this long after its release, so the pets (drawn about
+// 2 ms after the page's first paint) never appear under the clapper and the
+// edit's earliest in-point (s1: pets_ready-160) lands after it.
+const PREROLL_AFTER_CLAP_MS = 300;
+const SETTLE_BEFORE_CLAP_MS = 500;
+/**
+ * Keeps about:blank compositing a frame every animation frame (a 2 px
+ * near-white dot toggling shade), so the screencast delivers the start
+ * clapper's release when it happens: on a static page the release frame
+ * arrived only with the next page's first paint, 54 ms late, in a probe.
+ */
+function keepCompositing() {
+  const dot = document.createElement('div');
+  dot.style.cssText = 'all:initial;position:fixed;left:0;top:0;width:2px;height:2px;display:block;';
+  document.documentElement.appendChild(dot);
+  let k = 0;
+  const tick = () => {
+    dot.style.background = k++ % 2 ? '#fefefe' : '#fdfdfd';
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
 
 function parseArgv(argv) {
   const opts = {
@@ -57,44 +82,9 @@ function parseArgv(argv) {
 }
 
 function loadShotsDoc(shotsPath) {
-  const absPath = join(VIDEO_DIR, shotsPath);
+  const absPath = resolve(VIDEO_DIR, shotsPath);
   const doc = JSON.parse(readFileSync(absPath, 'utf-8'));
   return { doc, setDir: join(dirname(absPath), 'set') };
-}
-
-function seedCandidates(shot) {
-  const prng = shot.seed.prng ?? {};
-  if (prng.seed !== null && prng.seed !== undefined) {
-    // A fixed seed only controls game-logic RNG; real capture timing (the
-    // clapper check) is not deterministic even at the same seed, so a
-    // transient timing discard still needs a next attempt to retry into
-    // (bounded by the caller's own SEED_BUDGET loop) rather than exhausting
-    // immediately with nothing left to try.
-    const seed = prng.seed;
-    return { [Symbol.iterator]: () => ({ next: () => ({ value: seed, done: false }) }) };
-  }
-  const tried = new Set();
-  const candidates = [...(prng.sim_candidates ?? [])];
-  let next = 1;
-  return {
-    [Symbol.iterator]() {
-      return {
-        next() {
-          if (candidates.length) {
-            const seed = candidates.shift();
-            if (!tried.has(seed)) {
-              tried.add(seed);
-              return { value: seed, done: false };
-            }
-          }
-          while (tried.has(next)) next++;
-          const seed = next++;
-          tried.add(seed);
-          return { value: seed, done: false };
-        },
-      };
-    },
-  };
 }
 
 function mergeSeed(shot, aspect, variantDoc, homeDaysOverride) {
@@ -131,10 +121,13 @@ function actionsFor(shot, aspect, viewport, variantDoc, baseViewportWidth) {
 }
 
 async function captureOneTake({ shot, aspect, viewport, seedValue, ext, setDir, timezoneId, stripSeedAttr, homeDaysOverride, variantDoc, actions }) {
+  const profilesBefore = profileDirs();
   const { context, serviceWorker, extensionId } = await launchWithExtension({ ext, viewport, timezoneId });
+  const profileDir = ownProfileDir(profilesBefore);
   const workDir = mkdtempSync(join(tmpdir(), 'pixel-pets-take-'));
   const framesDir = join(workDir, 'frames');
   mkdirSync(framesDir, { recursive: true });
+  let handedOver = false;
 
   try {
     const seedDoc = mergeSeed(shot, aspect, variantDoc, homeDaysOverride);
@@ -145,20 +138,25 @@ async function captureOneTake({ shot, aspect, viewport, seedValue, ext, setDir, 
     await seedStorage(serviceWorker, seedDoc);
 
     const page = await context.newPage();
+    // Observers go in before the page exists, so pets_ready is the first
+    // frame a pet is drawn (observe.js), not when the recorder looked.
+    await page.addInitScript(installObservers, seedDoc.roster);
     const cdp = await context.newCDPSession(page);
     const screencast = await startScreencast(cdp, framesDir);
+
+    // Start clapper on the initial about:blank, before the set page loads:
+    // derive.mjs puts t=0 at its release (the events.json contract), so
+    // every logged event, pets_ready and first_paint included, is positive.
+    await new Promise((r) => setTimeout(r, SETTLE_BEFORE_CLAP_MS));
+    await page.evaluate(keepCompositing);
+    await page.evaluate(installClap);
+    const clapStart = await page.evaluate(([label, ms]) => window.__clap(label, ms), ['start', CLAP_MS]);
+    await new Promise((r) => setTimeout(r, PREROLL_AFTER_CLAP_MS));
 
     const setPage = shot.page === 'popup' ? undefined : shot.page;
     const url = `https://pixelpets.demo/${setPage}.html`;
     await page.goto(url, { waitUntil: 'load' });
-    await page.evaluate(installObservers, seedDoc.roster);
     await page.evaluate(installClap);
-    // derive.mjs puts t=0 at the start clapper's release (the events.json
-    // contract), so anything a shot logs during this 500ms settle (a boot
-    // greet, the first tracks) comes out negative.
-    await new Promise((r) => setTimeout(r, 500));
-
-    const clapStart = await page.evaluate(([label, ms]) => window.__clap(label, ms), ['start', CLAP_MS]);
 
     let choreoResult;
     try {
@@ -175,6 +173,7 @@ async function captureOneTake({ shot, aspect, viewport, seedValue, ext, setDir, 
 
     const pp = await page.evaluate(() => window.__pp);
 
+    handedOver = true;
     return {
       workDir,
       frames: screencast.frames,
@@ -191,7 +190,9 @@ async function captureOneTake({ shot, aspect, viewport, seedValue, ext, setDir, 
         hourSetT: choreoResult.hourSetMs,
         petsReadyT: choreoResult.petsReadyMs,
         feedMouseupT: choreoResult.feedMouseupMs,
+        firstPaintT: pp.firstPaintT ?? undefined,
       },
+      dblclickTarget: choreoResult.dblclickTarget,
       context: {
         extensionId,
         roster: seedDoc.roster,
@@ -201,6 +202,11 @@ async function captureOneTake({ shot, aspect, viewport, seedValue, ext, setDir, 
     };
   } finally {
     await context.close().catch(() => {});
+    // A take discarded mid-choreography still owns its frames (2.5 GB in
+    // one shakedown session); the profile dir is never removed by
+    // lib/browser.mjs (1.7 GB).
+    if (!handedOver) rmSync(workDir, { recursive: true, force: true });
+    if (profileDir) rmSync(profileDir, { recursive: true, force: true });
   }
 }
 
@@ -225,6 +231,18 @@ async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId })
 
   let takes = 0;
   const rejections = [];
+  const repeatGuard = createRepeatGuard({ fixedSeed: isFixedSeed(shot) });
+  let stoppedOn = null;
+  const label = `[${shot.id}/${aspect}]`;
+  // Logs one discarded take; returns true when the shot should stop
+  // (a fixed seed failing the same way FIXED_SEED_REPEAT_LIMIT times).
+  const discard = (seedValue, { message, failedRules, capture }, workDir) => {
+    if (workDir) rmSync(workDir, { recursive: true, force: true });
+    rejections.push(message);
+    console.log(`${label} seed ${seedValue} discarded: ${message}`);
+    stoppedOn = repeatGuard.record({ message, failedRules, capture });
+    return stoppedOn !== null;
+  };
 
   for (const seedValue of seedCandidates(shot)) {
     if (takes >= SEED_BUDGET) break;
@@ -247,8 +265,7 @@ async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId })
       });
     } catch (err) {
       if (err instanceof DiscardTake) {
-        rejections.push(err.message);
-        console.log(`[${shot.id}/${aspect}] seed ${seedValue} discarded: ${err.message}`);
+        if (discard(seedValue, { message: err.message })) break;
         continue;
       }
       throw err;
@@ -265,14 +282,14 @@ async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId })
       videoLagMs: 56,
     });
 
-    const results = evaluateShotRules(shot.accept ?? [], extraRules, events);
+    const outAnchor = [...(shot.beats ?? [])].reverse().find((b) => b.out)?.out;
+    const ctx = { dblclick: take.dblclickTarget, dblclickCss: variantDoc?.shots?.[shot.id]?.dblclick_css, outAnchor };
+    const results = evaluateShotRules(shot.accept ?? [], extraRules, events, ctx);
     const failed = results.filter((r) => !r.pass);
 
     if (failed.length > 0) {
-      rmSync(take.workDir, { recursive: true, force: true });
-      const detail = failed.map((f) => `${f.rule} (${f.detail})`).join('; ');
-      rejections.push(detail);
-      console.log(`[${shot.id}/${aspect}] seed ${seedValue} discarded: ${detail}`);
+      const message = failed.map((f) => `${f.rule} (${f.detail})`).join('; ');
+      if (discard(seedValue, { message, failedRules: failed.map((f) => f.rule) }, take.workDir)) break;
       continue;
     }
 
@@ -280,7 +297,9 @@ async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId })
     const outDir = join(BUILD_DIR, runId, aspect === '16:9' ? shot.id : join('v916', shot.id));
     mkdirSync(outDir, { recursive: true });
     const mp4Path = join(outDir, 'demo.mp4');
-    assembleFrames({ frames: take.frames, outPath: mp4Path, fps: doc.fps ?? 25, workDir: take.workDir });
+    const dprAssemble = viewport.device_scale_factor ?? 2;
+    const frames = dropLeadingMisSizedFrames(take.frames, { width: viewport.width * dprAssemble, height: viewport.height * dprAssemble, beforeMs: take.raw.clapStart.tInsert });
+    assembleFrames({ frames, outPath: mp4Path, fps: doc.fps ?? 25, workDir: take.workDir });
 
     // A screencast frame occasionally arrives at the wrong device-pixel size
     // under heavy system load (observed live: 1920x906, 1080x1286 instead of
@@ -293,10 +312,9 @@ async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId })
     const expectedHeight = viewport.height * dpr;
     const earlyProbe = probeVideo(mp4Path);
     if (earlyProbe.width !== expectedWidth || earlyProbe.height !== expectedHeight) {
-      rmSync(take.workDir, { recursive: true, force: true });
-      const detail = `assembled at ${earlyProbe.width}x${earlyProbe.height}, expected ${expectedWidth}x${expectedHeight}`;
-      rejections.push(detail);
-      console.log(`[${shot.id}/${aspect}] seed ${seedValue} discarded: ${detail}`);
+      rmSync(outDir, { recursive: true, force: true });
+      const message = `assembled at ${earlyProbe.width}x${earlyProbe.height}, expected ${expectedWidth}x${expectedHeight}`;
+      if (discard(seedValue, { message, capture: true }, take.workDir)) break;
       continue;
     }
 
@@ -336,10 +354,9 @@ async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId })
     // pass (both sides of the check can grow together under heavy system
     // load without the corrected residual crossing 40ms).
     if (measuredFromHeart && (videoLagMs < 0 || videoLagMs > VIDEO_LAG_MAX_MS)) {
-      rmSync(take.workDir, { recursive: true, force: true });
-      const detail = `videoLagMs ${videoLagMs.toFixed(1)}ms outside the epic eval's 0-120ms bound (${videoLagSource})`;
-      rejections.push(detail);
-      console.log(`[${shot.id}/${aspect}] seed ${seedValue} discarded: ${detail}`);
+      rmSync(outDir, { recursive: true, force: true });
+      const message = `videoLagMs ${videoLagMs.toFixed(1)}ms outside the epic eval's 0-120ms bound (${videoLagSource})`;
+      if (discard(seedValue, { message, capture: true }, take.workDir)) break;
       continue;
     }
 
@@ -355,8 +372,9 @@ async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId })
     console.log(`[${shot.id}/${aspect}] videoLagMs=${videoLagMs.toFixed(1)} (${videoLagSource}; epic eval bound 0-120ms)`);
     console.log(`[${shot.id}/${aspect}] clapper check: |${sync.endClapResidualMs.toFixed(1)} + ${videoLagMs.toFixed(1)}| = ${Math.abs(sync.correctedResidualMs).toFixed(1)} <= 40 -> ${sync.pass}`);
     if (!sync.pass) {
-      rmSync(take.workDir, { recursive: true, force: true });
-      rejections.push(`clapper sync residual ${sync.correctedResidualMs.toFixed(1)}ms outside +-40ms`);
+      rmSync(outDir, { recursive: true, force: true });
+      const message = `clapper sync residual ${sync.correctedResidualMs.toFixed(1)}ms outside +-40ms`;
+      if (discard(seedValue, { message, capture: true }, take.workDir)) break;
       continue;
     }
 
@@ -368,12 +386,18 @@ async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId })
     events.accept = results;
     writeFileSync(join(outDir, 'events.json'), JSON.stringify(events, null, 1));
 
-    if (!opts.keepFrames) rmSync(join(take.workDir, 'frames'), { recursive: true, force: true });
-    console.log(`[${shot.id}/${aspect}] takes-per-shot: ${takes}`);
-    return { ok: true, takes };
+    if (opts.keepFrames) console.log(`${label} --keep-frames: take files kept in ${take.workDir}`);
+    else rmSync(take.workDir, { recursive: true, force: true });
+    for (const r of results) console.log(`${label} accept ${r.pass ? 'PASS' : 'FAIL'}: ${r.rule}${r.detail ? ` -> ${r.detail}` : ''}`);
+    console.log(`${label} takes-per-shot: ${takes} (seed ${seedValue})`);
+    return { ok: true, takes, seed: seedValue };
   }
 
-  throw new Error(`[${shot.id}/${aspect}] exhausted ${takes} takes without a passing seed. Rejections:\n${rejections.join('\n')}`);
+  const why = stoppedOn
+    ? `stopped after the fixed seed failed the same way ${takes > 1 ? 'repeatedly' : 'once'} (${stoppedOn})`
+    : `exhausted ${takes} takes without a passing seed`;
+  console.log(`${label} FAILED: ${why}. Rejections:\n${rejections.join('\n')}`);
+  return { ok: false, takes, reason: why };
 }
 
 async function main() {
@@ -390,19 +414,35 @@ async function main() {
     return shot;
   });
 
+  // Record every shot even when one fails, then exit non-zero naming the
+  // failed ones: one shot's failure says nothing about the next.
+  const failures = [];
+  const attempt = async (name, fn) => {
+    try {
+      const result = await fn();
+      if (result && result.ok === false) failures.push(`${name}: ${result.reason}`);
+    } catch (err) {
+      console.error(err.stack || String(err));
+      failures.push(`${name}: ${err.message.split('\n')[0]}`);
+    }
+  };
   for (const shot of shots) {
     if (shot.page === 'popup') {
-      await recordPopupTake({ shot, doc, ext, opts, runId, buildDir: BUILD_DIR });
+      await attempt(shot.id, () => recordPopupTake({ shot, doc, ext, opts, runId, buildDir: BUILD_DIR }));
       continue;
     }
-    await recordShotAspect({ shot, aspect: '16:9', doc, setDir, ext, opts, runId });
+    await attempt(`${shot.id}/16:9`, () => recordShotAspect({ shot, aspect: '16:9', doc, setDir, ext, opts, runId }));
     if (doc.variants?.vertical_9x16) {
-      await recordShotAspect({ shot, aspect: '9:16', doc, setDir, ext, opts, runId });
+      await attempt(`${shot.id}/9:16`, () => recordShotAspect({ shot, aspect: '9:16', doc, setDir, ext, opts, runId }));
     }
   }
 
   pruneOldRuns();
-  console.log('record.mjs: all shots recorded.');
+  if (failures.length > 0) {
+    console.error(`record.mjs: ${failures.length} shot(s) not kept (run ${runId}):\n  ${failures.join('\n  ')}`);
+    process.exit(1);
+  }
+  console.log(`record.mjs: all shots recorded (run ${runId}).`);
 }
 
 main().catch((err) => {

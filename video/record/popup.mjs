@@ -11,8 +11,9 @@ import { launchWithExtension, logPopupRects, openPopup, seedStorage } from '../l
 import { evaluateRules } from './accept.mjs';
 import { assembleFrames, extractGrayCrop, generateSignalStats, probeVideo } from './assemble.mjs';
 import { installClap } from './clap.js';
-import { startScreencast } from './screencast.mjs';
+import { dropLeadingMisSizedFrames, startScreencast } from './screencast.mjs';
 import { computeSync, demoMsOf, findTrimBeforeMs, measureVideoLagFromChange, splitGrayFrames } from './sync.mjs';
+import { ownProfileDir, profileDirs } from './tempdirs.mjs';
 import { VIDEO_LAG_MAX_MS } from './video-lag.mjs';
 
 const CLAP_MS = 160;
@@ -111,6 +112,14 @@ async function waitPopupReady(page, layoutExpect, timeoutMs) {
     )
     .then(() => true, () => false);
   if (!ok) throw new DiscardPopupTake('popup_ready never reached (rows/cells/Nunito)');
+  // The rule's own predicate, read once more and kept with its time: the
+  // Nunito FontFace's status (accept.mjs evalPopupFontLoaded judges it
+  // against the first action).
+  return page.evaluate(() => {
+    const face = [...document.fonts].find((f) => f.family.replace(/["']/g, '') === 'Nunito' && f.status === 'loaded')
+      ?? [...document.fonts].find((f) => f.family.replace(/["']/g, '') === 'Nunito');
+    return { status: face ? face.status : 'absent', t: performance.timeOrigin + performance.now() };
+  });
 }
 
 async function assertLayout(page, layoutExpect) {
@@ -217,10 +226,13 @@ async function runPopupActions(page, actions, cursor) {
 }
 
 async function captureOnePopupTake({ shot, ext, timezoneId, homeDaysOverride, doc }) {
+  const profilesBefore = profileDirs();
   const { context, serviceWorker, extensionId } = await launchWithExtension({ ext, timezoneId });
+  const profileDir = ownProfileDir(profilesBefore);
   const workDir = mkdtempSync(join(tmpdir(), 'pixel-pets-popup-take-'));
   const framesDir = join(workDir, 'frames');
   mkdirSync(framesDir, { recursive: true });
+  let handedOver = false;
 
   try {
     const seed = structuredClone(shot.seed);
@@ -234,7 +246,7 @@ async function captureOnePopupTake({ shot, ext, timezoneId, homeDaysOverride, do
     await page.evaluate(installPopupObserver);
     await page.evaluate(installClap);
 
-    await waitPopupReady(page, shot.layout_expect, 5000);
+    const nunito = await waitPopupReady(page, shot.layout_expect, 5000);
     const layout = await assertLayout(page, shot.layout_expect);
 
     await logPopupRects(page);
@@ -269,10 +281,12 @@ async function captureOnePopupTake({ shot, ext, timezoneId, homeDaysOverride, do
     const nameInputs = await page.evaluate(() => window.__ppPopup.nameInputs);
     const tracks = rawTracks.map((f) => ({ ...f, t: tracksInstallEpoch + f.t }));
 
+    handedOver = true;
     return {
       workDir,
       frames: screencast.frames,
       extensionId,
+      nunito,
       clapStart,
       clapEnd,
       popupReadyT,
@@ -283,7 +297,18 @@ async function captureOnePopupTake({ shot, ext, timezoneId, homeDaysOverride, do
     };
   } finally {
     await context.close().catch(() => {});
+    if (!handedOver) rmSync(workDir, { recursive: true, force: true });
+    if (profileDir) rmSync(profileDir, { recursive: true, force: true });
   }
+}
+
+/** The accept-rule context of a popup take: the facts its rules need that events.json has no field for. */
+export function popupAcceptCtx({ take, shot }) {
+  return {
+    layoutExpect: shot.layout_expect,
+    nunito: { status: take.nunito.status, t: msAfterStartClap(take, take.nunito.t) },
+    popup: { beats: shot.beats, viewportWidth: shot.viewport.width, forbiddenTypes: shot.layout_expect.forbidden_types },
+  };
 }
 
 /**
@@ -380,7 +405,7 @@ export async function recordPopupTake({ shot, doc, ext, opts, runId, buildDir })
 
     const events = buildPopupEvents({ take, shot, doc });
 
-    const ctx = { layoutExpect: shot.layout_expect };
+    const ctx = popupAcceptCtx({ take, shot });
     const results = evaluateRules(shot.accept, events, ctx);
     const failed = results.filter((r) => !r.pass);
 
@@ -395,7 +420,9 @@ export async function recordPopupTake({ shot, doc, ext, opts, runId, buildDir })
     const outDir = join(buildDir, runId, shot.id);
     mkdirSync(outDir, { recursive: true });
     const mp4Path = join(outDir, 'demo.mp4');
-    assembleFrames({ frames: take.frames, outPath: mp4Path, fps: doc.fps ?? 25, workDir: take.workDir });
+    const dprAssemble = shot.viewport.device_scale_factor ?? 2;
+    const frames = dropLeadingMisSizedFrames(take.frames, { width: shot.viewport.width * dprAssemble, height: shot.viewport.height * dprAssemble, beforeMs: take.clapStart.tInsert });
+    assembleFrames({ frames, outPath: mp4Path, fps: doc.fps ?? 25, workDir: take.workDir });
 
     // See record.mjs's matching check: a screencast frame can arrive at the
     // wrong device-pixel size under heavy system load.
@@ -443,7 +470,10 @@ export async function recordPopupTake({ shot, doc, ext, opts, runId, buildDir })
     events.videoLagMs = videoLagMs;
     events.accept = results;
     writeFileSync(join(outDir, 'events.json'), JSON.stringify(events, null, 1));
-    if (!opts.keepFrames) rmSync(join(take.workDir, 'frames'), { recursive: true, force: true });
+    if (opts.keepFrames) console.log(`[${shot.id}] --keep-frames: take files kept in ${take.workDir}`);
+    else rmSync(take.workDir, { recursive: true, force: true });
+    for (const r of results) console.log(`[${shot.id}] accept ${r.pass ? 'PASS' : 'FAIL'}: ${r.rule}${r.detail ? ` -> ${r.detail}` : ''}`);
+    console.log(`[${shot.id}] takes-per-shot: ${attempt}`);
 
     return { ok: true, results, mp4Path };
   }
