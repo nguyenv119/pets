@@ -4,11 +4,10 @@
 // as a gate. See vitest.smoke.config.ts for the 100 min timeout: the
 // recording lock alone can wait up to 90 min for another holder.
 //
-// Two separate launches, matching real usage: routeSet aborts every
-// non-pixelpets.demo host (conventions.routed_html), so a page shot (which
-// calls routeSet) and the popup take (which calls openPopup, never
-// routeSet) never share a context — sharing one would abort the popup's own
-// chrome-extension:// resource loads.
+// Two separate launches, matching real usage: a page shot calls routeSet
+// (which aborts every web host but pixelpets.demo, conventions.routed_html)
+// and the popup take calls openPopup, never routeSet, so the two never
+// share a context.
 
 import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
@@ -24,7 +23,8 @@ describe('the real browser harness', () => {
      * Verifies the page-shot path end to end against a real, headless
      * Chromium: the built extension loads, routeSet serves the fixture set
      * page with no 404s, and the seeded pet renders inside the extension's
-     * shadow host.
+     * shadow host with its sprite actually loaded (routeSet must let the
+     * extension's chrome-extension:// sprite requests through).
      *
      * This matters because every unit test in browser.test.mjs mocks
      * nothing about a real launch — this is the one check that the harness
@@ -54,9 +54,14 @@ describe('the real browser harness', () => {
 
       // WHEN — the seeded pet is asked to render inside the extension's host
       const host = await page.waitForSelector('#pixel-pets-host', { timeout: 10000 });
+      await page.waitForFunction(() => {
+        const imgs = [...(document.querySelector('#pixel-pets-host')?.shadowRoot?.querySelectorAll('img') ?? [])];
+        return imgs.length > 0 && imgs.every((img) => img.complete && img.naturalWidth > 0);
+      }, null, { timeout: 10000 });
 
-      // THEN — the fixture page served with no 404s, and the pet is visible
+      // THEN — the fixture page served with no 404s, nothing of the extension's was aborted, and the pet is visible
       expect(routeLog.status404).toEqual([]);
+      expect(routeLog.unrouted.filter((u) => u.startsWith('chrome-extension:'))).toEqual([]);
       expect(host).toBeTruthy();
     } finally {
       await context.close();
