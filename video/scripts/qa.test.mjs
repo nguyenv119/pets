@@ -47,13 +47,13 @@ describe('checkCut', () => {
     expect(checkCut('16x9', probeOf({ w: 1920, h: 1080, d: 29.4 }), CUTS['16x9'])).toEqual([]);
   });
 
-  it('fails a silent master and one past 31.0 s', () => {
+  it('fails a silent master and one past 30.0 s', () => {
     /** A render that lost its music, or a fetch that ran long, must stop the run. */
     // GIVEN / WHEN
-    const bad = checkCut('16x9', probeOf({ w: 1920, h: 1080, acodec: null, d: 31.2 }), CUTS['16x9']);
+    const bad = checkCut('16x9', probeOf({ w: 1920, h: 1080, acodec: null, d: 30.2 }), CUTS['16x9']);
     // THEN
     expect(bad.join()).toMatch(/audio missing/);
-    expect(bad.join()).toMatch(/31.20 s/);
+    expect(bad.join()).toMatch(/30.20 s/);
   });
 
   it('fails a master at the wrong size', () => {
@@ -72,10 +72,18 @@ describe('checkCut', () => {
     expect(bad).toEqual(['16x9: video vp9 1920x1080, want h264 1920x1080', '16x9: audio opus, want aac']);
   });
 
-  it('allows the 9:16 cut up to 31.5 s', () => {
-    /** The vertical cut's window is wider than the master's. */
+  it('allows the 9:16 cut up to 30.5 s', () => {
+    /** The vertical cut's window (variants.vertical_9x16.expected_length_s) is wider than the master's. */
     // GIVEN / WHEN / THEN
-    expect(checkCut('9x16', probeOf({ w: 1080, h: 1920, d: 31.4 }), CUTS['9x16'])).toEqual([]);
+    expect(checkCut('9x16', probeOf({ w: 1080, h: 1920, d: 30.4 }), CUTS['9x16'])).toEqual([]);
+  });
+
+  it('fails a v2 cut under 27.3 s', () => {
+    /** With b1b cut the film runs about 28 s; a shorter cut lost a beat, and the eval fails it. */
+    // GIVEN / WHEN
+    const bad = checkCut('16x9', probeOf({ w: 1920, h: 1080, d: 27.2 }), CUTS['16x9']);
+    // THEN
+    expect(bad.join()).toMatch(/27.20 s/);
   });
 });
 

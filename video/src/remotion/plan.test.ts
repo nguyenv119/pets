@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { sampleCursor } from './Cursor';
 import { STAGE_16X9, STAGE_9X16 } from './camera';
 import { buildPromoPlan, popupCursor, withSharpFrame, type PlanBeat } from './plan';
-import { loadShots, loadSyntheticPopupEvents, makeEvents, stillPets } from './testEvents';
+import { loadShots, loadSyntheticPopupEvents, makeEvents, reviewThenCardEdit, stillPets } from './testEvents';
 import { buildTimeline, type ShotsDoc } from './timeline';
 
 describe('popupCursor', () => {
@@ -94,17 +94,38 @@ describe('buildPromoPlan: the chrome strip per page beat', () => {
      * (frameCrops) name a chrome PNG.
      * What breaks: the popup card renders with a page's tab strip stacked above it.
      */
-    // GIVEN — the real popup shot and its synthetic take, in the 9:16 (the 16:9 card placement is read by v1 code until pets-3it.5,
-    // which un-skips the 16:9 card tests in renderChecks.test.ts)
+    // GIVEN — the real popup shot and its synthetic take, in the 16:9
     const shots = { ...loadShots(), edit_order: ['s2b_shelter'] };
     const eventsByShotId = { s2b_shelter: loadSyntheticPopupEvents() };
-    const edit = buildTimeline({ shots, stage: STAGE_9X16, aspect: '9x16', eventsByShotId, sourceByShotId: { s2b_shelter: '/r/s2b.mp4' }, music: 'm' });
+    const edit = buildTimeline({ shots, stage: STAGE_16X9, aspect: '16x9', eventsByShotId, sourceByShotId: { s2b_shelter: '/r/s2b.mp4' }, music: 'm' });
     // WHEN
-    const out = buildPromoPlan({ edit, shots, eventsByShotId, stagedByShotId: { s2b_shelter: 's2b/demo.mp4' }, stage: STAGE_9X16, aspect: '9x16', outputWidth: 1080, outputHeight: 1920, musicSrc: 'm', iconPath: 'i' });
+    const out = buildPromoPlan({ edit, shots, eventsByShotId, stagedByShotId: { s2b_shelter: 's2b/demo.mp4' }, stage: STAGE_16X9, aspect: '16x9', outputWidth: 1920, outputHeight: 1080, musicSrc: 'm', iconPath: 'i' });
     // THEN
     expect(out.beats.length).toBeGreaterThan(0);
     expect(out.beats.every((b) => b.frameCrops === undefined)).toBe(true);
     expect(out.beats.map((b) => b.chromeSrc)).toEqual(out.beats.map(() => undefined));
+  });
+
+  it('gives every card beat the review backdrop: its chrome over its last shown frame', () => {
+    /**
+     * What: each card beat plans backdrop = {chromeSrc: the review chrome, stagedSrc: the staged review
+     * recording, frame: the source frame of the last review frame shown}, in both aspects.
+     * Why: shots.json overlays.popup_card.backdrop: during s2b the chrome stays on screen and the card
+     * hangs over the dimmed last review frame, a still (no cream field).
+     * What breaks: the card floats on cream or on a moving page, and the eval's backdrop check fails.
+     */
+    for (const [aspect, stage, png] of [['16x9', STAGE_16X9, 'set/chrome/review.png'], ['9x16', STAGE_9X16, 'set/chrome/review-narrow.png']] as const) {
+      // GIVEN
+      const { shots, eventsByShotId, edit } = reviewThenCardEdit(aspect);
+      const hold = edit.beats.find((b) => b.name === 'b_hold')!;
+      // WHEN
+      const out = buildPromoPlan({ edit, shots, eventsByShotId, stagedByShotId: { s2_review: 's2/demo.mp4', s2b_shelter: 's2b/demo.mp4' }, stage, aspect, outputWidth: stage.width, outputHeight: stage.height, musicSrc: 'm', iconPath: 'i' });
+      // THEN
+      const cards = out.beats.filter((b) => b.card);
+      expect(cards.length).toBe(3);
+      for (const c of cards) expect(c.backdrop).toEqual({ chromeSrc: png, stagedSrc: 's2/demo.mp4', frame: hold.k1 - 1 - Math.round(hold.shiftMs / 40) });
+      expect(out.beats.find((b) => b.name === 'b_hold')!.backdrop).toBeUndefined();
+    }
   });
 
   it('refuses a page shot that names no page', () => {

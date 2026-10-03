@@ -38,7 +38,7 @@ const EMPTY_PLAN = (stage: PromoProps['stage'], aspect: PromoProps['aspect']): P
   items: [],
   stage,
   totalFrames: FPS,
-  music: { src: 'music/cat_caffe.ogg', quietDb: -10, upDb: -2, upFrom: 0, upFrames: 30, stopAt: FPS, stopFrames: 6 },
+  music: { src: 'music/funny_and_cute_town_theme.ogg', quietDb: -10, upDb: -2, upFrom: 0, upFrames: 30, stopAt: FPS, stopFrames: 6 },
   sfx: [],
   iconPath: 'icons/icon-128.png',
   aspect,

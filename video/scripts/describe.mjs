@@ -32,7 +32,7 @@ export const CROP_B_SPECIES = ['chicken', 'crab', 'panda', 'snail'];
 export function musicCredits(licencesMd) {
   const out = {};
   const row = /^\| `video\/assets\/music\/([a-z0-9_]+)\.ogg` \| ([^|]+?) \| ([^|]+?) \| ([^|]+?) \| https?:\/\/([^|\s]+) \|/gm;
-  for (const m of licencesMd.matchAll(row)) out[m[1]] = `Music: "${m[2]}" by ${m[3]} (${m[5]}), ${m[4]}.`;
+  for (const m of licencesMd.matchAll(row)) out[m[1]] = `Music: "${m[2]}" by ${m[3]}, ${m[4]} (${m[5]}).`;
   if (!Object.keys(out).length) throw new Error('describe: assets/LICENSES.md lists no video/assets/music/*.ogg rows');
   return out;
 }

@@ -94,3 +94,29 @@ export function loadFixtureEventsV2(): Events {
     observed: e.observed.map((o) => (typeof o.y === 'number' ? { ...o, y: o.y + dy } : o)),
   };
 }
+
+export interface ReviewThenCardFixture {
+  shots: ShotsDoc;
+  eventsByShotId: Record<string, Events>;
+  edit: EditTimeline;
+  items: TextItem[];
+}
+
+/**
+ * A 2 s review page hold (Rex still at CSS x 400) cut to the real card beats on the synthetic popup take:
+ * the review shot's last frame is the card's backdrop. Sources are /r/s2.mp4 and /r/s2b.mp4.
+ */
+export function reviewThenCardEdit(aspect: '16x9' | '9x16'): ReviewThenCardFixture {
+  const full = loadShots();
+  const card = full.shots.find((s) => s.id === 's2b_shelter')!;
+  const review = { id: 's2_review', page: 'review', beats: [{ name: 'b_hold', in: 'pets_ready', out: 'pets_ready+2000', camera: { zoom: 1, focus: 'page', move: 'hold', sample: 1 as const } }] };
+  const shots = { ...full, edit_order: ['s2_review', 's2b_shelter'], shots: [review, card] };
+  const stage = aspect === '16x9' ? STAGE_16X9 : STAGE_9X16;
+  const eventsByShotId = {
+    s2_review: makeEvents({ roster: [{ id: 'rex', name: 'Rex', type: 'dog', color: 'brown' }], tracks: stillPets({ rex: 100 }, 20000, aspect === '9x16' ? 792 : 372), observed: [{ t: 500, kind: 'pets_ready' }] }),
+    s2b_shelter: loadSyntheticPopupEvents(),
+  };
+  const edit = buildTimeline({ shots, stage, aspect, eventsByShotId, sourceByShotId: { s2_review: '/r/s2.mp4', s2b_shelter: '/r/s2b.mp4' }, music: 'm' });
+  const items = buildOverlays({ edit, shots, eventsByShotId, stage, aspect, outputWidth: stage.width, outputHeight: stage.height });
+  return { shots, eventsByShotId, edit, items };
+}

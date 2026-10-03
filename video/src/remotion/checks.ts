@@ -24,8 +24,8 @@ export const CHECK_THRESHOLDS = {
   CARD_CAPTION_GAP_PX: 40,
   /**
    * A card's `steady_at` spot must sit within this many output px of the
-   * placement anchor rule (centre x on anchor.cx; centre y on anchor.cy in
-   * 16:9, top edge on anchor.top in 9:16). Every steady FRAME must then
+   * placement anchor rule (shots.json anchor_rule: x = min(icon_cx, frame w -
+   * margin_x - card w), y = min(top, frame h - card h)). Every steady FRAME must then
    * sit on `steady_at` exactly (no tolerance there).
    */
   CARD_ANCHOR_TOLERANCE_PX: 2,
@@ -223,33 +223,36 @@ export function checkCardSteadyAnchor(cardAt: { x: number; y: number }, steadyAt
   return violations;
 }
 
-/** overlays.popup_card.placement.<aspect>.anchor: the card's centre x, and its centre y (16:9) or top edge (9:16). */
+/** overlays.popup_card.placement.<aspect>.anchor: the pinned icon's centre x, the card top under the toolbar, and the right margin. */
 export interface CardAnchorRule {
-  cx: number;
-  cy?: number;
-  top?: number;
+  icon_cx: number;
+  top: number;
+  margin_x: number;
+}
+
+/** shots.json anchor_rule: the card hangs from the icon, clamped to end margin_x inside the right edge and to fit the frame bottom. */
+function anchorRuleAt(anchor: CardAnchorRule, size: { w: number; h: number }, frame: { w: number; h: number }): { x: number; y: number } {
+  return { x: Math.min(anchor.icon_cx, frame.w - anchor.margin_x - size.w), y: Math.min(anchor.top, frame.h - size.h) };
 }
 
 /**
  * A card's `steady_at` spot lies within CARD_ANCHOR_TOLERANCE_PX of the
- * placement anchor rule for its steady size (shots.json anchor_rule:
- * "the anchor rule rounded to even... within 2 output px"), the same test
- * verify.mjs's PLACE_TOL applies.
+ * placement anchor rule for its steady size in this frame (anchorRuleAt;
+ * the eval allows 2 px for the rounding to even).
  */
 export function checkSteadyAtOnAnchor(
   steadyAt: { x: number; y: number },
   size: { w: number; h: number },
   anchor: CardAnchorRule,
+  frame: { w: number; h: number },
   thresholds: CheckThresholds = CHECK_THRESHOLDS,
 ): CheckViolation[] {
   const tol = thresholds.CARD_ANCHOR_TOLERANCE_PX;
-  const dx = steadyAt.x + size.w / 2 - anchor.cx;
-  let dy: number;
-  if (anchor.cy !== undefined) dy = steadyAt.y + size.h / 2 - anchor.cy;
-  else if (anchor.top !== undefined) dy = steadyAt.y - anchor.top;
-  else return [{ check: 'card-anchor-rule', detail: 'the placement anchor names neither cy nor top' }];
+  const rule = anchorRuleAt(anchor, size, frame);
+  const dx = steadyAt.x - rule.x;
+  const dy = steadyAt.y - rule.y;
   if (Math.abs(dx) > tol || Math.abs(dy) > tol) {
-    return [{ check: 'card-anchor-rule', detail: `steady_at (${steadyAt.x}, ${steadyAt.y}) for a ${size.w}x${size.h} card is (${dx}, ${dy}) px off the anchor ${JSON.stringify(anchor)} (tol ${tol})` }];
+    return [{ check: 'card-anchor-rule', detail: `steady_at (${steadyAt.x}, ${steadyAt.y}) for a ${size.w}x${size.h} card is (${dx}, ${dy}) px off the anchor rule's (${rule.x}, ${rule.y}) (tol ${tol})` }];
   }
   return [];
 }

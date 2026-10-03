@@ -1,7 +1,8 @@
 #!/bin/sh
-# Regenerates the two committed music beds from their (uncommitted) sources.
-# Usage: make-music.sh <dir holding cat_caffe.mp3 and forgotten_path.ogg>
-# Writes cat_caffe.ogg and forgotten_path.ogg beside this script.
+# Regenerates the committed music bed from its (uncommitted) source.
+# Usage: make-music.sh <dir holding oga_majitapioka_0.mp3>
+#   (the download from https://opengameart.org/content/funny-and-cute-town-theme)
+# Writes funny_and_cute_town_theme.ogg beside this script.
 set -e
 SRC="$1"
 if [ -z "$SRC" ]; then
@@ -9,11 +10,11 @@ if [ -z "$SRC" ]; then
   exit 1
 fi
 HERE="$(cd "$(dirname "$0")" && pwd)"
+TARGET_LUFS=-20.4 # the v1 bed's integrated loudness; the cut is normalised to -16 LUFS later (scripts/loudness.mjs)
+CUT='atrim=0:45,afade=t=out:st=43:d=2'
 
-# "Cat caffe" by TAD, CC0, 133.02 s. The storyboard's default bed: the first
-# 45 s with a 2 s fade-out.
-ffmpeg -nostdin -y -i "$SRC/cat_caffe.mp3" -vn -af 'atrim=0:45,afade=t=out:st=43:d=2' -c:a libvorbis -q:a 4 "$HERE/cat_caffe.ogg"
-
-# "forgotten path" by johndekale, CC0, 40.31 s. The alternate bed: looped to
-# 45 s with a 2 s crossfade at the seam.
-ffmpeg -nostdin -y -i "$SRC/forgotten_path.ogg" -i "$SRC/forgotten_path.ogg" -filter_complex '[0][1]acrossfade=d=2,atrim=0:45' -c:a libvorbis -q:a 4 "$HERE/forgotten_path.ogg"
+# "Funny and Cute Town Theme" by ISAo: the first 45 s with a 2 s fade-out,
+# gained (one linear volume step) to TARGET_LUFS integrated.
+I=$(ffmpeg -nostdin -nostats -i "$SRC/oga_majitapioka_0.mp3" -vn -af "$CUT,ebur128" -f null - 2>&1 | sed -n 's/^ *I: *\(-*[0-9.]*\) LUFS.*/\1/p' | tail -1)
+GAIN=$(echo "$TARGET_LUFS - ($I)" | bc -l)
+ffmpeg -nostdin -y -i "$SRC/oga_majitapioka_0.mp3" -vn -af "$CUT,volume=${GAIN}dB" -c:a libvorbis -q:a 4 "$HERE/funny_and_cute_town_theme.ogg"

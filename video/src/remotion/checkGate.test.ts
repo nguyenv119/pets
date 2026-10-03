@@ -1,10 +1,10 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { enforceRenderChecks, RenderCheckError } from './checkGate';
 import { sampledFrames } from './motionBlur';
-import { planMaster } from './planMaster';
+import { LENGTH_RULE_S, planMaster } from './planMaster';
 import type { FrameViolation } from './renderChecks';
 import { makeEvents, stillPets, VIDEO_ROOT } from './testEvents';
 import type { ShotsDoc } from './timeline';
@@ -55,7 +55,7 @@ describe('planMaster (integration: the planner and checks render.mjs runs, no Re
     port: false,
     mode: 'synthetic' as const,
     musicPath: '/abs/music.ogg',
-    musicSrc: 'music/cat_caffe.ogg',
+    musicSrc: 'music/funny_and_cute_town_theme.ogg',
     iconPath: 'icons/icon-128.png',
   });
 
@@ -114,4 +114,21 @@ describe('render.mjs --fixture --plan-only (integration, subprocess)', () => {
     expect(r.status).toBe(0);
     expect(existsSync(tl) ? statSync(tl).mtimeMs : null).toBe(before);
   }, 60_000);
+});
+
+describe('LENGTH_RULE_S', () => {
+  it("is shots.json's v2 window per aspect", () => {
+    /**
+     * What: the master window is master.length_rule's 27.3-30.0 s and the 9:16's is its expected_length_s
+     * 27.3-30.5 s.
+     * Why: with b1b cut the film runs about 28 s; the v1 window (28.3-31.0) would extend or reject a good cut.
+     * What breaks: --run renders a cut the eval fails on length, or aborts one it would pass.
+     */
+    // GIVEN
+    const doc = JSON.parse(readFileSync(join(VIDEO_ROOT, 'shots.json'), 'utf8'));
+    const rule = (doc.master.length_rule as string).match(/Under ([\d.]+) s.*Over ([\d.]+) s/)!;
+    // WHEN / THEN
+    expect(LENGTH_RULE_S['16x9']).toEqual([Number(rule[1]), Number(rule[2])]);
+    expect(LENGTH_RULE_S['9x16']).toEqual(doc.variants.vertical_9x16.expected_length_s);
+  });
 });

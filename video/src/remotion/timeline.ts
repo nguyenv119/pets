@@ -25,6 +25,8 @@ import type { CardCropName, Events, ObservedEvent, Rect, Timeline, TimelineBeat 
 import { smoothedFocusX, type StageConfig } from './camera';
 import { petBoxStage, shotFrameCrops, type CameraBeatSpan } from './cameraPath';
 import { buildCardTimeline, cardSteadyOf, type CardSteadySize } from './cardTimeline';
+import type { CardAnchorRule } from './checks';
+import type { TextItem } from './overlays';
 
 // --- Minimal shots.json shape this module actually reads --------------
 //
@@ -74,7 +76,7 @@ export interface Shot {
 }
 
 export interface PopupCardPlacement {
-  anchor: { cx: number; cy?: number; top?: number };
+  anchor: CardAnchorRule;
   caption_rect: Rect;
 }
 
@@ -465,6 +467,8 @@ export interface EditBeat extends TimelineBeat {
   cardEnvelopes?: Rect[];
   /** Card beats: how the card arrives (the first card pops in, the next ones morph) and over how long. */
   cardTransition?: CardTransition;
+  /** Page beats (with an aspect): the shot's chrome PNG relative to video/ (chromePngPath). */
+  chrome?: string;
 }
 
 export interface CardTransition {
@@ -472,10 +476,27 @@ export interface CardTransition {
   ms: number;
 }
 
+/**
+ * shots.json overlays.popup_card.backdrop: the card beats hang over the last
+ * frame the master shows of the page shot before them (s2_review), at 1.0x,
+ * under that shot's chrome, as a still.
+ */
+export interface CardBackdrop {
+  shotId: string;
+  /** the page shot's recording (timeline.json `backdrop.source`) */
+  source: string;
+  /** demo.mp4 ms of that last shown frame (timeline.json `backdrop.source_t`, in s) */
+  source_t: number;
+  /** its chrome PNG, relative to video/ */
+  chrome: string;
+}
+
 export interface EditTimeline {
   music: string;
   fps: number;
   beats: EditBeat[];
+  /** Set when a card shot follows a page shot. */
+  backdrop?: CardBackdrop;
   /** Whole frames in the master. */
   totalFrames: number;
 }
@@ -503,12 +524,15 @@ export interface BuildTimelineOptions {
    */
   allowEmptyBeats?: boolean;
   /**
-   * --run only, shots.json master.length_rule: "Under 28.3 s: extend the
+   * --run only, shots.json master.length_rule: "Under 27.3 s: extend the
    * final hold by up to 1.0 s." The last beat's hold runs on (its crop
    * unchanged) until the master reaches this length, by at most 1000 ms.
    */
   minLengthMs?: number;
 }
+
+/** The chrome PNG a page shot stacks above its capture, relative to video/ (shots.json master.stage.chrome.png) and to the public dir render.mjs stages it in. */
+export const chromePngPath = (page: string, aspect: '16x9' | '9x16'): string => `set/chrome/${page}${aspect === '9x16' ? '-narrow' : ''}.png`;
 
 /** overlays.popup_card: the first card pops in over 200 ms, each next crop morphs in over 160 ms. */
 export const CARD_POP_IN: CardTransition = { kind: 'pop_in', ms: 200 };
@@ -545,6 +569,7 @@ export function buildTimeline(opts: BuildTimelineOptions): EditTimeline {
   const ceilFrame = (ms: number) => Math.ceil(ms / frameMs - 1e-6);
 
   const beats: EditBeat[] = [];
+  let backdrop: CardBackdrop | undefined;
   let masterFrame = 0;
   const deferred: { beat: ShotBeat; tb: EditBeat; events: Events; sourceIn: number; sourceOut: number }[] = [];
 
@@ -578,6 +603,8 @@ export function buildTimeline(opts: BuildTimelineOptions): EditTimeline {
       }
     }
     const isCardShot = shot.beats.some((b) => b.camera.sample === 'card');
+    const prev = beats[beats.length - 1];
+    if (isCardShot && prev?.chrome) backdrop = { shotId: prev.shotId, source: prev.source, source_t: (prev.k1 - 1) * frameMs - prev.shiftMs, chrome: prev.chrome };
     const pageCrops = isCardShot ? null : shotFrameCrops({ spans, events, stage: opts.stage, shiftMs, fps, noZoom: opts.noZoom });
     let prevCardSteady: CardSteadySize | undefined;
 
@@ -611,6 +638,7 @@ export function buildTimeline(opts: BuildTimelineOptions): EditTimeline {
         tb.master_t = k * frameMs;
         tb.hold_in = (sp.k0 + run.first) * frameMs;
         tb.hold_out = (sp.k0 + run.last + 1) * frameMs;
+        if (shot.page && opts.aspect) tb.chrome = chromePngPath(shot.page, opts.aspect);
       } else {
         if (!beat.card) throw new Error(`buildTimeline: beat "${beat.name}" samples the popup card but declares no card {crop, scale_native}`);
         if (!opts.aspect) throw new Error(`buildTimeline: shot "${shotId}" has card beats but no aspect ('16x9'|'9x16') was supplied`);
@@ -666,7 +694,7 @@ export function buildTimeline(opts: BuildTimelineOptions): EditTimeline {
     setCaptionSample(d.beat, d.tb, { events: d.events, beatInMs: d.sourceIn, totalMs: totalMs - d.tb.shiftMs }, d.sourceIn, d.sourceOut, frameMs);
   }
 
-  return { music: opts.music, fps, beats, totalFrames: masterFrame };
+  return { music: opts.music, fps, beats, totalFrames: masterFrame, ...(backdrop && { backdrop }) };
 }
 
 /** caption_t (snapped to the master frame that shows it), caption_source_t and caption_crop, on a beat that shows text. */
@@ -687,12 +715,19 @@ function usesEndAnchor(beat: ShotBeat): boolean {
 const round6 = (v: number) => Math.round(v * 1e6) / 1e6;
 const sec = (ms: number) => round6(ms / 1000);
 
+/** The text items drawn on the cream caption pill (Captions.tsx pillBox). */
+const PILL_KINDS = new Set(['caption', 'card_caption', 'name_tag']);
+
 /**
  * The frozen Timeline shape timeline.json carries, in SECONDS (what
- * verify.mjs reads): only the schema's fields, every time converted.
+ * verify.mjs reads): only the schema's fields, every time converted, plus
+ * each text beat's caption_rects (every pill on screen at caption_t, from
+ * the plan's `items`), each page beat's chrome PNG and the card backdrop.
  */
-export function timelineJson(edit: EditTimeline): Timeline {
-  return {
+export function timelineJson(edit: EditTimeline, items: readonly TextItem[]): Timeline {
+  const frameMs = 1000 / edit.fps;
+  const pills = items.filter((i) => PILL_KINDS.has(i.kind));
+  const json: Timeline = {
     music: edit.music,
     beats: edit.beats.map((b) => {
       const out: TimelineBeat = {
@@ -709,11 +744,18 @@ export function timelineJson(edit: EditTimeline): Timeline {
       if (b.crop) out.crop = b.crop;
       if (b.hold_in !== undefined) out.hold_in = sec(b.hold_in);
       if (b.hold_out !== undefined) out.hold_out = sec(b.hold_out);
-      if (b.caption_t !== undefined) out.caption_t = sec(b.caption_t);
+      if (b.caption_t !== undefined) {
+        out.caption_t = sec(b.caption_t);
+        const k = Math.round(b.caption_t / frameMs);
+        out.caption_rects = pills.filter((i) => k >= i.fromFrame && k < i.toFrame).map((i) => i.rect);
+      }
       if (b.caption_source_t !== undefined) out.caption_source_t = sec(b.caption_source_t);
       if (b.caption_crop) out.caption_crop = b.caption_crop;
+      if (b.chrome) out.chrome = b.chrome;
       if (b.card) out.card = { ...b.card, frames: b.card.frames.map((f) => ({ ...f, t: sec(f.t) })) };
       return out;
     }),
   };
+  if (edit.backdrop) json.backdrop = { source: edit.backdrop.source, source_t: sec(edit.backdrop.source_t) };
+  return json;
 }
