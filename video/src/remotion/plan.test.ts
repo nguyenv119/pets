@@ -117,13 +117,13 @@ describe('buildPromoPlan: the chrome strip per page beat', () => {
     for (const [aspect, stage, png] of [['16x9', STAGE_16X9, 'set/chrome/review.png'], ['9x16', STAGE_9X16, 'set/chrome/review-narrow.png']] as const) {
       // GIVEN
       const { shots, eventsByShotId, edit } = reviewThenCardEdit(aspect);
-      const hold = edit.beats.find((b) => b.name === 'b_hold')!;
       // WHEN
       const out = buildPromoPlan({ edit, shots, eventsByShotId, stagedByShotId: { s2_review: 's2/demo.mp4', s2b_shelter: 's2b/demo.mp4' }, stage, aspect, outputWidth: stage.width, outputHeight: stage.height, musicSrc: 'm', iconPath: 'i' });
       // THEN
       const cards = out.beats.filter((b) => b.card);
       expect(cards.length).toBe(3);
-      for (const c of cards) expect(c.backdrop).toEqual({ chromeSrc: png, stagedSrc: 's2/demo.mp4', frame: hold.k1 - 1 - Math.round(hold.shiftMs / 40) });
+      // The fixture's review hold ends on recording frame 62 (2.48 s at 40 ms a frame).
+      for (const c of cards) expect(c.backdrop).toEqual({ chromeSrc: png, stagedSrc: 's2/demo.mp4', frame: 62 });
       expect(out.beats.find((b) => b.name === 'b_hold')!.backdrop).toBeUndefined();
     }
   });

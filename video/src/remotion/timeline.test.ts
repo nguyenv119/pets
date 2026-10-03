@@ -437,11 +437,11 @@ describe('timelineJson: the v2 fields the eval reads', () => {
      */
     // GIVEN
     const { edit, items } = reviewThenCardEdit('16x9');
-    const hold = edit.beats.find((b) => b.name === 'b_hold')!;
     // WHEN
     const json = timelineJson(edit, items);
     // THEN
-    expect(json.backdrop).toEqual({ source: '/r/s2.mp4', source_t: Math.round(((hold.k1 - 1) * 40 - hold.shiftMs)) / 1000 });
+    // Recording frame 62 at 40 ms a frame, the fixture's last shown review frame.
+    expect(json.backdrop).toEqual({ source: '/r/s2.mp4', source_t: 2.48 });
   });
 
   it('names the chrome PNG on every page beat and on no card beat', () => {

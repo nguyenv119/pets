@@ -49,7 +49,6 @@ export interface PromoPlan {
   aspect: Aspect;
 }
 
-
 /** Popup-take clicks the card shows a ring for (the Add Pet press rings on the mousedown). */
 const POPUP_CLICKS = ['shelter_click', 'name_click', 'type_selected', 'color_selected', 'add_mousedown'];
 const GLIDE_MS = 300;

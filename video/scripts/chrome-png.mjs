@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { routeSet } from '../lib/browser.mjs';
 import { acquireLock } from '../lib/lock.mjs';
+import { chromePngPath } from '../src/remotion/timeline.ts';
 import { isMain, readJson, VIDEO_DIR } from './stage-io.mjs';
 
 const SET_DIR = join(VIDEO_DIR, 'set');
@@ -28,8 +29,8 @@ const DETERMINISTIC_ARGS = ['--disable-gpu', '--force-color-profile=srgb', '--di
 /** Every PNG to render: each page at both window widths, with its repo-relative path (shots.json's set/chrome/<page>[-narrow].png). */
 export function chromeTargets(chrome) {
   return CHROME_PAGES.flatMap((page) => [
-    { page, width: WIDE_W, path: `set/chrome/${page}.png` },
-    { page, width: NARROW_W, path: `set/chrome/${page}-narrow.png` },
+    { page, width: WIDE_W, path: chromePngPath(page, '16x9') },
+    { page, width: NARROW_W, path: chromePngPath(page, '9x16') },
   ]).map((t) => ({ ...t, height: chrome.css_h }));
 }
 

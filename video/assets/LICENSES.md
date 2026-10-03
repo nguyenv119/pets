@@ -13,7 +13,7 @@ applied; nothing else was changed.
 | `video/assets/fonts/OFL-Nunito.txt` | Nunito licence text | The Nunito Project Authors | SIL OFL 1.1 | https://github.com/google/fonts/tree/main/ofl/nunito | — |
 | `video/assets/fonts/nunito.css` | — | — | — | — | Generated `@font-face` rule for the bundled Nunito TTF, not a licensed asset |
 | `video/assets/music/funny_and_cute_town_theme.ogg` | Funny and Cute Town Theme | ISAo, SOUND AIRYLUVS (https://airyluvs.com/) | OGA-BY 3.0 | https://opengameart.org/content/funny-and-cute-town-theme | Trimmed: first 45.0 s, 2 s fade-out, gained to -20.4 LUFS. Regenerate with `make-music.sh` |
-| `video/assets/music/make-music.sh` | — | — | — | — | Regenerates the `.ogg` bed above from their (uncommitted) sources; not itself a licensed asset |
+| `video/assets/music/make-music.sh` | — | — | — | — | Regenerates the `.ogg` bed above from its (uncommitted) source; not itself a licensed asset |
 | `video/assets/sfx/picks/01_ball_throw_drop_003.ogg` | Interface Sounds: `Audio/drop_003.ogg` | Kenney (kenney.nl) | CC0 | https://kenney.nl/assets/interface-sounds | Renamed only |
 | `video/assets/sfx/picks/01b_ball_bounce_impactSoft_medium_000.ogg` | Impact Sounds: `Audio/impactSoft_medium_000.ogg` | Kenney (kenney.nl) | CC0 | https://kenney.nl/assets/impact-sounds | Renamed only |
 | `video/assets/sfx/picks/02_catch_pop_bong_001.ogg` | Interface Sounds: `Audio/bong_001.ogg` | Kenney (kenney.nl) | CC0 | https://kenney.nl/assets/interface-sounds | Renamed only |

@@ -3,7 +3,8 @@
 // (verify.mjs) checks independently; this catches a bad run before anyone
 // looks at it. Non-zero exit listing every failure.
 //
-//   cuts       16:9 1920x1080 h264 + aac, 27.3-30.0 s; 9:16 1080x1920, 27.3-30.5 s
+//   cuts       16:9 1920x1080 h264 + aac, 9:16 1080x1920, each within
+//              LENGTH_RULE_S (src/remotion/planMaster.ts)
 //   loudness   both cuts -18..-14 LUFS integrated
 //   GIF        out/pixel-pets.gif under 5 MB, 960x360, 7-10.5 s
 //   provenance out/render-manifest.json names this run for 16x9, 9x16, gif and
@@ -25,13 +26,14 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { POPUP_SHOT_ID, shotDir } from '../record/layout.mjs';
 import { demoMsShowing, loggedMsAt } from '../src/remotion/cameraPath.ts';
+import { LENGTH_RULE_S } from '../src/remotion/planMaster.ts';
 import { checkGif, FRAMES_DIR, GIF_PATH, gifFrameAt, gifFrameMoment, planScenes, rexAt } from './gif.mjs';
 import { measureLufs } from './loudness.mjs';
 import { CUT_FILES, isMain, OUT_DIR, probe, readJson, runArg, VIDEO_DIR } from './stage-io.mjs';
 
 export const CUTS = {
-  '16x9': { file: CUT_FILES['16x9'], width: 1920, height: 1080, seconds: [27.3, 30.0] },
-  '9x16': { file: CUT_FILES['9x16'], width: 1080, height: 1920, seconds: [27.3, 30.5] },
+  '16x9': { file: CUT_FILES['16x9'], width: 1920, height: 1080, seconds: LENGTH_RULE_S['16x9'] },
+  '9x16': { file: CUT_FILES['9x16'], width: 1080, height: 1920, seconds: LENGTH_RULE_S['9x16'] },
 };
 export const LUFS = [-18, -14];
 /**
