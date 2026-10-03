@@ -64,14 +64,28 @@ function evalFirstTransition(rule, m, events) {
   if (readyT === undefined) return fail(rule, NO_PETS_READY);
   // walkLeft/walkRight both render the `walk` gif; direction is not carried
   // by the frozen schema, so this checks the walk transition's timing only.
-  const gif = transition.toLowerCase().startsWith('walk') ? 'walk' : transition.toLowerCase();
+  // walkLeft/walkRight both render the `walk` gif; the direction is read
+  // from the tracked box: x falls on a walkLeft, rises on a walkRight.
+  const lower = transition.toLowerCase();
+  const gif = lower.startsWith('walk') ? 'walk' : lower;
   const first = events.observed.find((e) => e.kind === 'src' && e.pet === pet.id && e.to === gif && e.from !== gif);
   if (!first) return fail(rule, `${petName} never transitioned to ${gif}`);
   const delta = first.t - readyT;
   if (delta < Number(lo) || delta > Number(hi)) {
-    return fail(rule, `${petName} reached ${gif} ${delta}ms after pets_ready, outside ${lo}-${hi}`);
+    return fail(rule, `${petName} reached ${gif} ${delta.toFixed(1)}ms after pets_ready, outside ${lo}-${hi}`);
   }
-  return pass(rule, `${delta}ms`);
+  if (lower === 'walkleft' || lower === 'walkright') {
+    const next = events.observed.find((e) => e.kind === 'src' && e.pet === pet.id && e.t > first.t && e.to !== gif);
+    const until = next ? next.t : Infinity;
+    const boxes = petTrackBoxes(events, pet.id).filter((b) => b.t >= first.t && b.t < until);
+    if (boxes.length < 2) return fail(rule, `${petName} walked at +${delta.toFixed(1)}ms but has ${boxes.length} tracked frame(s) to read the direction from`);
+    const dx = boxes[boxes.length - 1].x - boxes[0].x;
+    const dir = dx < 0 ? 'left' : dx > 0 ? 'right' : 'nowhere';
+    const detail = `walk at +${delta.toFixed(1)}ms after pets_ready, x ${boxes[0].x.toFixed(1)} -> ${boxes[boxes.length - 1].x.toFixed(1)} (${dir})`;
+    if (dir !== lower.slice(4)) return fail(rule, detail);
+    return pass(rule, detail);
+  }
+  return pass(rule, `${delta.toFixed(1)}ms`);
 }
 
 // -- Family: box stays inside CSS x range, optional "before/until out" lie clause --
@@ -83,11 +97,25 @@ function boxStaysInRange(events, petId, lo, hi) {
   if (boxes.length === 0) return { ok: false, reason: `no tracked frames for ${petId}` };
   const outOfRange = boxes.find((b) => b.x < Number(lo) || b.x > Number(hi));
   if (outOfRange) return { ok: false, reason: `x=${outOfRange.x} at t=${outOfRange.t} outside ${lo}-${hi}` };
-  return { ok: true };
+  const xs = boxes.map((b) => b.x);
+  return { ok: true, detail: `x ${Math.min(...xs).toFixed(1)}-${Math.max(...xs).toFixed(1)} over ${boxes.length} frames` };
 }
 
-function noLieBeforeOut(events, petIds) {
+/**
+ * The shot's out point (ctx.outAnchor, its last beat's `out`, e.g.
+ * "pets_ready+2950"), resolved on the events: "before out" rules are judged
+ * up to it (bead step 8). Without an out anchor (the fixture shots declare
+ * no beats) the whole take is judged, which is stricter.
+ */
+function outT(events, ctx) {
+  if (!ctx?.outAnchor) return Infinity;
+  const t = anchorT(events, ctx.outAnchor);
+  return t === undefined ? Infinity : t;
+}
+
+function noLieBeforeOut(events, petIds, untilT = Infinity) {
   for (const frame of events.tracks ?? []) {
+    if (frame.t > untilT) break;
     for (const box of frame.pets ?? []) {
       if (petIds && !petIds.includes(box.id)) continue;
       if (box.src && box.src.includes('_lie_')) return { ok: false, reason: `${box.id} lay down at t=${frame.t}` };
@@ -96,28 +124,28 @@ function noLieBeforeOut(events, petIds) {
   return { ok: true };
 }
 
-function evalBoxRange(rule, m, events) {
+function evalBoxRange(rule, m, events, ctx) {
   const [, petName, lo, hi, lieClausePet] = m;
   const pet = findRosterPet(events, petName);
   if (!pet) return fail(rule, `no roster entry named "${petName}"`);
   const box = boxStaysInRange(events, pet.id, lo, hi);
   if (!box.ok) return fail(rule, box.reason);
   if (lieClausePet) {
-    const lie = noLieBeforeOut(events, [findRosterPet(events, lieClausePet)?.id]);
+    const lie = noLieBeforeOut(events, [findRosterPet(events, lieClausePet)?.id], outT(events, ctx));
     if (!lie.ok) return fail(rule, lie.reason);
   }
-  return pass(rule);
+  return pass(rule, `${box.detail}${lieClausePet ? '; no lie sprite' : ''}`);
 }
 
-function evalBoxRangeUntilOut(rule, m, events) {
+function evalBoxRangeUntilOut(rule, m, events, ctx) {
   const [, petName, lo, hi] = m;
   const pet = findRosterPet(events, petName);
   if (!pet) return fail(rule, `no roster entry named "${petName}"`);
   const box = boxStaysInRange(events, pet.id, lo, hi);
   if (!box.ok) return fail(rule, box.reason);
-  const lie = noLieBeforeOut(events, null);
+  const lie = noLieBeforeOut(events, null, outT(events, ctx));
   if (!lie.ok) return fail(rule, lie.reason);
-  return pass(rule);
+  return pass(rule, `${box.detail}; no lie sprite`);
 }
 
 // -- Family: swipe observed within Xms of the hover entry -------------------
@@ -127,15 +155,13 @@ function evalSwipeAfterHover(rule, m, events) {
   const withinMs = Number(m[1]);
   const hoverClick = events.clicks.find((c) => c.kind === 'hover');
   const swipe = events.observed.find((e) => e.kind === 'src' && e.to === 'swipe');
-  if (!hoverClick) return fail(rule, 'no logged hover-arrival click event');
+  if (!hoverClick) return fail(rule, 'no logged hover-entry click event');
   if (!swipe) return fail(rule, 'no swipe src transition observed');
+  // choreo.mjs logs the hover entry as the page's own mouseover of the pet
+  // (both on the page clock), so the swipe the hover causes comes after it.
   const delta = swipe.t - hoverClick.tMs;
-  // A small negative delta is measurement slack, not a real ordering
-  // violation: the logged hover-arrival time is read right after the
-  // glide's final mouse.move resolves, which can land a tick or two after
-  // the mouseover (and its swipe pose) actually fired.
-  if (delta < -150 || delta > withinMs) return fail(rule, `swipe arrived ${delta}ms after hover, outside -150-${withinMs}`);
-  return pass(rule, `${delta}ms`);
+  if (delta < 0 || delta > withinMs) return fail(rule, `swipe arrived ${delta.toFixed(1)}ms after the hover entry, outside 0-${withinMs}`);
+  return pass(rule, `swipe ${delta.toFixed(1)}ms after the hover entry (mouseover)`);
 }
 
 // -- Family: heart_on within Xms of the mouseup ------------------------------
@@ -145,27 +171,47 @@ function evalHeartAfterMouseup(rule, m, events) {
   const withinMs = Number(m[1]);
   const feedClick = events.clicks.find((c) => c.kind === 'click');
   if (!feedClick) return fail(rule, 'no logged feed click event');
-  // "exactly one feed heart" scopes to the feed's own accept window: a shot
-  // that also has a later catch (its own, separate heart_on) must not have
-  // that catch heart counted as a second feed.
   const feedHearts = events.observed.filter((e) => e.kind === 'heart_on' && e.t >= feedClick.tMs && e.t - feedClick.tMs <= withinMs);
   if (feedHearts.length !== 1) return fail(rule, `${feedHearts.length} heart_on events within ${withinMs}ms of the mouseup, expected exactly 1`);
+  // "exactly one feed heart appears in the take": every heart_on in the take
+  // (a take with a catch, the fixture's sample shot, has a second heart that
+  // is the catch's, not a feed, so a catch heart is not counted).
+  const catchTs = events.observed.filter((e) => e.kind === 'catch').map((e) => e.t);
+  const takeHearts = events.observed.filter((e) => e.kind === 'heart_on' && !catchTs.some((t) => Math.abs(t - e.t) <= 60));
+  if (takeHearts.length !== 1) return fail(rule, `${takeHearts.length} non-catch heart_on events in the take, expected exactly 1`);
   const delta = feedHearts[0].t - feedClick.tMs;
-  return pass(rule, `${delta}ms`);
+  return pass(rule, `heart_on ${delta.toFixed(1)}ms after the mouseup; 1 feed heart in the take`);
 }
 
 // -- Family: dblclick target + timing ---------------------------------------
 const RE_DBLCLICK_TARGET = /^elementFromPoint at \((\d+), (\d+)\) is div#dbl-zone and no pet box contains the point; the dblclick lands within (\d+) ms of pets_ready$/;
 
-function evalDblclickTarget(rule, m, events) {
-  const [, , , withinMs] = m;
+/**
+ * Judges the point the dblclick was really sent at (ctx.dblclick, logged by
+ * choreo.mjs with what elementFromPoint returned there). A 9:16 take sends
+ * it at the variant's dblclick_css instead of the rule's 16:9 point; that is
+ * judged at the variant point and said so, like an extra_accept replacement.
+ */
+function evalDblclickTarget(rule, m, events, ctx) {
+  const [, ruleX, ruleY, withinMs] = m;
   const readyT = firstObserved(events, 'pets_ready')?.t;
   if (readyT === undefined) return fail(rule, NO_PETS_READY);
   const dblclick = events.observed.find((e) => e.kind === 'dblclick');
   if (!dblclick) return fail(rule, 'no dblclick observed');
+  const sent = ctx.dblclick;
+  if (!sent) return fail(rule, 'no logged dblclick point/elementFromPoint target');
+  let where;
+  if (sent.x === Number(ruleX) && sent.y === Number(ruleY)) where = `at (${sent.x}, ${sent.y})`;
+  else if (ctx.dblclickCss && sent.x === ctx.dblclickCss.x && sent.y === ctx.dblclickCss.y) where = `at (${sent.x}, ${sent.y}): the rule's (${ruleX}, ${ruleY}) replaced in 9:16 by dblclick_css`;
+  else return fail(rule, `dblclick sent at (${sent.x}, ${sent.y}), neither the rule's (${ruleX}, ${ruleY}) nor a dblclick_css`);
+  if (sent.element !== 'div#dbl-zone') return fail(rule, `elementFromPoint ${where} is ${sent.element}, not div#dbl-zone`);
+  const frame = [...(events.tracks ?? [])].reverse().find((f) => f.t <= dblclick.t && f.pets?.length);
+  if (!frame) return fail(rule, 'no tracked pet box at the dblclick');
+  const hit = frame.pets.find((p) => sent.x >= p.x && sent.x <= p.x + p.w && sent.y >= p.y && sent.y <= p.y + p.h);
+  if (hit) return fail(rule, `${hit.id}'s box contains the dblclick point ${where}`);
   const delta = dblclick.t - readyT;
-  if (delta < 0 || delta > Number(withinMs)) return fail(rule, `dblclick landed ${delta}ms after pets_ready, outside 0-${withinMs}`);
-  return pass(rule, `${delta}ms; elementFromPoint/no-pet-box target is enforced live by choreo.mjs, which discards a take that misses it`);
+  if (delta < 0 || delta > Number(withinMs)) return fail(rule, `dblclick landed ${delta.toFixed(1)}ms after pets_ready, outside 0-${withinMs}`);
+  return pass(rule, `elementFromPoint ${where} is div#dbl-zone, no pet box contains it; dblclick ${delta.toFixed(1)}ms after pets_ready`);
 }
 
 // -- Family: state (ball_on/run/catch) within Xms of the dblclick -----------
@@ -185,7 +231,7 @@ function evalBallOnAfterDblclick(rule, m, events) {
   if (!ballOn) return fail(rule, 'ball_on never observed after the dblclick');
   const delta = ballOn.t - dblT;
   if (delta > withinMs) return fail(rule, `ball_on arrived ${delta}ms after the dblclick, over ${withinMs}`);
-  return pass(rule, `${delta}ms`);
+  return pass(rule, `${delta.toFixed(1)}ms`);
 }
 
 function evalPetStateAfterDblclick(rule, m, events) {
@@ -200,7 +246,7 @@ function evalPetStateAfterDblclick(rule, m, events) {
   if (!ev) return fail(rule, `${petName} never reached ${state} after the dblclick`);
   const delta = ev.t - dblT;
   if (delta > Number(withinMs)) return fail(rule, `${petName} reached ${state} ${delta}ms after the dblclick, over ${withinMs}`);
-  return pass(rule, `${delta}ms`);
+  return pass(rule, `${delta.toFixed(1)}ms`);
 }
 
 function evalCatchAfterDblclick(rule, m, events) {
@@ -213,7 +259,7 @@ function evalCatchAfterDblclick(rule, m, events) {
   if (!catchEv) return fail(rule, `no catch by ${petName} after the dblclick`);
   const delta = catchEv.t - dblT;
   if (delta > Number(withinMs)) return fail(rule, `${petName} caught ${delta}ms after the dblclick, over ${withinMs}`);
-  return pass(rule, `${delta}ms`);
+  return pass(rule, `${delta.toFixed(1)}ms`);
 }
 
 // -- Family: a named pet is never drawn -------------------------------------
@@ -224,7 +270,7 @@ function evalNeverOnPage(rule, m, events) {
   if (!pet) return fail(rule, `no roster entry named "${m[1]}"`);
   const boxes = petTrackBoxes(events, pet.id);
   if (boxes.length > 0) return fail(rule, `${m[1]} was drawn on ${boxes.length} tracked frames`);
-  return pass(rule);
+  return pass(rule, `0 of ${(events.tracks ?? []).length} tracked frames draw ${m[1]}`);
 }
 
 // -- Family: greet_start timing + pairing ------------------------------------
@@ -237,22 +283,24 @@ function evalGreetStart(rule, m, events) {
   if (!petA || !petB) return fail(rule, `roster missing ${petAName} or ${petBName}`);
   const readyT = firstObserved(events, 'pets_ready')?.t;
   if (readyT === undefined) return fail(rule, NO_PETS_READY);
-  const starts = events.observed.filter((e) => e.kind === 'greet_start' && (e.pet === petA.id || e.pet === petB.id));
+  // The first greet of each pet: a later second greet in the take is not this one.
+  const starts = [petA, petB].map((p) => events.observed.find((e) => e.kind === 'greet_start' && e.pet === p.id)).filter(Boolean);
   if (starts.length < 2) return fail(rule, `only ${starts.length} greet_start events for ${petAName}/${petBName}`);
   const delta = Math.max(...starts.map((e) => e.t)) - readyT;
-  if (delta > Number(withinMs)) return fail(rule, `greet_start ${delta}ms after pets_ready, over ${withinMs}`);
-  return pass(rule, `${delta}ms`);
+  if (delta > Number(withinMs)) return fail(rule, `greet_start ${delta.toFixed(1)}ms after pets_ready, over ${withinMs}`);
+  return pass(rule, `${petAName} and ${petBName} swipe ${delta.toFixed(1)}ms after pets_ready, neither hovered`);
 }
 
 // -- Family: named pet never greets (px-apart parenthetical is documentation only) --
 const RE_NEVER_GREETS = /^(\w+) \([^)]*\) never plays swipe before out$/;
 
-function evalNeverGreets(rule, m, events) {
+function evalNeverGreets(rule, m, events, ctx) {
   const pet = findRosterPet(events, m[1]);
   if (!pet) return fail(rule, `no roster entry named "${m[1]}"`);
-  const swipe = events.observed.find((e) => e.kind === 'src' && e.pet === pet.id && e.to === 'swipe');
+  const until = outT(events, ctx);
+  const swipe = events.observed.find((e) => e.kind === 'src' && e.pet === pet.id && e.to === 'swipe' && e.t <= until);
   if (swipe) return fail(rule, `${m[1]} swiped at t=${swipe.t}`);
-  return pass(rule);
+  return pass(rule, `no ${m[1]} swipe src ${Number.isFinite(until) ? `before out (${ctx.outAnchor}, t=${until.toFixed(1)})` : 'in the take'}`);
 }
 
 // -- Family: all pets idle from greet_end until a named out time ------------
@@ -267,11 +315,13 @@ function evalAllIdleUntilOut(rule, m, events) {
   const outT = readyT + outOffset;
   const inRange = (events.tracks ?? []).filter((f) => f.t >= greetEndT && f.t <= outT);
   if (inRange.length === 0) return fail(rule, `no tracked frame between greet_end (${greetEndT}) and out (${outT})`);
+  const lastT = (events.tracks ?? []).at(-1).t;
+  if (lastT < outT) return fail(rule, `the take's tracks end at t=${lastT.toFixed(1)}, before out (${outT.toFixed(1)})`);
   const badFrame = inRange.find(
     (f) => f.pets?.some((p) => p.src && (p.src.includes('_walk_') || p.src.includes('_lie_'))),
   );
   if (badFrame) return fail(rule, `a pet walked or lay down at t=${badFrame.t}`);
-  return pass(rule);
+  return pass(rule, `all idle on ${inRange.length} frames from greet_end (+${(greetEndT - readyT).toFixed(1)}ms) to out (+${outOffset}ms)`);
 }
 
 // -- Family: all pets idle/lie relative to hour_set --------------------------
@@ -290,7 +340,7 @@ function evalAllIdleAtHourSet(rule, _m, events) {
   if (!frame) return fail(rule, 'no tracked frame at hour_set');
   const notIdle = frame.pets.find((p) => p.src && !p.src.includes('_idle_'));
   if (notIdle) return fail(rule, `${notIdle.id} was not idle at hour_set`);
-  return pass(rule);
+  return pass(rule, `${frame.pets.map((p) => p.id).join(', ')} idle on the frame ${(hourSetT - frame.t).toFixed(1)}ms before hour_set`);
 }
 
 function evalAllLieWithin(rule, m, events) {
@@ -300,8 +350,8 @@ function evalAllLieWithin(rule, m, events) {
   if (hourSetT === undefined) return fail(rule, 'no hour_set observed');
   if (sleepT === undefined) return fail(rule, 'no sleep observed');
   const delta = sleepT - hourSetT;
-  if (delta > withinMs) return fail(rule, `sleep arrived ${delta}ms after hour_set, over ${withinMs}`);
-  return pass(rule, `${delta}ms`);
+  if (delta > withinMs) return fail(rule, `sleep arrived ${delta.toFixed(1)}ms after hour_set, over ${withinMs}`);
+  return pass(rule, `all lie ${delta.toFixed(1)}ms after hour_set`);
 }
 
 function evalAllLieUntilEnd(rule, m, events) {
@@ -311,9 +361,11 @@ function evalAllLieUntilEnd(rule, m, events) {
   const untilT = sleepT + untilOffset;
   const inRange = (events.tracks ?? []).filter((f) => f.t >= sleepT && f.t <= untilT);
   if (inRange.length === 0) return fail(rule, `no tracked frame between sleep (${sleepT}) and the take end (${untilT})`);
+  const lastT = (events.tracks ?? []).at(-1).t;
+  if (lastT < untilT) return fail(rule, `the take's tracks end at sleep+${(lastT - sleepT).toFixed(1)}ms, before sleep+${untilOffset}`);
   const badFrame = inRange.find((f) => f.pets?.some((p) => p.src && !p.src.includes('_lie_')));
   if (badFrame) return fail(rule, `a pet left the lie sprite at t=${badFrame.t}`);
-  return pass(rule);
+  return pass(rule, `all on lie for ${inRange.length} frames, tracks to sleep+${(lastT - sleepT).toFixed(1)}ms`);
 }
 
 // -- Family: 9:16 box right-edge safe margin ---------------------------------
@@ -327,7 +379,8 @@ function evalBoxRightEdge(rule, m, events) {
   const boxes = petTrackBoxes(events, pet.id);
   const over = boxes.find((b) => b.x + b.w > Number(maxX));
   if (over) return fail(rule, `${petName}'s right edge reached ${over.x + over.w} at t=${over.t}, over ${maxX}`);
-  return pass(rule);
+  if (boxes.length === 0) return fail(rule, `no tracked frames for ${petName}`);
+  return pass(rule, `max right edge ${Math.max(...boxes.map((b) => b.x + b.w)).toFixed(1)}`);
 }
 
 function evalEveryBoxRightEdge(rule, m, events) {
@@ -337,7 +390,9 @@ function evalEveryBoxRightEdge(rule, m, events) {
       if (box.x + box.w > maxX) return fail(rule, `${box.id}'s right edge reached ${box.x + box.w} at t=${frame.t}, over ${maxX}`);
     }
   }
-  return pass(rule);
+  const rights = (events.tracks ?? []).flatMap((f) => (f.pets ?? []).map((b) => b.x + b.w));
+  if (rights.length === 0) return fail(rule, 'no tracked pet boxes');
+  return pass(rule, `max right edge ${Math.max(...rights).toFixed(1)}`);
 }
 
 // -- Family: no wall bounce -----------------------------------------------
@@ -349,7 +404,9 @@ function evalNoWallBounce(rule, _m, events) {
       if (box.x <= 0) return fail(rule, `${box.id} reached the left wall (x=${box.x}) at t=${frame.t}`);
     }
   }
-  return pass(rule);
+  const xs = (events.tracks ?? []).flatMap((f) => (f.pets ?? []).map((b) => b.x));
+  if (xs.length === 0) return fail(rule, 'no tracked pet boxes');
+  return pass(rule, `min x ${Math.min(...xs).toFixed(1)}`);
 }
 
 // -- Family: catch replacement limit (9:16) + ball x at catch ---------------
@@ -382,29 +439,119 @@ function evalPopupTypeGrid(rule, _m, events, ctx) {
   if (cells.length !== order.length) return fail(rule, `${cells.length} type cells logged, expected ${order.length}`);
   const columns = new Set(cells.filter((c) => Math.abs(c.y - cells[0].y) < 4).map((c) => Math.round(c.x)));
   if (columns.size !== 6) return fail(rule, `${columns.size} columns in the first row, expected 6`);
-  const scrolled = events.observed.find((e) => e.kind === 'form_expanded' && e.scrollHeight > e.innerHeight);
-  if (scrolled) return fail(rule, `scrollHeight ${scrolled.scrollHeight} > innerHeight ${scrolled.innerHeight}`);
-  return pass(rule);
+  const reading = [...cells].sort((a, b) => a.y - b.y || a.x - b.x).map((c) => c.type);
+  if (JSON.stringify(reading) !== JSON.stringify(order)) return fail(rule, `type order ${reading.join(',')}`);
+  const expanded = events.observed.find((e) => e.kind === 'form_expanded');
+  if (!expanded) return fail(rule, 'no form_expanded observed');
+  if (expanded.scrollHeight > expanded.innerHeight) return fail(rule, `scrollHeight ${expanded.scrollHeight} > innerHeight ${expanded.innerHeight}`);
+  return pass(rule, `6 columns in type_order; scrollHeight ${expanded.scrollHeight} <= innerHeight ${expanded.innerHeight} with the form expanded`);
 }
 
-function evalPopupFontLoaded(rule, _m, events) {
+/**
+ * The frozen schema has no field for a FontFace status, so popup.mjs reads
+ * it from document.fonts when it declares popup_ready and hands it over as
+ * ctx.nunito = { status, t } (t in events.json time). Judged here against
+ * the first popup action.
+ */
+function evalPopupFontLoaded(rule, _m, events, ctx) {
   const firstClick = events.observed.find((e) => ['shelter_click', 'name_click', 'type_selected', 'color_selected'].includes(e.kind));
   if (!firstClick) return fail(rule, 'no first action observed to check against');
-  // The frozen schema carries no FontFace boolean; this is asserted live by
-  // popup.mjs before the first action and the take is discarded if it fails.
-  return pass(rule, 'asserted live by popup.mjs before the first action (document.fonts FontFace check)');
+  const nunito = ctx.nunito;
+  if (!nunito) return fail(rule, 'no Nunito FontFace status was read from document.fonts');
+  if (nunito.status !== 'loaded') return fail(rule, `the Nunito FontFace status was '${nunito.status}'`);
+  if (!(nunito.t <= firstClick.t)) return fail(rule, `Nunito read as loaded at t=${nunito.t.toFixed(1)}, after the first action (${firstClick.kind} at t=${firstClick.t.toFixed(1)})`);
+  return pass(rule, `Nunito FontFace status 'loaded' at t=${nunito.t.toFixed(1)}, ${(firstClick.t - nunito.t).toFixed(1)}ms before ${firstClick.kind}`);
 }
 
-function evalPopupCropsDisjoint(rule, _m, events) {
-  // The crop rects themselves are computed per frame from tracks[].cells by
-  // s2b_shelter.crops (a geometric rule, not a fixed rect); the frozen
-  // schema carries the raw DOMRects for that computation but not the crop
-  // definitions, so the epic eval — which reads shots.json directly — is
-  // what re-derives and judges disjointness. This predicate checks the one
-  // precondition it can: every frame has cells to compute crops from.
-  const hasCells = (events.tracks ?? []).some((f) => f.cells?.length);
-  if (!hasCells) return fail(rule, 'no tracks[].cells logged; crops cannot be computed');
-  return pass(rule, 'crop geometry re-derived by the epic eval from tracks[].cells per s2b_shelter.crops');
+// -- Popup crops (s2b_shelter.crops), computed per logged frame exactly as
+// the epic eval's cropRule does: native px = CSS x 2, each edge rounded.
+const POPUP_CROP_OF_EVENT = {
+  shelter_click: 'A_list',
+  name_click: 'B_pick',
+  type_selected: 'B_pick',
+  color_selected: 'C_add',
+  add_mousedown: 'C_add',
+};
+const CLICK_INSIDE_CSS = 4;
+
+function nativeRect(x0, y0, x1, y1) {
+  const a = [x0, y0, x1, y1].map((v) => Math.round(v * 2));
+  return { x: a[0], y: a[1], w: a[2] - a[0], h: a[3] - a[1] };
+}
+
+function finiteRect(...rects) {
+  return rects.every((r) => r && [r.x, r.y, r.w, r.h].every(Number.isFinite));
+}
+
+/** One crop's native-px rect on one logged frame, or null when a rect it needs is missing. */
+export function popupCropRect(name, frame, viewportWidth) {
+  const e = frame?.els ?? {};
+  const cell = (type) => (frame?.cells ?? []).find((c) => c.type === type);
+  if (name === 'A_list') return finiteRect(e.pets_list, e.btn_add_toggle) ? nativeRect(0, e.pets_list.y - 8, viewportWidth, e.btn_add_toggle.y + e.btn_add_toggle.h + 4) : null;
+  if (name === 'B_pick') {
+    const crab = cell('crab');
+    const panda = cell('panda');
+    return finiteRect(e.add_pet_form, e.pet_name, crab, panda) ? nativeRect(e.add_pet_form.x, e.pet_name.y - 8, crab.x + crab.w + 3, panda.y + panda.h + 3) : null;
+  }
+  if (name === 'C_add') return finiteRect(e.pet_color_label, e.btn_add) ? nativeRect(0, e.pet_color_label.y - 4, viewportWidth, e.btn_add.y + e.btn_add.h + 8) : null;
+  return null;
+}
+
+/** Native-px gap between two rects (negative when they overlap). */
+function rectGap(a, b) {
+  const dx = Math.max(b.x - (a.x + a.w), a.x - (b.x + b.w));
+  const dy = Math.max(b.y - (a.y + a.h), a.y - (b.y + b.h));
+  return Math.max(dx, dy);
+}
+
+/** Resolves a beat anchor like "popup_ready+200" or "pets_ready+2950" on the events (ms), or undefined. */
+function anchorT(events, anchor) {
+  const m = /^([a-z_]+)([+-]\d+)?$/.exec(String(anchor).replace(/\s+/g, ''));
+  if (!m) return undefined;
+  const ev = firstObserved(events, m[1]);
+  return ev ? ev.t + Number(m[2] ?? 0) : undefined;
+}
+
+function nearestFrame(events, t) {
+  let best = null;
+  for (const f of events.tracks ?? []) if (!best || Math.abs(f.t - t) < Math.abs(best.t - t)) best = f;
+  return best;
+}
+
+/**
+ * ctx.popup = { beats, viewportWidth, forbiddenTypes } (from the shot):
+ * every frame logged inside each card beat's [in, out] window has its crop
+ * computed from that frame's own DOMRects and must miss every forbidden
+ * cell's DOMRect.
+ */
+function evalPopupCropsDisjoint(rule, _m, events, ctx) {
+  const popup = ctx.popup;
+  if (!popup?.beats?.length) return fail(rule, 'no popup beats/crop context to compute the crops from');
+  const parts = [];
+  let minGap = Infinity;
+  for (const beat of popup.beats) {
+    const crop = beat.card?.crop;
+    if (!crop) continue;
+    const from = anchorT(events, beat.in);
+    const to = anchorT(events, beat.out);
+    if (from === undefined || to === undefined) return fail(rule, `${beat.name}: cannot resolve its window ${beat.in} .. ${beat.out}`);
+    const frames = (events.tracks ?? []).filter((f) => f.t >= from && f.t <= to);
+    if (frames.length === 0) return fail(rule, `${beat.name}: no logged frame in ${from.toFixed(1)}..${to.toFixed(1)}`);
+    for (const f of frames) {
+      const rect = popupCropRect(crop, f, popup.viewportWidth);
+      if (!rect) return fail(rule, `${beat.name}: ${crop} cannot be computed on the frame at t=${f.t.toFixed(1)}`);
+      for (const type of popup.forbiddenTypes) {
+        const cell = (f.cells ?? []).find((c) => c.type === type);
+        if (!cell) return fail(rule, `${beat.name}: forbidden cell ${type} not logged at t=${f.t.toFixed(1)}`);
+        const gap = rectGap(rect, { x: cell.x * 2, y: cell.y * 2, w: cell.w * 2, h: cell.h * 2 });
+        if (gap < 0) return fail(rule, `${beat.name}: ${crop} ${JSON.stringify(rect)} overlaps ${type} at t=${f.t.toFixed(1)}`);
+        minGap = Math.min(minGap, gap);
+      }
+    }
+    parts.push(`${crop} ${frames.length} frames`);
+  }
+  if (parts.length === 0) return fail(rule, 'no card beat declares a crop');
+  return pass(rule, `${parts.join(', ')}; nearest forbidden cell ${minGap} native px away`);
 }
 
 function evalPopupTypeColorSelected(rule, _m, events) {
@@ -412,7 +559,7 @@ function evalPopupTypeColorSelected(rule, _m, events) {
   const color = events.observed.find((e) => e.kind === 'color_selected');
   if (!type || type.type !== 'chicken') return fail(rule, `type_selected was ${type?.type}`);
   if (!color || color.color !== 'white') return fail(rule, `color_selected was ${color?.color}`);
-  return pass(rule);
+  return pass(rule, `type_selected ${type.type}, color_selected ${color.color}`);
 }
 
 function evalPopupAddMouseupTiming(rule, _m, events) {
@@ -420,18 +567,21 @@ function evalPopupAddMouseupTiming(rule, _m, events) {
   const up = events.observed.find((e) => e.kind === 'add_mouseup');
   if (!down || !up) return fail(rule, 'missing add_mousedown/add_mouseup');
   if (up.t - down.t < 240) return fail(rule, `mouseup ${up.t - down.t}ms after mousedown, under 240`);
-  return pass(rule, `${up.t - down.t}ms`);
+  return pass(rule, `mouseup at add_mousedown+${(up.t - down.t).toFixed(1)}ms`);
 }
 
 function evalPopupRosterSaved(rule, _m, events) {
-  const down = events.observed.find((e) => e.kind === 'add_mousedown');
+  const up = events.observed.find((e) => e.kind === 'add_mouseup');
   const saved = events.observed.find((e) => e.kind === 'roster_saved');
-  if (!down) return fail(rule, 'no add_mousedown observed');
+  if (!up) return fail(rule, 'no add_mouseup observed');
   if (!saved) return fail(rule, 'no roster_saved observed');
-  if (saved.t - down.t > 1000) return fail(rule, `roster_saved ${saved.t - down.t}ms after mousedown, over 1000`);
-  const names = (saved.roster ?? []).map((p) => p.name).sort();
-  if (JSON.stringify(names) !== JSON.stringify(['Bao', 'Pip', 'Rex'])) return fail(rule, `roster was ${names.join(',')}`);
-  return pass(rule, `${saved.t - down.t}ms`);
+  const delta = saved.t - up.t;
+  if (delta < 0 || delta > 1000) return fail(rule, `roster_saved ${delta.toFixed(1)}ms after the mouseup, outside 0-1000`);
+  // exactly the seeded Rex and Bao plus a white chicken named Pip, by type, colour and name
+  const want = [...(events.roster ?? []).map((r) => `${r.type}/${r.color}/${r.name}`), 'chicken/white/Pip'].sort();
+  const got = (saved.roster ?? []).map((r) => `${r.type}/${r.color}/${r.name}`).sort();
+  if (JSON.stringify(got) !== JSON.stringify(want)) return fail(rule, `roster was ${got.join(', ')}, expected ${want.join(', ')}`);
+  return pass(rule, `roster_saved ${delta.toFixed(1)}ms after the mouseup: ${got.join(', ')}`);
 }
 
 // The rule has three clauses (shots.json s2b_shelter.accept): #pets-list
@@ -462,16 +612,29 @@ function evalPopupListGrowsFormCollapses(rule, _m, events) {
   if (!RE_UUID_V4.test(pip.id ?? '')) return fail(rule, `Pip's id "${pip.id}" is not a crypto.randomUUID()`);
   const seededIds = (events.roster ?? []).map((p) => p.id);
   if (seededIds.includes(pip.id)) return fail(rule, `Pip's id "${pip.id}" matches a seeded pet id`);
-  return pass(rule);
+  return pass(rule, `#pets-list ${before.els.pets_list.h} -> ${grown.els.pets_list.h} px at mouseup+${(grown.t - up.t).toFixed(1)}ms, #add-pet-form ${before.els.add_pet_form.h} -> ${collapsed.els.add_pet_form.h} px at mouseup+${(collapsed.t - up.t).toFixed(1)}ms; Pip id ${pip.id}`);
 }
 
-function evalPopupClicksInsideCrop(rule, _m, events) {
-  const actionKinds = ['shelter_click', 'name_click', 'type_selected', 'color_selected', 'add_mousedown'];
-  for (const e of events.observed) {
-    if (!actionKinds.includes(e.kind)) continue;
-    if (e.x === undefined || e.y === undefined) return fail(rule, `${e.kind} logged no x/y`);
+/**
+ * Each popup click's logged point, judged against its crop computed on the
+ * logged frame nearest the click (the eval's nearestTrack): at least 4 CSS
+ * px inside every edge. Needs ctx.popup.viewportWidth.
+ */
+function evalPopupClicksInsideCrop(rule, _m, events, ctx) {
+  const vw = ctx.popup?.viewportWidth;
+  if (!vw) return fail(rule, 'no popup viewport width to compute the crops with');
+  const parts = [];
+  for (const [kind, crop] of Object.entries(POPUP_CROP_OF_EVENT)) {
+    const e = firstObserved(events, kind);
+    if (!e) return fail(rule, `no ${kind} observed`);
+    if (!Number.isFinite(e.x) || !Number.isFinite(e.y)) return fail(rule, `${kind} logged no x/y`);
+    const rect = popupCropRect(crop, nearestFrame(events, e.t), vw);
+    if (!rect) return fail(rule, `${crop} cannot be computed at ${kind}`);
+    const insideCss = Math.min(e.x * 2 - rect.x, rect.x + rect.w - e.x * 2, e.y * 2 - rect.y, rect.y + rect.h - e.y * 2) / 2;
+    if (insideCss < CLICK_INSIDE_CSS) return fail(rule, `${kind} at CSS (${e.x.toFixed(1)}, ${e.y.toFixed(1)}) is ${insideCss.toFixed(1)} CSS px inside ${crop} ${JSON.stringify(rect)}, under ${CLICK_INSIDE_CSS}`);
+    parts.push(`${kind} ${insideCss.toFixed(1)}px inside ${crop}`);
   }
-  return pass(rule, 'crop-edge margin re-derived by the epic eval from tracks[].cells/els per s2b_shelter.crops');
+  return pass(rule, parts.join('; '));
 }
 
 // -- Registry -----------------------------------------------------------
