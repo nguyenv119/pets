@@ -11,14 +11,18 @@
 // extension draws him, and halved like the GIF) must be within 8 RGB units of
 // a colour in that source frame. It catches a colour shift anywhere between
 // the screen and the GIF: an untagged encode decoded by Remotion (13 units
-// off in review round 4) or a starved palette. The stage also fails at 5 MB
-// or more, or outside 960x360 and 7-10.5 s.
+// off when measured) or a starved palette. The stage also fails at 5 MB
+// or more, or outside 960x360 and 7-10.5 s (the size and byte limit come from
+// shots.json variants.readme_gif).
 //
 // Usage: npx tsx scripts/gif.mjs --run build/<run>
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
+import { shotDir } from '../record/layout.mjs';
+import { loggedMsAt } from '../src/remotion/cameraPath.ts';
+import { nearestTrack } from '../src/remotion/cardCrop.ts';
 import { buildGifScenes } from '../src/remotion/gifScenes.ts';
 import { sampleCursor } from '../src/remotion/Cursor.tsx';
 import { CHECK_THRESHOLDS } from '../src/remotion/checks.ts';
@@ -26,10 +30,13 @@ import { ffmpeg, isMain, OUT_DIR, probe, readJson, REPO_DIR, runArg, VIDEO_DIR }
 
 export const GIF_PATH = join(OUT_DIR, 'pixel-pets.gif');
 export const FRAMES_DIR = join(OUT_DIR, 'gif-frames');
-export const MAX_BYTES = 5_000_000;
-export const SIZE = { width: 960, height: 360 };
-export const SOURCE_SIZE = { width: 1920, height: 720 };
+const README_GIF = readJson(join(VIDEO_DIR, 'shots.json')).variants.readme_gif;
+export const MAX_BYTES = README_GIF.max_bytes;
+export const SIZE = { width: README_GIF.size.width, height: README_GIF.size.height };
+/** About shots.json's nominal_length_s (8.6 s), with room for the scene anchors to land a little either way. */
 export const LENGTH_S = [7.0, 10.5];
+/** Everything the finished GIF file is held to; makeGif and qa.mjs both check it with checkGif. */
+export const GIF_SPEC = { maxBytes: MAX_BYTES, size: SIZE, seconds: LENGTH_S };
 /** The colour gate: max per-channel distance from a source-frame colour (storyboard colour_check). */
 export const MAX_COLOUR_ERROR = 8;
 /**
@@ -54,7 +61,7 @@ export const MIN_MASK_PX = 100;
 export const MIN_JUDGED_FRAMES = 20;
 /** ms after an eat, catch or heart_on during which the extension's 🍖/❤️ particles may cover Rex. */
 export const PARTICLE_MS = CHECK_THRESHOLDS.PARTICLE_LIFETIME_MS + 100;
-/** The extension draws each pet in a DRAW_W x DRAW_W CSS box, object-fit contain, bottom-centred (src/renderer.ts). */
+/** The pet the gate judges: Rex, the cast dog, on screen in both GIF scenes. */
 const PET_ID = 'rex';
 
 // ---------- pure: time and geometry ----------
@@ -72,15 +79,6 @@ export function gifFrameAt(scenes, fps, shotId, demoMs) {
   if (!scene) return null;
   const k = scene.fromFrame + Math.round(((demoMs - scene.sourceInMs) * fps) / 1000);
   return k >= scene.fromFrame && k < scene.fromFrame + scene.frames ? k : null;
-}
-
-/** The recorder's clock at what demo.mp4 shows at `demoMs` (the screen lags the log by videoLagMs). */
-export const loggedAt = (events, demoMs) => demoMs - events.trimBeforeMs - events.videoLagMs;
-
-function nearestTrack(events, tMs) {
-  let best = null;
-  for (const f of events.tracks ?? []) if (!best || Math.abs(f.t - tMs) < Math.abs(best.t - tMs)) best = f;
-  return best;
 }
 
 /**
@@ -102,7 +100,7 @@ export function spritePath(src, pet) {
  * (the src can change between a track sample and the frame).
  */
 export function rexAt(events, tMs, cropCss, srcWindowMs = 60) {
-  const f = nearestTrack(events, tMs);
+  const f = nearestTrack(events.tracks, tMs);
   const box = f?.pets?.find((p) => p.id === PET_ID);
   if (!box) return null;
   const srcs = new Set();
@@ -305,7 +303,7 @@ export function colourGate({ scenes, fps, totalFrames, eventsByShotId, frameAt, 
   for (let k = 0; k < totalFrames; k++) {
     const m = gifFrameMoment(scenes, fps, k);
     const events = eventsByShotId[m.shotId];
-    const tMs = loggedAt(events, m.demoMs);
+    const tMs = loggedMsAt(events, m.demoMs);
     const rex = rexAt(events, tMs, m.scene.cropCss);
     const skip = (why) => (out.skipped[why.replace(/@.*$/, '')] = (out.skipped[why.replace(/@.*$/, '')] ?? 0) + 1);
     if (!rex) { skip('no Rex track'); continue; }
@@ -350,8 +348,8 @@ export function decodeGifRgb(path) {
 export function planScenes(runDir) {
   const shots = readJson(join(VIDEO_DIR, 'shots.json'));
   const ids = [...new Set(shots.variants.readme_gif.scenes.map((s) => s.shot))];
-  const eventsByShotId = Object.fromEntries(ids.map((id) => [id, readJson(join(runDir, id, 'events.json'))]));
-  const staged = Object.fromEntries(ids.map((id) => [id, `${id}/demo.mp4`]));
+  const eventsByShotId = Object.fromEntries(ids.map((id) => [id, readJson(join(shotDir(runDir, id, '16:9'), 'events.json'))]));
+  const staged = Object.fromEntries(ids.map((id) => [id, `${shotDir('', id, '16:9')}/demo.mp4`]));
   return { ...buildGifScenes(shots, eventsByShotId, staged), eventsByShotId };
 }
 
@@ -378,24 +376,37 @@ export function encodeGif(framesDir, outPath, fps) {
   ]);
 }
 
-/** Encodes and gates the GIF; returns a report; throws listing every failure. */
-export function makeGif({ runDir, framesDir = FRAMES_DIR, outPath = GIF_PATH, manifest }) {
+/** The encoded GIF's size, length and byte count against `spec` (from its ffprobe result): failure strings. */
+export function checkGif(bytes, p, spec = GIF_SPEC) {
+  const v = p?.streams?.find((s) => s.codec_type === 'video');
+  const d = Number(p?.format?.duration);
+  const bad = [];
+  if (!(bytes < spec.maxBytes)) bad.push(`${bytes} bytes, want under ${spec.maxBytes}`);
+  if (v?.width !== spec.size.width || v?.height !== spec.size.height) bad.push(`${v?.width}x${v?.height}, want ${spec.size.width}x${spec.size.height}`);
+  if (!(d >= spec.seconds[0] && d <= spec.seconds[1])) bad.push(`${Number.isFinite(d) ? d.toFixed(2) : '?'} s, want ${spec.seconds.join('-')} s`);
+  return bad;
+}
+
+/**
+ * Encodes and gates the GIF; returns a report; throws listing every failure.
+ * `plan` (planScenes' result) and `spec` default to this run's scene plan and
+ * GIF_SPEC; tests pass small ones.
+ */
+export function makeGif({ runDir, framesDir = FRAMES_DIR, outPath = GIF_PATH, manifest, plan, spec = GIF_SPEC }) {
   if (manifest !== null) assertFramesFromRun(runDir, manifest ?? readJson(join(OUT_DIR, 'render-manifest.json')));
-  const { scenes, fps, totalFrames, eventsByShotId } = planScenes(runDir);
+  const { scenes, fps, totalFrames, eventsByShotId } = plan ?? planScenes(runDir);
   const pngs = existsSync(framesDir) ? readdirSync(framesDir).filter((f) => /^frame-\d{4}\.png$/.test(f)) : [];
   if (pngs.length !== totalFrames) throw new Error(`gif: ${framesDir} holds ${pngs.length} frames; the scene plan has ${totalFrames}`);
   const first = probe(join(framesDir, 'frame-0000.png')).streams[0];
-  if (first.width !== SOURCE_SIZE.width || first.height !== SOURCE_SIZE.height) throw new Error(`gif: frames are ${first.width}x${first.height}, not ${SOURCE_SIZE.width}x${SOURCE_SIZE.height}`);
+  const source = { width: spec.size.width * 2, height: spec.size.height * 2 }; // render.mjs --variant gif draws at 2x; the GIF halves it
+  if (first.width !== source.width || first.height !== source.height) throw new Error(`gif: frames are ${first.width}x${first.height}, not ${source.width}x${source.height}`);
   encodeGif(framesDir, outPath, fps);
 
   const p = probe(outPath);
   const v = p.streams.find((s) => s.codec_type === 'video');
   const bytes = statSync(outPath).size;
   const seconds = Number(p.format.duration);
-  const failures = [];
-  if (v.width !== SIZE.width || v.height !== SIZE.height) failures.push(`${v.width}x${v.height}, not ${SIZE.width}x${SIZE.height}`);
-  if (!(bytes < MAX_BYTES)) failures.push(`${bytes} bytes, not under ${MAX_BYTES}`);
-  if (!(seconds >= LENGTH_S[0] && seconds <= LENGTH_S[1])) failures.push(`${seconds} s, outside ${LENGTH_S.join('-')} s`);
+  const failures = checkGif(bytes, p, spec);
 
   const gifFrames = decodeGifRgb(outPath);
   if (gifFrames.length !== totalFrames) failures.push(`the GIF decodes to ${gifFrames.length} frames, not ${totalFrames}`);

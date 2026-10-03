@@ -2,13 +2,22 @@
 // on small hand-built images (the gate's real PASS/FAIL controls run through
 // Remotion in scripts/gif-gate-control.mjs; these pin the arithmetic).
 
-import { describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { controlVerdict } from './gif-gate-control.mjs';
 import {
+  assertFramesFromRun,
   candidateSprites,
+  checkGif,
   colourGate,
   erodedMask,
   gifFrameAt,
   gifFrameMoment,
+  GIF_SPEC,
+  makeGif,
   MAX_COLOUR_ERROR,
   MIN_JUDGED_FRAMES,
   rexColourError,
@@ -16,6 +25,12 @@ import {
   spritePath,
   unjudgeable,
 } from './gif.mjs';
+
+let tmp;
+afterEach(() => {
+  if (tmp) rmSync(tmp, { recursive: true, force: true });
+  tmp = undefined;
+});
 
 const FPS = 12.5;
 const SCENES = [
@@ -209,5 +224,149 @@ describe('colourGate', () => {
     // THEN
     expect(g.judged).toBe(0);
     expect(g.failures.join()).toMatch(new RegExp(`need ${MIN_JUDGED_FRAMES}`));
+  });
+});
+
+describe('colourGate on a colour-shifted Rex', () => {
+  it('fails every judged frame where his pixels are 12 units off his sprite', () => {
+    /**
+     * The FAIL control's failure end to end through the gate: an untagged
+     * encode shifts Rex's fur 12 RGB units. If the gate passed this, a GIF
+     * with visibly wrong sprite colours would ship in the README.
+     */
+    // GIVEN — 25 frames, Rex tracked at CSS (100, 220) = GIF px (100, 40), drawn 12 units too red
+    const scenes = [{ shotId: 's1_inbox', fromFrame: 0, frames: 25, sourceInMs: 0, cropCss: { x: 0, y: 180, w: 960, h: 360 }, captions: [] }];
+    const tracks = Array.from({ length: 60 }, (_, i) => ({ t: i * 40, pets: [{ id: 'rex', x: 100, y: 220, w: 32, h: 32, src: 'chrome-extension://x/assets/dog/brown_idle_8fps.gif' }] }));
+    const eventsByShotId = { s1_inbox: { trimBeforeMs: 0, videoLagMs: 0, tracks, observed: [], cursorTrack: [], roster: [{ id: 'rex', type: 'dog', color: 'brown' }] } };
+    const shifted = image(240, 80, PAGE, DRAWN(0), [TAN[0] + 12, TAN[1], TAN[2]]);
+    // WHEN
+    const g = colourGate({ scenes, fps: FPS, totalFrames: 25, eventsByShotId, frameAt: () => shifted, loadSprite: () => SPRITE });
+    // THEN
+    expect(g.judged).toBe(25);
+    expect(g.worst).toBe(12);
+    expect(g.failures).toHaveLength(25);
+    expect(g.failures[0]).toBe('frame 0 (s1_inbox): an opaque Rex pixel is 12 RGB units from his source frame\'s colours');
+  });
+});
+
+describe('assertFramesFromRun', () => {
+  it('accepts frames render-manifest.json says came from this run', () => {
+    /** The honest pipeline: stage 2 rendered the gif frames from the run stage 4 encodes. */
+    // GIVEN / WHEN / THEN
+    expect(() => assertFramesFromRun('/v/build/run-1', { variants: { gif: { run: 'run-1' } } })).not.toThrow();
+  });
+
+  it('rejects frames from another run, or with no manifest entry', () => {
+    /**
+     * out/gif-frames left over from the synthetic run or the gate control
+     * would otherwise be encoded and published as this run's GIF.
+     */
+    // GIVEN / WHEN / THEN
+    expect(() => assertFramesFromRun('/v/build/run-1', { variants: { gif: { run: 'synthetic' } } })).toThrow(/rendered from run "synthetic", not run-1/);
+    expect(() => assertFramesFromRun('/v/build/run-1', { variants: {} })).toThrow(/rendered from run "undefined"/);
+  });
+});
+
+describe('controlVerdict', () => {
+  const gate = (failures, worst = 1) => ({ ok: !failures.length, report: { gate: { failures, worst } } });
+  const shift = ['frame 3 (s1_inbox): an opaque Rex pixel is 11 RGB units from his source frame\'s colours'];
+
+  it('is empty when the tagged encode passes and the untagged one fails on colour', () => {
+    /** The gate separates the two encodes: the proof the bead asks for. */
+    // GIVEN / WHEN / THEN
+    expect(controlVerdict({ tagged: gate([]), untagged: gate(shift, 11) })).toEqual([]);
+  });
+
+  it('reports a PASS control that failed the gate', () => {
+    /** A gate that fails honest footage would block every real run. */
+    // GIVEN / WHEN / THEN
+    expect(controlVerdict({ tagged: gate(['only 3 frames judgeable (need 20)']), untagged: gate(shift, 11) }).join()).toMatch(/tagged \(PASS control\) failed the gate/);
+  });
+
+  it('reports a FAIL control that passed, or failed only for a reason other than colour', () => {
+    /** An untagged GIF that fails on too few judged frames proves nothing about colour. */
+    // GIVEN / WHEN / THEN
+    expect(controlVerdict({ tagged: gate([]), untagged: gate([], 1) }).join()).toMatch(/untagged \(FAIL control\) passed the gate with worst error 1/);
+    expect(controlVerdict({ tagged: gate([]), untagged: gate(['only 3 frames judgeable (need 20)'], 2) }).join()).toMatch(/untagged \(FAIL control\) passed/);
+  });
+
+  it('reports a control that never reached the gate', () => {
+    /** A render failure is not a gate verdict either way. */
+    // GIVEN / WHEN / THEN
+    expect(controlVerdict({ tagged: { ok: false, error: 'render failed' }, untagged: gate(shift, 11) }).join()).toMatch(/never reached the gate: render failed/);
+  });
+});
+
+describe('checkGif', () => {
+  const probeOf = (w, h, d) => ({ streams: [{ codec_type: 'video', width: w, height: h }], format: { duration: String(d) } });
+
+  it('passes an 8.6 s 960x360 GIF under the byte limit', () => {
+    /** The spec comes from shots.json variants.readme_gif. */
+    // GIVEN / WHEN / THEN
+    expect(GIF_SPEC.size).toEqual({ width: 960, height: 360 });
+    expect(checkGif(1_400_000, probeOf(960, 360, 8.6))).toEqual([]);
+  });
+
+  it('fails each of size, dimensions and length', () => {
+    /** Each limit on its own must fail the GIF, not only all of them together. */
+    // GIVEN / WHEN / THEN
+    expect(checkGif(GIF_SPEC.maxBytes, probeOf(960, 360, 8.6))).toEqual([`${GIF_SPEC.maxBytes} bytes, want under ${GIF_SPEC.maxBytes}`]);
+    expect(checkGif(1_000, probeOf(1920, 720, 8.6))).toEqual(['1920x720, want 960x360']);
+    expect(checkGif(1_000, probeOf(960, 360, 6.9))).toEqual(['6.90 s, want 7-10.5 s']);
+  });
+});
+
+describe('makeGif (real ffmpeg, a tiny spec)', () => {
+  // GIVEN (shared) — a 32x16 GIF spec, so the source frames are 64x32; no Rex track, so the gate judges nothing
+  const spec = { maxBytes: 10, size: { width: 32, height: 16 }, seconds: [7, 10.5] };
+  const plan = (totalFrames) => ({
+    scenes: [{ shotId: 's1_inbox', fromFrame: 0, frames: totalFrames, sourceInMs: 0, cropCss: { x: 0, y: 0, w: 32, h: 16 }, captions: [] }],
+    fps: FPS,
+    totalFrames,
+    eventsByShotId: { s1_inbox: { trimBeforeMs: 0, videoLagMs: 0, tracks: [], observed: [] } },
+  });
+  function frames(n, size) {
+    tmp = mkdtempSync(join(tmpdir(), 'gif-make-'));
+    const dir = join(tmp, 'frames');
+    mkdirSync(dir);
+    execFileSync('ffmpeg', ['-nostdin', '-v', 'error', '-f', 'lavfi', '-i', `testsrc2=s=${size}:r=12.5`, '-frames:v', String(n), '-start_number', '0', join(dir, 'frame-%04d.png')]);
+    return dir;
+  }
+
+  it('fails a GIF over the byte limit and outside the length window, listing both', () => {
+    /**
+     * makeGif must throw on its spec failures (not just report them), so the
+     * pipeline stops at stage 4 rather than shipping an oversized or
+     * too-short GIF.
+     */
+    // GIVEN — 3 frames (0.24 s) against a 10-byte limit
+    const dir = frames(3, '64x32');
+    // WHEN
+    let err;
+    try {
+      makeGif({ runDir: tmp, framesDir: dir, outPath: join(tmp, 'out.gif'), manifest: null, plan: plan(3), spec });
+    } catch (e) {
+      err = e;
+    }
+    // THEN
+    expect(err.report.width).toBe(32);
+    expect(err.report.specFailures).toEqual([`${err.report.bytes} bytes, want under 10`, '0.24 s, want 7-10.5 s']);
+    expect(err.message).toMatch(/want under 10.*0\.24 s.*only 0 frames judgeable/);
+  });
+
+  it('refuses frames that are not twice the GIF size', () => {
+    /** Non-integer nearest-neighbour scaling breaks text strokes; only an exact halving is allowed. */
+    // GIVEN — 48x32 frames for a 32x16 GIF
+    const dir = frames(3, '48x32');
+    // WHEN / THEN
+    expect(() => makeGif({ runDir: tmp, framesDir: dir, outPath: join(tmp, 'out.gif'), manifest: null, plan: plan(3), spec })).toThrow('gif: frames are 48x32, not 64x32');
+  });
+
+  it('refuses a frame count that differs from the scene plan', () => {
+    /** A partial render would otherwise be encoded as a shorter GIF. */
+    // GIVEN — 3 frames where the plan has 4
+    const dir = frames(3, '64x32');
+    // WHEN / THEN
+    expect(() => makeGif({ runDir: tmp, framesDir: dir, outPath: join(tmp, 'out.gif'), manifest: null, plan: plan(4), spec })).toThrow(/holds 3 frames; the scene plan has 4/);
   });
 });

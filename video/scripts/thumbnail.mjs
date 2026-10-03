@@ -13,7 +13,9 @@ import { copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ffmpeg, isMain, OUT_DIR, probe, readJson, REPO_DIR, VIDEO_DIR } from './stage-io.mjs';
 
-export const THUMB = { w: 1280, h: 720 };
+const THUMB_SIZE = readJson(join(VIDEO_DIR, 'shots.json')).variants.thumbnail.size;
+/** The thumbnail's size, from shots.json variants.thumbnail.size (1280x720). */
+export const THUMB = { w: THUMB_SIZE.width, h: THUMB_SIZE.height };
 export const MIN_GAP = 80; // px between the brand block and Rex's box
 export const MARGIN = 48; // px from the thumbnail's edges
 export const ICON_PX = 128; // assets/icons/icon-128.png, drawn at ICON_SCALE
@@ -89,7 +91,7 @@ export function main() {
   ]);
   copyFileSync(still, join(OUT_DIR, 'x-poster.png'));
   const rexIn = inCrop(rex.box);
-  console.log(`thumbnail: out/thumbnail.png 1280x720 = still crop at (${crop.x}, ${crop.y}); Rex at (${Math.round(rexIn.x)}, ${Math.round(rexIn.y)}) ${Math.round(rexIn.w)}x${Math.round(rexIn.h)}; brand block at (${block.x}, ${block.y}) ${size.w}x${size.h}, ${Math.round(rectGap(block, rexIn))} px from Rex; out/x-poster.png = master frame ${meta.frame}`);
+  console.log(`thumbnail: out/thumbnail.png ${THUMB.w}x${THUMB.h} = still crop at (${crop.x}, ${crop.y}); Rex at (${Math.round(rexIn.x)}, ${Math.round(rexIn.y)}) ${Math.round(rexIn.w)}x${Math.round(rexIn.h)}; brand block at (${block.x}, ${block.y}) ${size.w}x${size.h}, ${Math.round(rectGap(block, rexIn))} px from Rex; out/x-poster.png = master frame ${meta.frame}`);
 }
 
 if (isMain(import.meta.url)) {

@@ -24,13 +24,13 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildConcatList, BT709_TAGS, BT709_VF, LOSSLESS_H264 } from '../record/assemble.mjs';
+import { pageShotIds, shotDir } from '../record/layout.mjs';
 import { describeReport, makeGif, MAX_COLOUR_ERROR } from './gif.mjs';
 import { buildPageTrackFrames } from './synthetic/page-events.mjs';
 import { ffmpeg, isMain, probe, readJson, VIDEO_DIR } from './stage-io.mjs';
 
 const CACHE = join(VIDEO_DIR, '.cache', 'gif-control');
 const SYNTHETIC = join(VIDEO_DIR, '.cache', 'synthetic-run');
-const PAGE_SHOTS = ['s1_inbox', 's2_review', 's3_sheet', 's4_article_night'];
 
 /** The two encodes: identical frames and timing, only the colour handling differs. */
 export const ENCODES = {
@@ -90,8 +90,8 @@ function runControl(proofMkv, variant) {
   const runDir = join(CACHE, variant);
   rmSync(runDir, { recursive: true, force: true });
   cpSync(SYNTHETIC, runDir, { recursive: true });
-  for (const id of PAGE_SHOTS) cpSync(mp4, join(runDir, id, 'demo.mp4'));
-  trackEveryFilmedPet(join(runDir, 's1_inbox', 'events.json'));
+  for (const id of pageShotIds(readJson(join(VIDEO_DIR, 'shots.json')))) cpSync(mp4, join(shotDir(runDir, id, '16:9'), 'demo.mp4'));
+  trackEveryFilmedPet(join(shotDir(runDir, 's1_inbox', '16:9'), 'events.json'));
   const r = spawnSync('npx', ['tsx', 'scripts/render.mjs', '--run', runDir, '--variant', 'gif'], { cwd: VIDEO_DIR, stdio: 'inherit' });
   if (r.status !== 0) throw new Error(`gif-gate-control: render.mjs --variant gif failed for ${variant}`);
   try {
