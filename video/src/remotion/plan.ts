@@ -5,6 +5,7 @@
 // resolution or geometry of its own.
 
 import type { ClickEvent, CursorSample, Events, Rect, TimelineCardFrame } from '../schema';
+import { sampledFrames } from './motionBlur';
 import { buildMusicPlan, buildSfx, type MusicPlan, type SfxCue } from './audioPlan';
 import type { StageConfig } from './camera';
 import { buildOverlays, type Aspect, type TextItem } from './overlays';
@@ -27,6 +28,8 @@ export interface PlanBeat {
   /** public-dir path of the shot's staged demo.mp4 */
   stagedSrc: string;
   frameCrops?: Rect[];
+  /** master frames drawn without motion blur: every frame verify.mjs samples (motionBlur.sampledFrames), plus a still's frame */
+  sharpFrames: number[];
   card?: { frames: TimelineCardFrame[]; envelopes: Rect[] };
   cursor: CursorData;
 }
@@ -77,6 +80,11 @@ export function popupCursor(events: Events, startX: number): CursorData {
   return { ...base, track, clicks };
 }
 
+/** The plan with master frame `k` drawn sharp (no motion blur): renderStill's frame, the thumbnail. */
+export function withSharpFrame<P extends { beats: PlanBeat[] }>(plan: P, k: number): P {
+  return { ...plan, beats: plan.beats.map((b) => (k >= b.k0 && k < b.k1 && !b.sharpFrames.includes(k) ? { ...b, sharpFrames: [...b.sharpFrames, k].sort((x, y) => x - y) } : b)) };
+}
+
 export interface PlanInput {
   edit: EditTimeline;
   shots: ShotsDoc;
@@ -111,6 +119,7 @@ export function buildPromoPlan(input: PlanInput): PromoPlan {
         shiftFrames: Math.round(b.shiftMs / frameMs),
         stagedSrc: stagedByShotId[b.shotId],
         frameCrops: b.frameCrops,
+        sharpFrames: b.frameCrops ? sampledFrames(b, frameMs) : [],
         card: b.card && b.cardEnvelopes ? { frames: b.card.frames, envelopes: b.cardEnvelopes } : undefined,
         cursor,
       };

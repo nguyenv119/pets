@@ -141,3 +141,51 @@ describe('shotFrameCrops: a hold frames its focus pet on every frame', () => {
     expect(crops[0]).toMatchObject({ x: 464, w: 960 });
   });
 });
+
+describe('shotFrameCrops: a push lands on the next hold\'s crop', () => {
+  const b4a = beat('b4a_hi', 2, 'between:rex,bao', 'Hold 1.0x (page) until pets_ready+400, then push to 2.0x between Rex and Bao (all three pets) over 450 ms, floor-anchored.', 1);
+  const b4b = beat('b4b_too', 2, 'between:rex,bao', 'hold', 2);
+  /** Rex still at CSS 400; Bao at CSS 480 until 3200 ms (inside b4b, past the 400 ms focus smoothing of b4a's rest), then at `baoLater`. */
+  const eventsWith = (baoLater: number) => {
+    const tracks = [];
+    for (let t = 0; t <= 4000; t += 40) tracks.push({ t, pets: [{ id: 'rex', x: 400, y: 476, w: 64, h: 64, src: 'idle' }, { id: 'bao', x: t < 3200 ? 480 : baoLater, y: 476, w: 64, h: 64, src: 'idle' }] });
+    return makeEvents({ observed: [{ t: 1000, kind: 'pets_ready' }], tracks });
+  };
+  const plan = (baoLater: number) => shotFrameCrops({ spans: [span(b4a, 0, 2800), span(b4b, 2800, 4000)], events: eventsWith(baoLater), stage: STAGE_16X9, shiftMs: 0, fps: 25 });
+
+  it('pushes straight to the re-centred crop of the next same-focus hold when it frames the pets as well', () => {
+    /**
+     * What: b4a_hi pushes to 2.0x on Rex and Bao; midway through b4b_too Bao steps right, so b4b holds its own
+     * re-centred crop. b4a's push lands on that crop (it still frames both pets on b4a's resting frames), so
+     * the cut from b4a to b4b moves the camera by 0 px.
+     * Why: the sharing rule exists so a hold never jitters a few px at a beat boundary; the synthetic 16:9
+     * run jumped 762 -> 758 stage px (8 output px) at exactly this cut.
+     * What breaks: a visible nudge of the camera on the b4a -> b4b cut.
+     */
+    // GIVEN — Bao moves from CSS 480 to 680 inside b4b
+    // WHEN
+    const [c4a, c4b] = plan(680);
+    // THEN — no jump at the cut, and b4a rests on that crop with both pets 16 stage px clear
+    expect(c4a[c4a.length - 1]).toEqual(c4b[0]);
+    expect(c4b[0].x).not.toBe(464); // not b4a's own crop: the next hold really re-centred
+    const rest = c4a[c4a.length - 1];
+    for (const [x0, x1] of [[800, 928], [960, 1088]]) {
+      expect(x0 - rest.x).toBeGreaterThanOrEqual(16);
+      expect(rest.x + rest.w - x1).toBeGreaterThanOrEqual(16);
+    }
+  });
+
+  it('keeps its own crop when the next hold\'s crop would lose a pet it frames', () => {
+    /**
+     * What: Bao jumps to CSS 900 inside b4b, so b4b's crop no longer contains Rex where b4a rests; b4a keeps
+     * its own crop (x 464, centred between the pets) and the cut stays a cut.
+     * Why: a smoother cut never justifies framing a pet out of a held crop the eval checks for containment.
+     * What breaks: b4a's declared crop loses Rex and the containment check fails.
+     */
+    // GIVEN — Bao moves from CSS 480 to 900 inside b4b
+    // WHEN
+    const [c4a] = plan(900);
+    // THEN
+    expect(c4a[c4a.length - 1]).toMatchObject({ x: 464, w: 960 });
+  });
+});

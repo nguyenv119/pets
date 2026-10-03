@@ -3,6 +3,7 @@ import { existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { enforceRenderChecks, RenderCheckError } from './checkGate';
+import { sampledFrames } from './motionBlur';
 import { planMaster } from './planMaster';
 import type { FrameViolation } from './renderChecks';
 import { makeEvents, stillPets, VIDEO_ROOT } from './testEvents';
@@ -73,6 +74,24 @@ describe('planMaster (integration: the planner and checks render.mjs runs, no Re
       expect(() => planMaster(args)).toThrow(/frame \d+ b_hold camera crop: crop-pet-margin/);
     });
   }
+
+  it("hands Promo every frame the eval samples as a sharp frame (no motion blur) on each page beat", () => {
+    /**
+     * What: the plan render.mjs passes to Remotion carries, per page beat, sharpFrames = the master frames
+     * verify.mjs reads (motionBlur.sampledFrames of the beat's timeline fields), master_t's frame among them.
+     * Why: Promo.tsx skips camera and cursor blur on exactly these frames; a plan without them blurs a sampled
+     * frame whenever master_t lands inside a move.
+     * What breaks: the aim/zoom SSIM at master_t scores a smeared frame.
+     */
+    // GIVEN — the same hold with Bao well clear of Rex's crop (a passing plan)
+    const args = { ...input('fixture'), eventsByShotId: { s1: makeEvents({ shim: 'fixture', roster, tracks: stillPets({ rex: 400, bao: 900 }), observed: [{ t: 500, kind: 'pets_ready' }] }) } };
+    // WHEN
+    const { edit, plan } = planMaster(args);
+    // THEN
+    const b = edit.beats[0];
+    expect(plan.beats[0].sharpFrames).toEqual(sampledFrames(b, 40));
+    expect(plan.beats[0].sharpFrames).toContain(Math.round(b.master_t / 40));
+  });
 });
 
 describe('render.mjs --fixture --plan-only (integration, subprocess)', () => {

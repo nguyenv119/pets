@@ -13,7 +13,9 @@
 //   centred on the pet's whole span across the beat instead (if it fits).
 //   Consecutive holds on the same focus and zoom share the previous crop
 //   while it still contains the focus pets, so a hold never jitters by a
-//   few px at a beat boundary.
+//   few px at a beat boundary. When the next hold re-centres instead, a
+//   push into it (hold_until, push_then_hold) lands on the next hold's crop
+//   if that loses none of the focus boxes the push's own crop framed.
 // - "Hold 1.0x ... until <anchor>, then push": 1.0x until anchor+videoLagMs,
 //   then a 450 ms ease-out-expo push (3000 ms ease-in-out when the text says
 //   "easing in and out", the night push) to the beat's resting 2.0x crop.
@@ -136,11 +138,12 @@ export function shotFrameCrops(input: ShotCameraInput): Rect[][] {
     zoomOf(b) === 1 ? full : floorAnchoredCrop(stage, zoomOf(b), resolveFocusX(b.camera.focus, stage, events, loggedMs));
   const anchor = (spec: string, s: CameraBeatSpan) => resolveAnyAnchor(spec, { events, beatInMs: s.sourceIn });
 
-  /** The focus pets' boxes on every master frame of a beat (stage px). */
-  const focusBoxesOver = (s: CameraBeatSpan): Rect[] => {
+  /** The focus pets' boxes on every master frame of a beat (stage px), or on those showing demo ms >= fromMs. */
+  const focusBoxesOver = (s: CameraBeatSpan, fromMs = -Infinity): Rect[] => {
     const ids = focusPets(s.beat.camera.focus, events);
     const boxes: Rect[] = [];
     for (let k = s.k0; k < s.k1; k++) {
+      if (demoAt(k) < fromMs) continue;
       for (const id of ids) {
         const b = petBoxStage(events, id, loggedMsAt(events, demoAt(k)), stage);
         if (b) boxes.push(b);
@@ -182,6 +185,23 @@ export function shotFrameCrops(input: ShotCameraInput): Rect[][] {
       }
     }
     rest.push(own);
+  });
+
+  // Pass 1b: a push that lands on its own crop and then cuts to the next same-focus hold, re-centred a few px
+  // away, jitters at the cut (b4a_hi -> b4b_too: 762 -> 758 stage px). Push straight to the next hold's crop
+  // instead, when that crop frames every focus box this beat's own crop frames from the push on (so no pet
+  // the camera held is lost), and this beat's crop is not already shared with the beat before it.
+  spans.forEach((s, i) => {
+    const move = classifyMove(s.beat.camera.move);
+    const n = spans[i + 1];
+    const own = rest[i];
+    const next = i + 1 < rest.length ? rest[i + 1] : null;
+    if (noZoom || !n || !own || !next || own === next || (i > 0 && rest[i - 1] === own)) return;
+    if (move.kind !== 'hold_until' && move.kind !== 'push_then_hold') return;
+    if (classifyMove(n.beat.camera.move).kind !== 'hold' || zoomOf(n.beat) === 1 || zoomOf(n.beat) !== zoomOf(s.beat) || n.beat.camera.focus !== s.beat.camera.focus) return;
+    const pushFrom = anchor(move.kind === 'hold_until' ? move.untilAnchor! : move.pushEndAnchor!, s) + lag;
+    const held = focusBoxesOver(s, pushFrom).filter((b) => contains(own, b, SHARE_MARGIN_STAGE_PX));
+    if (held.every((b) => contains(next, b, SHARE_MARGIN_STAGE_PX))) rest[i] = next;
   });
 
   // Pass 2: every frame.

@@ -28,6 +28,7 @@ import { renderFrames, renderMedia, renderStill, selectComposition } from '@remo
 import { acquireLock } from '../lib/lock.mjs';
 import { findAnchorMasterFrame, timelineJson } from '../src/remotion/timeline.ts';
 import { planMaster } from '../src/remotion/planMaster.ts';
+import { withSharpFrame } from '../src/remotion/plan.ts';
 import { runGifChecks } from '../src/remotion/renderChecks.ts';
 import { enforceRenderChecks, describeViolation } from '../src/remotion/checkGate.ts';
 import { buildGifScenes } from '../src/remotion/gifScenes.ts';
@@ -218,7 +219,8 @@ async function main() {
 
   if (args.variant === 'still') {
     const frame = args.at ? frameAtAnchor(edit, eventsByShotId, args.at) : 0;
-    await withBundle('Promo16x9', plan, (serveUrl, composition) => renderStill({ composition, serveUrl, inputProps: plan, frame, output: join(outDir, 'still.png'), ...RENDER_OPTS }));
+    const still = withSharpFrame(plan, frame); // the thumbnail frame is never motion-blurred, even mid-move
+    await withBundle('Promo16x9', still, (serveUrl, composition) => renderStill({ composition, serveUrl, inputProps: still, frame, output: join(outDir, 'still.png'), ...RENDER_OPTS }));
     console.log(`rendered out/still.png at master frame ${frame}${args.at ? ` (${args.at})` : ''}`);
     updateManifest('still', run, sources);
     return;

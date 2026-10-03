@@ -12,7 +12,8 @@
 //
 // Motion blur (motionBlur.ts): a page frame inside a camera move renders
 // the whole stage through CameraMotionBlur; a held frame blurs only a
-// moving cursor; holds and the popup card are never blurred.
+// moving cursor; holds, the popup card and every frame the eval samples
+// (PlanBeat.sharpFrames) are never blurred.
 
 import React from 'react';
 import { CameraMotionBlur } from '@remotion/motion-blur';
@@ -22,7 +23,7 @@ import { BrandLine, CaptionPill, Clock, Cta, NameTag } from './Captions';
 import { Cursor } from './Cursor';
 import { PopupCard } from './PopupCard';
 import { Stage } from './Stage';
-import { BLUR_SAMPLES, BLUR_SHUTTER_ANGLE, cameraMovesInto, cursorMovesInto, exposureOf, subframeCrop } from './motionBlur';
+import { BLUR_SAMPLES, BLUR_SHUTTER_ANGLE, blurAllowed, cameraMovesInto, cursorMovesInto, exposureOf, subframeCrop } from './motionBlur';
 import type { PlanBeat, PromoPlan } from './plan';
 
 export type PromoProps = PromoPlan;
@@ -64,8 +65,9 @@ const BeatLayer: React.FC<{ beat: PlanBeat; plan: PromoPlan }> = ({ beat, plan }
   }
   const crops = beat.frameCrops ?? [];
   const i = Math.min(local, crops.length - 1);
-  const cursorMoving = cursorMovesInto(beat.cursor.track, loggedMs, 1000 / fps);
-  if (cameraMovesInto(crops, i)) {
+  const blur = blurAllowed(beat, i); // a frame the eval samples is drawn sharp, mid-move or not
+  const cursorMoving = blur && cursorMovesInto(beat.cursor.track, loggedMs, 1000 / fps);
+  if (blur && cameraMovesInto(crops, i)) {
     return (
       <CameraMotionBlur shutterAngle={BLUR_SHUTTER_ANGLE} samples={BLUR_SAMPLES}>
         <PageSample beat={beat} plan={plan} local={i} camera cursor={cursorMoving} />
