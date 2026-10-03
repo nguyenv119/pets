@@ -1,85 +1,89 @@
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { enforceRenderChecks, isStandInRun, RenderCheckError } from './checkGate';
+import { enforceRenderChecks, RenderCheckError } from './checkGate';
+import { planMaster } from './planMaster';
 import type { FrameViolation } from './renderChecks';
-import { makeEvents } from './testEvents';
+import { makeEvents, stillPets, VIDEO_ROOT } from './testEvents';
+import type { ShotsDoc } from './timeline';
 
 const ONE: FrameViolation[] = [{ frame: 900, element: 'b4b_too camera crop', check: 'crop-pet-margin', detail: 'left crop edge -84px from pet box (margin 16)' }];
 
 describe('enforceRenderChecks', () => {
-  it('aborts a recorded take (shim v3;seed=N) on a single violating frame', () => {
+  it('aborts on a single violating frame, naming the frame and the element', () => {
     /**
-     * Verifies the render-failing contract: one bad frame on a real take stops the render, naming the
-     * frame and the element. If a real take could render past a violation, the epic's framing rules
-     * would be advisory and a clipped pet could ship.
+     * What: one bad frame throws RenderCheckError whose message names the frame, the element and the check.
+     * Why: the bead's contract: the render aborts on any violation, naming the frame and the element.
+     * What breaks: framing rules become advisory and a clipped pet ships.
      */
-    // GIVEN — every shot recorded by the real recorder
-    const events = { s1: makeEvents({ shim: 'v3;seed=7' }), s2: makeEvents({ shim: 'v3;seed=7' }) };
-    // WHEN / THEN
-    expect(() => enforceRenderChecks(ONE, events)).toThrow(RenderCheckError);
-    expect(() => enforceRenderChecks(ONE, events)).toThrow(/frame 900 b4b_too camera crop: crop-pet-margin/);
+    // GIVEN / WHEN / THEN
+    expect(() => enforceRenderChecks(ONE)).toThrow(RenderCheckError);
+    expect(() => enforceRenderChecks(ONE)).toThrow(/frame 900 b4b_too camera crop: crop-pet-margin/);
   });
 
-  it('never lets a run with even one recorded (v3) shot reach the stand-in bypass', () => {
+  it('passes a clean plan with the one success line', () => {
     /**
-     * The bypass keys on the recordings' own shim, never a flag: a run that mixes one real shot with
-     * stand-ins is real data and must abort. If this broke, a pipeline run could be passed off as a
-     * stand-in to skip the checks.
+     * What: no violations returns the line render.mjs prints.
+     * Why: render:fixture's evidence is that line.
+     * What breaks: a clean plan could not be told from an unchecked one.
      */
-    const events = { s1: makeEvents({ shim: 'fixture' }), s2: makeEvents({ shim: 'v3;seed=1' }) };
-    expect(isStandInRun(events)).toBe(false);
-    expect(() => enforceRenderChecks(ONE, events)).toThrow(RenderCheckError);
-  });
-
-  it('renders stand-in data (every shim "fixture") but reports CHECKS FAILED with every violation', () => {
-    /** The synthetic and fixture runs reuse one clip whose pets ignore the shot spec; they render, loudly marked. */
-    const events = { s1: makeEvents({ shim: 'fixture' }) };
-    const r = enforceRenderChecks(ONE, events);
-    expect(r.standIn).toBe(true);
-    expect(r.report[0]).toBe('CHECKS FAILED (stand-in data)');
-    expect(r.report).toHaveLength(2);
-  });
-
-  it('passes a clean plan without a report of failures', () => {
-    expect(enforceRenderChecks([], { s1: makeEvents({ shim: 'v3;seed=1' }) }).report).toEqual(['render checks: every frame passes']);
+    // GIVEN / WHEN
+    const line = enforceRenderChecks([]);
+    // THEN
+    expect(line).toBe('render checks: every frame passes');
   });
 });
 
-const videoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const synthetic = join(videoRoot, '.cache', 'synthetic-run');
+describe('planMaster (integration: the planner and checks render.mjs runs, no Remotion)', () => {
+  // One shot, one 2.0x hold on Rex (CSS x 400: crop stage x 384-1344) with Bao standing across its right edge (CSS x 650: stage 1300-1428).
+  const shots: ShotsDoc = {
+    fps: 25,
+    edit_order: ['s1'],
+    shots: [{ id: 's1', beats: [{ name: 'b_hold', in: 'pets_ready', out: 'pets_ready+2000', camera: { zoom: 2, focus: 'pet:rex', move: 'hold', sample: 2 } }] }],
+  };
+  const roster = [
+    { id: 'rex', name: 'Rex', type: 'dog', color: 'brown' },
+    { id: 'bao', name: 'Bao', type: 'panda', color: 'black' },
+  ];
+  const input = (shim: string) => ({
+    shots,
+    eventsByShotId: { s1: makeEvents({ shim, roster, tracks: stillPets({ rex: 400, bao: 650 }), observed: [{ t: 500, kind: 'pets_ready' }] }) },
+    sourceByShotId: { s1: '/run/s1/demo.mp4' },
+    stagedByShotId: { s1: 's1/demo.mp4' },
+    port: false,
+    mode: 'synthetic' as const,
+    musicPath: '/abs/music.ogg',
+    musicSrc: 'music/cat_caffe.ogg',
+    iconPath: 'icons/icon-128.png',
+  });
 
-describe('render.mjs --run (integration, real planner on the synthetic recordings re-labelled as a recorded take)', () => {
-  it.skipIf(!existsSync(synthetic))('exits non-zero, naming the frame, when a --run take has a violating frame', () => {
+  for (const shim of ['fixture', 'v3;seed=1']) {
+    it(`aborts a plan with a clipped pet whatever the recordings' shim ("${shim}")`, () => {
+      /**
+       * What: planMaster throws RenderCheckError naming b_hold's camera crop, for stand-in data (shim
+       * "fixture") exactly as for a recorded take.
+       * Why: the stand-in bypass is gone: no shim, mode or flag lets a violating plan render.
+       * What breaks: a synthetic or real run renders past a clipped pet.
+       */
+      // GIVEN
+      const args = input(shim);
+      // WHEN / THEN
+      expect(() => planMaster(args)).toThrow(RenderCheckError);
+      expect(() => planMaster(args)).toThrow(/frame \d+ b_hold camera crop: crop-pet-margin/);
+    });
+  }
+});
+
+describe('render.mjs --fixture --plan-only (integration, subprocess)', () => {
+  it('plans the committed fixture with every frame passing and exits 0', () => {
     /**
-     * The synthetic run is known to put Bao through a 2.0x crop edge on b4b_too. Re-labelled with a
-     * recorder shim it is, to render.mjs, a real take, so the render must abort before Remotion runs,
-     * with a non-zero exit and the frame named. (Skipped when the gitignored synthetic run is absent.)
+     * What: the real CLI on the committed fixture prints "render checks: every frame passes" and exits 0.
+     * Why: render:fixture renders before any recording exists; with the bypass gone it must pass honestly.
+     * What breaks: npm run render:fixture aborts.
      */
-    // GIVEN — a copy of the synthetic run whose every events.json says v3;seed=1
-    const dir = mkdtempSync(join(tmpdir(), 'pp-run-'));
-    const run = join(dir, 'run-2026-10-03');
-    try {
-      cpSync(synthetic, run, { recursive: true });
-      const relabel = (d: string) => {
-        for (const e of readdirSync(d, { withFileTypes: true })) {
-          const p = join(d, e.name);
-          if (e.isDirectory()) relabel(p);
-          else if (e.name === 'events.json') writeFileSync(p, JSON.stringify({ ...JSON.parse(readFileSync(p, 'utf8')), shim: 'v3;seed=1' }));
-        }
-      };
-      relabel(run);
-      // WHEN — planning the 16:9 master (--plan-only: no Remotion, no lock)
-      const r = spawnSync('npx', ['tsx', 'scripts/render.mjs', '--run', run, '--variant', '16x9', '--plan-only'], { cwd: videoRoot, encoding: 'utf8' });
-      // THEN
-      expect(r.status).not.toBe(0);
-      expect(r.stderr).toMatch(/render checks failed/);
-      expect(r.stderr).toMatch(/^frame \d+ \S+ camera crop: crop-pet-margin/m);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    // GIVEN / WHEN
+    const r = spawnSync('npx', ['tsx', 'scripts/render.mjs', '--fixture', '--plan-only'], { cwd: VIDEO_ROOT, encoding: 'utf8' });
+    // THEN
+    expect(r.stdout).toMatch(/render checks: every frame passes/);
+    expect(r.status).toBe(0);
   }, 60_000);
 });
