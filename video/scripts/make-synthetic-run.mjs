@@ -18,7 +18,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildExtension } from '../lib/browser.mjs';
-import { assembleFrames, buildPortraitStandin, probeVideo } from './synthetic/assemble.mjs';
+import { assembleFrames, probeVideo } from '../record/assemble.mjs';
+import { buildPortraitStandin } from './synthetic/assemble.mjs';
 import {
   buildPageTrackFrames,
   buildS1InboxObserved,
