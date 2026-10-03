@@ -260,7 +260,7 @@ async function captureOnePopupTake({ shot, ext, timezoneId, homeDaysOverride, do
     const layout = await assertLayout(page, shot.layout_expect);
 
     await logPopupRects(page);
-    // logPopupRects (lib/browser.mjs, frozen) times each track relative to
+    // logPopupRects (lib/browser.mjs, frozen; v2 pets-3it.4 changed only seedStorage) times each track relative to
     // its own install moment (performance.now() - start), not the absolute
     // epoch every other timestamp here uses — capture that epoch now so
     // tracks can be converted to it below.

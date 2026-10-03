@@ -757,6 +757,25 @@ describe('the popup click rule judges every logged click, not the first of each 
     expect(result.detail).toMatch(/^shelter_click #2 at CSS \(1\.0, /);
   });
 
+  it.each([
+    ['name_click', 'B_pick'],
+    ['add_mousedown', 'C_add'],
+  ])('fails when a second %s lands outside crop %s', (kind) => {
+    /** FAIL controls for the B and C crops: a re-click outside its crop must fail, as shelter_click does for A. */
+    // GIVEN — the real kept popup log plus a second click of this kind 50 ms later at x 1, outside its crop
+    const events = realPopup();
+    const first = events.observed.find((e) => e.kind === kind);
+    events.observed.push({ ...first, t: first.t + 50, x: 1 });
+    events.observed.sort((a, b) => a.t - b.t);
+
+    // WHEN — the click rule is evaluated
+    const result = evaluateRule(rule, events, POPUP_CTX);
+
+    // THEN — it fails on that second click
+    expect(result.pass).toBe(false);
+    expect(result.detail).toMatch(new RegExp(`^${kind} #2 at CSS`));
+  });
+
   it('passes the same log when the second shelter click is inside crop A, judging both', () => {
     /** Pass control for the case above: two good shelter clicks both pass and both appear in the detail. */
     // GIVEN — a second shelter click at the same point as the first
