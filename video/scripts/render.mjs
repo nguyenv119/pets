@@ -26,6 +26,7 @@ import { fileURLToPath } from 'node:url';
 import { bundle } from '@remotion/bundler';
 import { renderFrames, renderMedia, renderStill, selectComposition } from '@remotion/renderer';
 import { acquireLock } from '../lib/lock.mjs';
+import { shotDir } from '../record/layout.mjs';
 import { findAnchorMasterFrame, timelineJson } from '../src/remotion/timeline.ts';
 import { planMaster } from '../src/remotion/planMaster.ts';
 import { withSharpFrame } from '../src/remotion/plan.ts';
@@ -41,7 +42,6 @@ const outDir = join(videoRoot, 'out');
 const syntheticRunDir = join(videoRoot, '.cache', 'synthetic-run');
 const MUSIC = 'music/cat_caffe.ogg';
 const ICON = 'icons/icon-128.png';
-const POPUP_SHOT_ID = 's2b_shelter';
 /** PromoGif's frame width (Root.tsx): the native 16:9 capture, 1920x720 band. */
 const GIF_WIDTH = 1920;
 const RENDER_OPTS = { imageFormat: 'png', chromiumOptions: { gl: 'angle' } };
@@ -95,7 +95,7 @@ function loadRun(rootDir, shots, port) {
   const eventsByShotId = {};
   const sourceByShotId = {};
   for (const id of shots.edit_order) {
-    const dir = port && id !== POPUP_SHOT_ID ? join(rootDir, 'v916', id) : join(rootDir, id);
+    const dir = shotDir(rootDir, id, port ? '9:16' : '16:9');
     const demo = join(dir, 'demo.mp4');
     if (!existsSync(demo)) throw new Error(`render.mjs: missing ${demo}; did the run record every shot?`);
     eventsByShotId[id] = readJson(join(dir, 'events.json'));
@@ -106,7 +106,7 @@ function loadRun(rootDir, shots, port) {
 
 /** Each shot's demo.mp4 path inside the public dir (where stageShots copies it; the plan names it before anything is copied). */
 function stagedPaths(sourceByShotId, port) {
-  return Object.fromEntries(Object.keys(sourceByShotId).map((id) => [id, `${port && id !== POPUP_SHOT_ID ? 'v916/' : ''}${id}/demo.mp4`]));
+  return Object.fromEntries(Object.keys(sourceByShotId).map((id) => [id, `${shotDir('', id, port ? '9:16' : '16:9')}/demo.mp4`]));
 }
 
 function stageShots(sourceByShotId, stagedByShotId) {

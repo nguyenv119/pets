@@ -9,12 +9,13 @@
 // (Events -> AcceptResult[]), assemble.mjs (frames -> mp4) and sync.mjs
 // (clapper detection).
 
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildExtension, launchWithExtension, routeSet, seedStorage } from '../lib/browser.mjs';
 import { evaluateShotRules } from './accept.mjs';
+import { shotDir } from './layout.mjs';
 import { assembleFrames, generateSignalStats, probeVideo } from './assemble.mjs';
 import { DiscardTake, runActions } from './choreo.mjs';
 import { createRepeatGuard, isFixedSeed, seedCandidates } from './search.mjs';
@@ -28,11 +29,9 @@ import { computeSync, demoMsOf, findTrimBeforeMs, HEART_MASK_FILTER, measureVide
 import { fallbackVideoLagMs, keptHeartLagsMs, VIDEO_LAG_MAX_MS } from './video-lag.mjs';
 
 const VIDEO_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
-const CACHE_TAKES_DIR = join(VIDEO_DIR, '.cache', 'takes');
 const BUILD_DIR = join(VIDEO_DIR, 'build');
 const SEED_BUDGET = 60;
 const CLAP_MS = 160;
-const KEPT_RUNS = 2;
 // The start clapper flashes on the page's initial about:blank document, and
 // the set page loads this long after its release, so the pets (drawn about
 // 2 ms after the page's first paint) never appear under the clapper and the
@@ -210,19 +209,6 @@ async function captureOneTake({ shot, aspect, viewport, seedValue, ext, setDir, 
   }
 }
 
-function pruneOldRuns() {
-  if (!existsSync(BUILD_DIR)) return;
-  // Each run is its own build/<runId>/ directory (v916/ lives nested inside
-  // it, alongside the 16:9 shot directories), so every top-level entry here
-  // is a run.
-  const runs = readdirSync(BUILD_DIR)
-    .map((name) => ({ name, mtime: statSync(join(BUILD_DIR, name)).mtimeMs }))
-    .sort((a, b) => b.mtime - a.mtime);
-  for (const run of runs.slice(KEPT_RUNS)) {
-    rmSync(join(BUILD_DIR, run.name), { recursive: true, force: true });
-  }
-}
-
 async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId }) {
   const viewport = aspect === '16:9' ? doc.viewport : doc.variants.vertical_9x16.viewport;
   const variantDoc = aspect === '9:16' ? doc.variants.vertical_9x16 : undefined;
@@ -294,7 +280,7 @@ async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId })
     }
 
     // Kept take: assemble, sync, write outputs.
-    const outDir = join(BUILD_DIR, runId, aspect === '16:9' ? shot.id : join('v916', shot.id));
+    const outDir = shotDir(join(BUILD_DIR, runId), shot.id, aspect);
     mkdirSync(outDir, { recursive: true });
     const mp4Path = join(outDir, 'demo.mp4');
     const dprAssemble = viewport.device_scale_factor ?? 2;
@@ -437,7 +423,6 @@ async function main() {
     }
   }
 
-  pruneOldRuns();
   if (failures.length > 0) {
     console.error(`record.mjs: ${failures.length} shot(s) not kept (run ${runId}):\n  ${failures.join('\n  ')}`);
     process.exit(1);

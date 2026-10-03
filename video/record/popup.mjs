@@ -11,6 +11,7 @@ import { launchWithExtension, logPopupRects, openPopup, seedStorage } from '../l
 import { evaluateRules } from './accept.mjs';
 import { assembleFrames, extractGrayCrop, generateSignalStats, probeVideo } from './assemble.mjs';
 import { installClap } from './clap.js';
+import { shotDir } from './layout.mjs';
 import { dropLeadingMisSizedFrames, startScreencast } from './screencast.mjs';
 import { computeSync, demoMsOf, findTrimBeforeMs, measureVideoLagFromChange, splitGrayFrames } from './sync.mjs';
 import { ownProfileDir, profileDirs } from './tempdirs.mjs';
@@ -417,7 +418,7 @@ export async function recordPopupTake({ shot, doc, ext, opts, runId, buildDir })
       continue;
     }
 
-    const outDir = join(buildDir, runId, shot.id);
+    const outDir = shotDir(join(buildDir, runId), shot.id, '16:9');
     mkdirSync(outDir, { recursive: true });
     const mp4Path = join(outDir, 'demo.mp4');
     const dprAssemble = shot.viewport.device_scale_factor ?? 2;
