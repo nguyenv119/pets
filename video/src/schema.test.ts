@@ -455,12 +455,18 @@ describe('video/shots.json is the v2 contract', () => {
     const b1a = s1.beats.find((b) => b.name === 'b1a_open')!;
     const b1c = s1.beats.find((b) => b.name === 'b1c_name')!;
 
+    expect(b1a.caption_out).toBeDefined();
+    expect(b1c.overlay?.from).toBeDefined();
+
     // WHEN — both anchors are parsed
     const out = parseAnchor(b1a.caption_out!);
     const from = parseAnchor(b1c.overlay!.from!);
 
     // THEN — same event, 0-200 ms after the caption leaves
-    expect(from.kind === 'event' && out.kind === 'event' && from.event === out.event).toBe(true);
+    expect(out.kind).toBe('event');
+    expect(from.kind).toBe('event');
+    if (from.kind !== 'event' || out.kind !== 'event') return;
+    expect(from.event).toBe(out.event);
     expect(from.offsetMs - out.offsetMs).toBeGreaterThanOrEqual(0);
     expect(from.offsetMs - out.offsetMs).toBeLessThanOrEqual(200);
   });
@@ -482,23 +488,34 @@ describe('video/shots.json is the v2 contract', () => {
     expect(doc.master.stage.page_stage_y).toEqual([208, 1080]);
   });
 
-  it('records at 960x436 (16:9) and 540x856 (9:16), both at DPR 2', () => {
+  it('records the 16:9 at 960x436, DPR 2', () => {
     /**
-     * Verifies the real viewports under the 104 CSS px chrome: 104 + 436 = 540 and 104 + 856 = 960
-     * CSS px, so chrome plus page fill 1920x1080 and 1080x1920 at DPR 2.
+     * Verifies the 16:9 viewport under the 104 CSS px chrome: 104 + 436 = 540 CSS px,
+     * so chrome plus page fill 1920x1080 at DPR 2.
      */
-    // GIVEN / WHEN — the two declared viewports
-    const doc = shots();
+    // GIVEN / WHEN — the declared 16:9 viewport
+    const { viewport } = shots();
 
-    // THEN — exactly the v2 sizes
-    expect(doc.viewport).toEqual({ width: 960, height: 436, device_scale_factor: 2 });
-    expect(doc.variants.vertical_9x16.viewport).toEqual({ width: 540, height: 856, device_scale_factor: 2 });
+    // THEN — exactly the v2 size
+    expect(viewport).toEqual({ width: 960, height: 436, device_scale_factor: 2 });
+  });
+
+  it('records the 9:16 at 540x856, DPR 2', () => {
+    /**
+     * Verifies the 9:16 viewport under the 104 CSS px chrome: 104 + 856 = 960 CSS px,
+     * so chrome plus page fill 1080x1920 at DPR 2.
+     */
+    // GIVEN / WHEN — the declared 9:16 viewport
+    const { viewport } = shots().variants.vertical_9x16;
+
+    // THEN — exactly the v2 size
+    expect(viewport).toEqual({ width: 540, height: 856, device_scale_factor: 2 });
   });
 
   it('names music 03 and its credit', () => {
     /**
      * Verifies the bed is "Funny and Cute Town Theme" and the credit carries the artist, site and licence;
-     * OGA-BY 3.0 requires the credit, so a missing piece is a licence breach, not a style issue.
+     * OGA-BY 3.0 requires attribution, so the credit must be complete.
      */
     // GIVEN / WHEN — the master's music block
     const { music } = shots().master;
@@ -547,5 +564,124 @@ describe('video/shots.json is the v2 contract', () => {
         expect(x % 2 === 0 && y % 2 === 0 && x >= 0 && y + h <= frames[aspect].h).toBe(true);
       }
     }
+  });
+  it('ties the chrome, pinned icon, card anchors and card scales together', () => {
+    /**
+     * Verifies the derived numbers agree with the ones they come from: chrome output height is 2x its
+     * CSS height and is where the page starts, the icon's output centre and bottom are 2x its CSS box,
+     * each card anchor uses that icon centre and sits 8 px below the toolbar, and every card scale is an
+     * integer. If one drifts, the card hangs from a spot that is not the icon, or the page overlaps the chrome.
+     */
+    // GIVEN — the master stage, both placements, both viewports and every declared card scale
+    const raw = readJson('shots.json') as {
+      viewport: { width: number };
+      master: { stage: { chrome: { css_h: number; out_h: number; pinned_icon_css: { x: number; y: number; w: number; h: number }; pinned_icon_out: { cx_16x9: number; cx_9x16: number; cy: number; bottom: number }; toolbar_bottom_out: number }; page_stage_y: [number, number] } };
+      overlays: { popup_card: { placement: Record<string, { anchor?: { icon_cx: number; top: number } }> } };
+      shots: Array<{ id: string; crops?: Record<string, { card_scale_native?: number }> }>;
+      variants: { vertical_9x16: { viewport: { width: number }; shots: { s2b_shelter: { card_scale_native: Record<string, number> } } } };
+    };
+    const { chrome, page_stage_y } = raw.master.stage;
+    const css = chrome.pinned_icon_css;
+    const out = chrome.pinned_icon_out;
+    // the icon is right-anchored in the toolbar, so the narrow window moves it left by the width difference
+    const narrowShift = raw.viewport.width - raw.variants.vertical_9x16.viewport.width;
+
+    // WHEN / THEN — chrome height and page start
+    expect(chrome.css_h * 2).toBe(chrome.out_h);
+    expect(page_stage_y[0]).toBe(chrome.out_h);
+
+    // THEN — the icon's output point is its CSS box at 2x
+    expect(out.cx_16x9).toBe((css.x + css.w / 2) * 2);
+    expect(out.cx_9x16).toBe((css.x - narrowShift + css.w / 2) * 2);
+    expect(out.cy).toBe((css.y + css.h / 2) * 2);
+    expect(out.bottom).toBe((css.y + css.h) * 2);
+
+    // THEN — each aspect's anchor uses that icon and the toolbar's bottom + 8
+    for (const [aspect, cx] of [['16x9', out.cx_16x9], ['9x16', out.cx_9x16]] as const) {
+      const anchor = raw.overlays.popup_card.placement[aspect].anchor;
+      expect(anchor, aspect).toBeDefined();
+      expect(anchor!.icon_cx, aspect).toBe(cx);
+      expect(anchor!.top, aspect).toBe(chrome.toolbar_bottom_out + 8);
+    }
+
+    // THEN — every card scale is a whole number
+    const crops = raw.shots.find((s) => s.id === 's2b_shelter')!.crops!;
+    const scales = [
+      ...['A_list', 'B_pick', 'C_add'].map((name) => crops[name].card_scale_native),
+      ...Object.values(raw.variants.vertical_9x16.shots.s2b_shelter.card_scale_native),
+    ];
+    expect(scales).toHaveLength(6);
+    for (const scale of scales) expect(Number.isInteger(scale), String(scale)).toBe(true);
+  });
+
+  it('aims the 16:9 dblclick inside the declared #dbl-zone', () => {
+    /**
+     * Verifies the glide and dblclick point (800, 306) lies inside div#dbl-zone as the review page
+     * description declares it. A point outside the zone lands on page text or a pet, and the take fails accept.
+     */
+    // GIVEN — the zone rect from the page description and the s2_review actions aimed at it
+    const text = readFileSync(join(VIDEO_DIR, 'shots.json'), 'utf-8');
+    const m = text.match(/div#dbl-zone, an empty[^.]*? box at x (\d+)-(\d+), y (\d+)-(\d+)/);
+    expect(m).not.toBeNull();
+    const [x0, x1, y0, y1] = m!.slice(1).map(Number);
+    const raw = readJson('shots.json') as { shots: Array<{ id: string; actions?: Array<{ kind: string; x?: number; y?: number; target?: string }> }> };
+    const aimed = raw.shots.find((s) => s.id === 's2_review')!.actions!.filter((a) => a.target === '#dbl-zone');
+
+    // WHEN — the dblclick action is picked out
+    expect(aimed.map((a) => a.kind)).toContain('dblclick_empty');
+
+    // THEN — every point aimed at the zone is inside it
+    expect([x0, x1, y0, y1]).toEqual([700, 900, 276, 336]);
+    for (const a of aimed) {
+      expect(a.x!, a.kind).toBeGreaterThanOrEqual(x0);
+      expect(a.x!, a.kind).toBeLessThanOrEqual(x1);
+      expect(a.y!, a.kind).toBeGreaterThanOrEqual(y0);
+      expect(a.y!, a.kind).toBeLessThanOrEqual(y1);
+    }
+  });
+
+  it('keeps each adoption caption rect in the page area, above the pets and clear of every card', () => {
+    /**
+     * Verifies the fixed caption rect for b3c-b3e sits below the chrome (y 208), ends above the pets
+     * (the 128 output px pet strip at the frame bottom), and overlaps none of the three steady cards.
+     * A rect that breaks this draws the caption over the chrome, a pet or the card.
+     */
+    // GIVEN — both placements, the steady card spots and the measured card sizes
+    const doc = shots();
+    const raw = readJson('shots.json') as { variants: { vertical_9x16: { safe: { pets_canvas_y: [number, number] } } } };
+    const [petsTop9x16, frameH9x16] = raw.variants.vertical_9x16.safe.pets_canvas_y;
+    const petStripH = frameH9x16 - petsTop9x16;
+    const crops = doc.shots.find((s) => s.id === 's2b_shelter')!.crops!;
+    const frames: Record<string, { h: number }> = { '16x9': { h: 1080 }, '9x16': { h: 1920 } };
+    const pageTop = (doc.master.stage.page_stage_y as [number, number])[0];
+
+    for (const aspect of ['16x9', '9x16']) {
+      const rect = (doc.overlays.popup_card.placement[aspect] as { caption_rect: { x: number; y: number; w: number; h: number } }).caption_rect;
+
+      // WHEN / THEN — inside the page area and above the pets
+      expect(rect.y, aspect).toBeGreaterThanOrEqual(pageTop);
+      expect(rect.y + rect.h, aspect).toBeLessThanOrEqual(frames[aspect].h - petStripH);
+
+      // THEN — no overlap with any steady card
+      for (const crop of ['A_list', 'B_pick', 'C_add']) {
+        const c = crops[crop];
+        const at = doc.overlays.popup_card.placement.steady_at[aspect][crop];
+        const w = c.measured_native_500x960!.w * c.card_scale_native!;
+        const h = c.measured_native_500x960!.h * c.card_scale_native!;
+        const overlaps = rect.x < at.x + w && at.x < rect.x + rect.w && rect.y < at.y + h && at.y < rect.y + rect.h;
+        expect(overlaps, `${aspect} ${crop}`).toBe(false);
+      }
+    }
+  });
+
+  it('declares the 9:16 length window 27.3-30.5 s', () => {
+    /** The 9:16 cut runs a little longer than the master; without a window the eval has nothing to judge it by. */
+    // GIVEN / WHEN — the 9:16 expected length
+    const v = readJson('shots.json') as { variants: { vertical_9x16: { expected_length_s?: [number, number]; nominal_length_s: number } } };
+
+    // THEN — the agreed window, with the nominal length inside it
+    expect(v.variants.vertical_9x16.expected_length_s).toEqual([27.3, 30.5]);
+    expect(v.variants.vertical_9x16.nominal_length_s).toBeGreaterThanOrEqual(27.3);
+    expect(v.variants.vertical_9x16.nominal_length_s).toBeLessThanOrEqual(30.5);
   });
 });

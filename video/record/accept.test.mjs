@@ -393,8 +393,14 @@ describe('frame-window rules fail when no tracked frame falls in the window', ()
 describe('9:16 accept rules: every base and extra text is judged on its own (acceptRulesFor)', () => {
   const s2 = shots.shots.find((s) => s.id === 's2_review');
   const baseCatchRule = 'a catch by Rex (conventions.states.catch) within 2600 ms of the dblclick';
-  // v2: updated by pets-3it.1 (the rule text in shots.json; pets-3it.4 re-measures the limit)
-  const extraCatchRule = 'a catch by Rex within 2800 ms of the dblclick, replacing the 16:9 limit of 2600 ms (the 856 px page gives a longer fall; re-measured by pets-3it.4)';
+  // the 9:16 extra catch rule, read from shots.json so a re-measured limit (pets-3it.4) needs no edit here
+  const extraCatchRule = shots.variants.vertical_9x16.shots.s2_review.extra_accept.find((r) => r.startsWith('a catch by Rex within'));
+
+  it('finds the 9:16 extra catch rule in shots.json', () => {
+    // GIVEN / WHEN — the rule looked up above; THEN — it exists, so the tests below never compare against undefined
+    expect(typeof extraCatchRule).toBe('string');
+    expect(extraCatchRule).toMatch(/replacing the 16:9 limit/);
+  });
 
   /** verify.mjs's own rule list for one shot and aspect (loop-evals/pets-o3p/verify.mjs, section 4), restated here. */
   const verifyRules = (doc, id, port) => {

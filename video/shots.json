@@ -151,7 +151,7 @@
    "sample": "camera.sample is the zoom of the steady hold that a beat's master_t samples (1.0 or 2.0). b1a_open, b3a_throw, b4a_hi and b5_lights_out sample a 1.0x hold (their 2.0x push is short or has not finished); every other beat samples a 2.0x hold. The edit puts master_t in the middle of that hold and the eval classifies beats by it. New in the adoption pass: 'card' marks the s2b popup beats (b3c_shelter, b3d_pick, b3e_add). They show no live page (their backdrop is a still), so SSIM, margin and aim do not apply; they are checked by crop disjointness from the forbidden cells and by caption presence at caption_at."
   },
   "cursor": "Never recorded. Drawn in Remotion from the logged path: a black arrow with a 2 px white outline, 22 CSS px tall, in page space, so it scales with the camera. A click on the page draws one ring (250 ms, up to 18 CSS px radius) stroked #484848 with a 1 px cream inner stroke; a double-click draws two rings 90 ms apart. A click inside a pet box draws no ring. cursor_start.visible false keeps the cursor hidden until its first move.",
-  "captions": "VT323 72 px, lowercase, #484848 on a cream #FFE3B0 pill with a 3 px olive #A4B859 border, 6 px radius, 12/22 px padding, at most 30 characters. One caption on screen at a time, and the name tag counts as a caption; the clock, the brand line and the CTA are separate layers. Placed in the band above the pet strip, beside the acting pet, at least 80 output px from its box and outside the particle column of any pet that can emit particles in that span (from a hover, feed or catch until they fade); when it does not fit beside, above that column with the same gap. Never a fixed corner.",
+  "captions": "VT323 72 px, lowercase, #484848 on a cream #FFE3B0 pill with a 3 px olive #A4B859 border, 6 px radius, 12/22 px padding, at most 30 characters. One caption on screen at a time, and the name tag counts as a caption; the clock, the brand line and the CTA are separate layers. Placed above the pets, beside the acting pet, at least 80 output px from its box and outside the particle column of any pet that can emit particles in that span (from a hover, feed or catch until they fade); when it does not fit beside, above that column with the same gap. Never a fixed corner.",
   "clapperboard": "The recorder shows a 160 ms full-viewport magenta frame (inline all:initial; opacity:1) at the start and end of every page capture, and the edit trims it. Alignment is measured from the release edge of both clappers; never assume a start lag.",
   "sfx_root": "video/assets",
   "retry": "A take that fails accept is discarded and re-run with the next seed. Nothing is patched, re-clicked or faked in the edit."
@@ -1312,7 +1312,7 @@
    "placement": {
     "sizes_output_px": "A_list 1000x397 (1x), B_pick 630x934 (2x), C_add 1000x298 (1x), from the measured rects",
     "16x9": {
-     "card": "hangs from the pinned icon: top edge at y 164 (8 px below the toolbar's bottom, y 156), left edge at the icon's centre x (1658) clamped so the card ends at least 40 px inside the frame's right edge, and its bottom clamped to the frame bottom: A x 880-1880 y 164-561, B x 1250-1880 y 146-1080, C x 880-1880 y 164-462",
+     "card": "hangs from the pinned icon: card top 8 px below the toolbar's bottom (y 164), clamped to fit the frame (16:9 B sits at y 146); left edge at the icon's centre x (1658) clamped so the card ends at least 40 px inside the frame's right edge: A x 880-1880 y 164-561, B x 1250-1880 y 146-1080, C x 880-1880 y 164-462",
      "caption_rect": {
       "x": 160,
       "y": 380,
@@ -1327,7 +1327,7 @@
      }
     },
     "9x16": {
-     "card": "hangs from the pinned icon by the same rule: top edge at y 164, left edge at the icon's centre x (818) clamped 40 px inside the right edge: A x 40-1040 y 164-561, B x 410-1040 y 164-1098, C x 40-1040 y 164-462. The card is the one element allowed past canvas x 960, for the 2.6 s of s2b (1x is the smallest integer scale).",
+     "card": "hangs from the pinned icon by the same rule: card top 8 px below the toolbar's bottom (y 164), clamped to fit the frame (every 9:16 card fits, so all sit at y 164); left edge at the icon's centre x (818) clamped 40 px inside the right edge: A x 40-1040 y 164-561, B x 410-1040 y 164-1098, C x 40-1040 y 164-462. The card is the one element allowed past canvas x 960, for the 2.89 s of s2b (1x is the smallest integer scale).",
      "caption_rect": {
       "x": 60,
       "y": 1224,
@@ -1496,7 +1496,7 @@
       "B_pick": 2,
       "C_add": 1
      },
-     "place": "overlays.popup_card.placement.9x16 (the card hangs from the pinned icon, top at y 164; the caption in its fixed rect below)"
+     "place": "overlays.popup_card.placement.9x16 (the card hangs from the pinned icon, card top 8 px below the toolbar's bottom (y 164), clamped to fit the frame; the caption in its fixed rect below)"
     },
     "s3_sheet": {
      "positions": {
@@ -1583,6 +1583,10 @@
    ],
    "prerequisite": "Set the bio link on each platform before posting.",
    "nominal_length_s": 28.0,
+   "expected_length_s": [
+    27.3,
+    30.5
+   ],
    "accept_rule": "Each 9:16 re-record keeps its shot's 16:9 accept rules (shim, timing, catch, no lie before out) with these positions, adds extra_accept, and runs its own seed search."
   },
   "readme_gif": {
@@ -1627,7 +1631,7 @@
     }
    ],
    "cursor": "drawn, with the same ring rules",
-   "caption_style": "VT323 32 px on the cream pill, top left of the band",
+   "caption_style": "VT323 32 px on the cream pill, top left of the frame",
    "audio": "none",
    "encode": "ffmpeg palettegen=max_colors=256:stats_mode=diff, paletteuse=dither=none, loop=0",
    "colour_check": "every opaque Rex pixel is within 8 RGB units of a colour in his source GIF frame, or the encode fails",
