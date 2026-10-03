@@ -101,3 +101,43 @@ describe('shotFrameCrops: follow', () => {
     expect(crops.every((c) => c.w === 960)).toBe(true);
   });
 });
+
+describe('shotFrameCrops: a hold frames its focus pet on every frame', () => {
+  it('centres the held crop on the pet\'s whole span when the pet moves out of the crop picked at the middle', () => {
+    /**
+     * What: Rex stands at CSS x 200 for most of a 2 s hold at 2.0x, then at x 560 for its last 200 ms. The
+     * crop computed at the beat's middle (x 0-960) would lose him; the hold instead centres on his span
+     * across the beat and contains his box, 16 stage px clear, on every frame.
+     * Why: a hold is one crop for the whole beat; the render checks judge every frame of it, and the
+     * fixture's long b_hover (Rex walks between his hover and click rects) aborted on exactly this.
+     * What breaks: render:fixture aborts, and a real take whose pet shifts during a hold renders a clipped pet.
+     */
+    // GIVEN
+    const tracks = [];
+    for (let t = 0; t <= 2000; t += 40) tracks.push({ t, pets: [{ id: 'rex', x: t < 1800 ? 200 : 560, y: 476, w: 64, h: 64, src: 'idle' }] });
+    const events = makeEvents({ tracks });
+    // WHEN
+    const [crops] = shotFrameCrops({ spans: [span(beat('h', 2, 'pet:rex', 'hold', 2), 0, 2000)], events, stage: STAGE_16X9, shiftMs: 0, fps: 25 });
+    // THEN — one crop, and both of Rex's boxes (stage 400-528 and 1120-1248) inside it with the 16 px margin
+    expect(new Set(crops.map((c) => JSON.stringify(c))).size).toBe(1);
+    const c = crops[0];
+    for (const [x0, x1] of [[400, 528], [1120, 1248]]) {
+      expect(x0 - c.x).toBeGreaterThanOrEqual(16);
+      expect(c.x + c.w - x1).toBeGreaterThanOrEqual(16);
+    }
+  });
+
+  it('keeps the crop picked at the middle when the pet never leaves it', () => {
+    /**
+     * What: a still pet gets the same crop as before the span rule (centred on the pet).
+     * Why: the span rule only fires when the middle crop would fail the check; honest holds must not move.
+     * What breaks: every passing take's framing shifts, and its calibrated eval numbers with it.
+     */
+    // GIVEN
+    const events = makeEvents({ tracks: stillPets({ rex: 440 }) });
+    // WHEN
+    const [crops] = shotFrameCrops({ spans: [span(beat('h', 2, 'pet:rex', 'hold', 2), 0, 2000)], events, stage: STAGE_16X9, shiftMs: 0, fps: 25 });
+    // THEN — centred on Rex's centre (CSS 472 = stage 944): x 464
+    expect(crops[0]).toMatchObject({ x: 464, w: 960 });
+  });
+});

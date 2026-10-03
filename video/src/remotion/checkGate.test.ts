@@ -1,4 +1,6 @@
 import { spawnSync } from 'node:child_process';
+import { existsSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { enforceRenderChecks, RenderCheckError } from './checkGate';
 import { planMaster } from './planMaster';
@@ -74,16 +76,23 @@ describe('planMaster (integration: the planner and checks render.mjs runs, no Re
 });
 
 describe('render.mjs --fixture --plan-only (integration, subprocess)', () => {
-  it('plans the committed fixture with every frame passing and exits 0', () => {
+  it('plans the committed fixture with every frame passing, exits 0, and leaves out/timeline.json alone', () => {
     /**
-     * What: the real CLI on the committed fixture prints "render checks: every frame passes" and exits 0.
-     * Why: render:fixture renders before any recording exists; with the bypass gone it must pass honestly.
-     * What breaks: npm run render:fixture aborts.
+     * What: the real CLI on the committed fixture prints "render checks: every frame passes", exits 0,
+     * and does not touch out/timeline.json (no render happened).
+     * Why: render:fixture renders before any recording exists, so with the bypass gone it must pass
+     * honestly. And timeline.json is written only beside a master that rendered, or verify.mjs pairs a
+     * new timeline with an old mp4.
+     * What breaks: npm run render:fixture aborts, or the eval judges a master against the wrong timeline.
      */
-    // GIVEN / WHEN
+    // GIVEN — out/timeline.json's state before
+    const tl = join(VIDEO_ROOT, 'out', 'timeline.json');
+    const before = existsSync(tl) ? statSync(tl).mtimeMs : null;
+    // WHEN
     const r = spawnSync('npx', ['tsx', 'scripts/render.mjs', '--fixture', '--plan-only'], { cwd: VIDEO_ROOT, encoding: 'utf8' });
     // THEN
     expect(r.stdout).toMatch(/render checks: every frame passes/);
     expect(r.status).toBe(0);
+    expect(existsSync(tl) ? statSync(tl).mtimeMs : null).toBe(before);
   }, 60_000);
 });
