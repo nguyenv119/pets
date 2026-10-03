@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { probeVideo } from '../../record/assemble.mjs';
-import { buildPortraitStandin } from './assemble.mjs';
+import { buildStandin } from './assemble.mjs';
 
 let workDir;
 
@@ -18,7 +18,7 @@ afterEach(() => {
   workDir = undefined;
 });
 
-describe('buildPortraitStandin (real ffmpeg)', () => {
+describe('buildStandin (real ffmpeg)', () => {
   it('crops and pads a source video to the declared output size', () => {
     /**
      * Verifies the v916 crop+pad recipe produces a video at exactly the
@@ -36,7 +36,7 @@ describe('buildPortraitStandin (real ffmpeg)', () => {
     const outPath = join(workDir, 'out.mp4');
 
     // WHEN — cropping x 50-150 (100px wide, full height) and padding 40px on top to 100x140
-    buildPortraitStandin({ srcPath, outPath, crop: { x: 50, y: 0, w: 100, h: 100 }, padW: 100, padH: 140, padY: 40, padColor: '0xfaf6ef' });
+    buildStandin({ srcPath, outPath, crop: { x: 50, y: 0, w: 100, h: 100 }, padW: 100, padH: 140, padY: 40, padColor: '0xfaf6ef' });
 
     // THEN — the output is exactly the padded size
     const probe = probeVideo(outPath);
@@ -60,7 +60,7 @@ describe('buildPortraitStandin (real ffmpeg)', () => {
     const outPath = join(workDir, 'out.mp4');
 
     // WHEN — building the stand-in
-    buildPortraitStandin({ srcPath, outPath, crop: { x: 0, y: 0, w: 100, h: 100 }, padW: 100, padH: 120, padY: 20, padColor: '0xfaf6ef' });
+    buildStandin({ srcPath, outPath, crop: { x: 0, y: 0, w: 100, h: 100 }, padW: 100, padH: 120, padY: 20, padColor: '0xfaf6ef' });
 
     // THEN — ffprobe reads back the bt709 colour space
     expect(probeVideo(outPath).color_space).toBe('bt709');

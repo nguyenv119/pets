@@ -19,13 +19,13 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildExtension } from '../lib/browser.mjs';
 import { assembleFrames, probeVideo } from '../record/assemble.mjs';
-import { buildPortraitStandin } from './synthetic/assemble.mjs';
+import { buildStandin } from './synthetic/assemble.mjs';
 import {
   buildPageTrackFrames,
   buildS1InboxObserved,
   buildS3SheetObserved,
   buildS4ArticleNightObserved,
-  shiftPortraitEvents,
+  shiftStandinEvents,
 } from './synthetic/page-events.mjs';
 import { buildPopupEvents } from './synthetic/popup-events.mjs';
 import { capturePopupTake } from './synthetic/popup-take.mjs';
@@ -106,8 +106,8 @@ async function buildPageShots(shotsDoc) {
     for (const [g, dir] of [[LAND, join(OUT_DIR, shotId)], [V916, join(OUT_DIR, 'v916', shotId)]]) {
       mkdirSync(dir, { recursive: true });
       const demoPath = join(dir, 'demo.mp4');
-      buildPortraitStandin({ srcPath: fixtureMp4, outPath: demoPath, crop: g.crop, padW: g.pad.w, padH: g.pad.h, padY: g.pad.y, padColor: g.pad.color });
-      writeEvents(dir, { ...shiftPortraitEvents(events, g.shift), viewport: g.viewport });
+      buildStandin({ srcPath: fixtureMp4, outPath: demoPath, crop: g.crop, padW: g.pad.w, padH: g.pad.h, padY: g.pad.y, padColor: g.pad.color });
+      writeEvents(dir, { ...shiftStandinEvents(events, g.shift), viewport: g.viewport });
       written.push({ label: g === LAND ? shotId : `v916/${shotId}`, path: demoPath });
     }
   }

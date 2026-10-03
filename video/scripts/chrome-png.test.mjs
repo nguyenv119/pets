@@ -37,7 +37,8 @@ describe('chromeTargets / expectedIcon / iconProblem', () => {
      * Why: overlays.popup_card.placement.9x16 hangs the card from that centre.
      * What breaks: the 9:16 card hangs from empty toolbar.
      */
-    // GIVEN / WHEN
+    // GIVEN — the chrome spec from shots.json
+    // WHEN
     const wide = expectedIcon(chrome, 960);
     const narrow = expectedIcon(chrome, 540);
     // THEN
@@ -54,10 +55,14 @@ describe('chromeTargets / expectedIcon / iconProblem', () => {
      */
     // GIVEN
     const want = { x: 821, y: 51, w: 16, h: 16 };
-    // WHEN / THEN
-    expect(iconProblem({ x: 821.25, y: 51, w: 16, h: 16 }, want)).toBeNull();
-    expect(iconProblem({ x: 819, y: 51, w: 16, h: 16 }, want)).toMatch(/pinned icon at .*819.*expected .*821/);
-    expect(iconProblem(null, want)).toMatch(/not on the page/);
+    // WHEN
+    const close = iconProblem({ x: 821.25, y: 51, w: 16, h: 16 }, want);
+    const shifted = iconProblem({ x: 819, y: 51, w: 16, h: 16 }, want);
+    const missing = iconProblem(null, want);
+    // THEN
+    expect(close).toBeNull();
+    expect(shifted).toMatch(/pinned icon at .*819.*expected .*821/);
+    expect(missing).toMatch(/not on the page/);
   });
 });
 

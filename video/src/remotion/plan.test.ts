@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { sampleCursor } from './Cursor';
 import { STAGE_16X9, STAGE_9X16 } from './camera';
 import { buildPromoPlan, popupCursor, withSharpFrame, type PlanBeat } from './plan';
-import { makeEvents, stillPets } from './testEvents';
+import { loadShots, loadSyntheticPopupEvents, makeEvents, stillPets } from './testEvents';
 import { buildTimeline, type ShotsDoc } from './timeline';
 
 describe('popupCursor', () => {
@@ -85,6 +85,26 @@ describe('buildPromoPlan: the chrome strip per page beat', () => {
     // THEN
     expect(land.beats.map((b) => b.chromeSrc)).toEqual(['set/chrome/review.png']);
     expect(port.beats.map((b) => b.chromeSrc)).toEqual(['set/chrome/review-narrow.png']);
+  });
+
+  it('gives a card beat (the popup take, no frameCrops) no chrome strip', () => {
+    /**
+     * What: every beat of the real s2b_shelter popup take plans with chromeSrc undefined.
+     * Why: a card beat draws the popup card on its own, not a page under the browser chrome; only page beats
+     * (frameCrops) name a chrome PNG.
+     * What breaks: the popup card renders with a page's tab strip stacked above it.
+     */
+    // GIVEN — the real popup shot and its synthetic take, in the 9:16 (the 16:9 card placement is read by v1 code until pets-3it.5,
+    // which un-skips the 16:9 card tests in renderChecks.test.ts)
+    const shots = { ...loadShots(), edit_order: ['s2b_shelter'] };
+    const eventsByShotId = { s2b_shelter: loadSyntheticPopupEvents() };
+    const edit = buildTimeline({ shots, stage: STAGE_9X16, aspect: '9x16', eventsByShotId, sourceByShotId: { s2b_shelter: '/r/s2b.mp4' }, music: 'm' });
+    // WHEN
+    const out = buildPromoPlan({ edit, shots, eventsByShotId, stagedByShotId: { s2b_shelter: 's2b/demo.mp4' }, stage: STAGE_9X16, aspect: '9x16', outputWidth: 1080, outputHeight: 1920, musicSrc: 'm', iconPath: 'i' });
+    // THEN
+    expect(out.beats.length).toBeGreaterThan(0);
+    expect(out.beats.every((b) => b.frameCrops === undefined)).toBe(true);
+    expect(out.beats.map((b) => b.chromeSrc)).toEqual(out.beats.map(() => undefined));
   });
 
   it('refuses a page shot that names no page', () => {

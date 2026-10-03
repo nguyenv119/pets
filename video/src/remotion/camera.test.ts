@@ -1,5 +1,16 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { STAGE_16X9, STAGE_9X16, floorAnchoredCrop, smoothedFocusX } from './camera';
+import { GIF_SOURCE_STAGE } from './renderChecks';
+import { loadFixtureEventsV2, V1_FIXTURE_TOP_CUT_CSS, VIDEO_ROOT } from './testEvents';
+
+/** The slice of shots.json the stage constants copy. */
+interface StageSpec {
+  viewport: { width: number; height: number };
+  master: { width: number; height: number; stage: { page_stage_y: [number, number]; chrome: { css_h: number; out_h: number } } };
+  variants: { vertical_9x16: { canvas: { width: number; height: number } } };
+}
 
 describe('floorAnchoredCrop', () => {
   it('shows the whole stage, chrome included, at 1.0x', () => {
@@ -162,5 +173,30 @@ describe('smoothedFocusX', () => {
      * case — this function is not responsible for that fallback.
      */
     expect(smoothedFocusX([], 100)).toBe(0);
+  });
+});
+
+describe('the stage constants against shots.json', () => {
+  it('pins STAGE_16X9, STAGE_9X16, the GIF source stage and the v1 fixture cut to the approved spec', () => {
+    /**
+     * What: both stages are the master / 9:16 canvas size with the page at master.stage.page_stage_y[0]
+     * (== chrome.out_h); the GIF source stage is the 16:9 capture (viewport height x 2); the v1 fixture cut is
+     * chrome.css_h and its v2 viewport is shots.json's.
+     * Why: these constants are hand-copied numbers; shots.json is the approved contract the eval reads.
+     * What breaks: an edit to shots.json (a taller chrome, a new viewport) leaves the camera, overlays and
+     * checks framing the old geometry with every other test still green.
+     */
+    // GIVEN
+    const shots: StageSpec = JSON.parse(readFileSync(join(VIDEO_ROOT, 'shots.json'), 'utf8'));
+    const { master } = shots;
+    // WHEN
+    const v2 = loadFixtureEventsV2();
+    // THEN
+    expect(master.stage.page_stage_y[0]).toBe(master.stage.chrome.out_h);
+    expect(STAGE_16X9).toEqual({ width: master.width, height: master.height, pageY: master.stage.page_stage_y[0] });
+    expect(STAGE_9X16).toEqual({ ...shots.variants.vertical_9x16.canvas, pageY: master.stage.page_stage_y[0] });
+    expect(GIF_SOURCE_STAGE).toEqual({ width: shots.viewport.width * 2, height: shots.viewport.height * 2, pageY: 0 });
+    expect(V1_FIXTURE_TOP_CUT_CSS).toBe(master.stage.chrome.css_h);
+    expect(v2.viewport).toEqual({ width: shots.viewport.width, height: shots.viewport.height });
   });
 });

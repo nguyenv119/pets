@@ -24,9 +24,40 @@ describe('textBounds', () => {
     const port = textBounds('9x16', STAGE_9X16);
     // THEN
     expect(land).toEqual({ x: 48, y: 256, w: 1824, h: 776 });
+    expect(port.y).toBe(250);
     expect(port.y).toBeGreaterThan(STAGE_9X16.pageY);
     expect(port.y + port.h).toBe(1872);
   });
+});
+
+describe('buildOverlays: the s4 clock', () => {
+  for (const aspect of ['16x9', '9x16'] as const) {
+    it(`${aspect}: puts the clock below the chrome`, () => {
+      /**
+       * What: the real s4_article_night clock layer's rect starts at or below stage.pageY.
+       * Why: shots.json keeps every overlay off the drawn browser chrome (9:16: "below the chrome (y 208)"); the
+       * clock is placed by its own rule, not by textBounds, so the area test above does not cover it.
+       * What breaks: the clock draws over the tab strip or the address bar.
+       */
+      // GIVEN — the real s4 beats with two pets standing on the floor
+      const shots = { ...loadShots(), edit_order: ['s4_article_night'] };
+      const stage = aspect === '16x9' ? STAGE_16X9 : STAGE_9X16;
+      const events = makeEvents({
+        roster: [{ id: 'rex', name: 'Rex', type: 'dog', color: 'brown' }, { id: 'pip', name: 'Pip', type: 'chicken', color: 'white' }, { id: 'bao', name: 'Bao', type: 'panda', color: 'black' }],
+        durationMs: 13000,
+        tracks: stillPets({ rex: 200, pip: 260, bao: 320 }, 13000, aspect === '9x16' ? 792 : 372),
+        observed: [{ t: 0, kind: 'first_paint' }, { t: 500, kind: 'pets_ready' }, { t: 3000, kind: 'sleep' }],
+      });
+      const eventsByShotId = { s4_article_night: events };
+      const edit = buildTimeline({ shots, stage, aspect, eventsByShotId, sourceByShotId: { s4_article_night: '/r/s4.mp4' }, music: 'm' });
+      // WHEN
+      const items = buildOverlays({ edit, shots, eventsByShotId, stage, aspect, outputWidth: stage.width, outputHeight: stage.height });
+      // THEN
+      const clock = items.find((i) => i.kind === 'clock');
+      expect(clock).toBeDefined();
+      expect(clock!.rect.y).toBeGreaterThanOrEqual(stage.pageY);
+    });
+  }
 });
 
 describe('wrapCaption', () => {

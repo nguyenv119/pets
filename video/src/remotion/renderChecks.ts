@@ -131,7 +131,7 @@ export function runRenderChecks(input: RenderCheckInput): FrameViolation[] {
 }
 
 /** The 16:9 capture as the GIF reads it: native px (stage y = 2 x CSS y), no chrome above it. */
-const GIF_SOURCE_STAGE: StageConfig = { width: 1920, height: 872, pageY: 0 };
+export const GIF_SOURCE_STAGE: StageConfig = { width: 1920, height: 872, pageY: 0 };
 
 /**
  * The README GIF's text checks (variants.readme_gif): on every GIF frame

@@ -93,7 +93,6 @@ export function focusPets(focus: string, events: Events): string[] {
  * A pet's box in STAGE px at logged time `loggedMs`: the nearest track
  * frame's box, or (no tracks, as in the fixture) the nearest click rect on
  * that pet. CSS -> native (x2) -> stage (plus the chrome above the page, stage.pageY).
- * Mirrors verify.mjs's petBoxStage.
  */
 export function petBoxStage(events: Events, petId: string, loggedMs: number, stage: StageConfig): Rect | null {
   let box: Rect | null = null;

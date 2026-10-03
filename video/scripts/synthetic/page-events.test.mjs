@@ -10,7 +10,7 @@ import {
   buildS4ArticleNightObserved,
   currentPetState,
   interpolatePetX,
-  shiftPortraitEvents,
+  shiftStandinEvents,
 } from './page-events.mjs';
 
 const SRC_EVENTS = [
@@ -244,7 +244,7 @@ describe('buildS4ArticleNightObserved', () => {
   });
 });
 
-describe('shiftPortraitEvents', () => {
+describe('shiftStandinEvents', () => {
   it('shifts every x/y-bearing field by (dx, dy), leaving other fields untouched', () => {
     /**
      * Verifies the v916 coordinate shift touches cursorTrack, clicks
@@ -269,7 +269,7 @@ describe('shiftPortraitEvents', () => {
       tracks: [{ t: 0, pets: [{ id: 'rex', x: 10, y: 20, w: 64, h: 64, src: 'idle' }] }],
     };
     // WHEN — shifting by (-420, +190)
-    const shifted = shiftPortraitEvents(events, { dx: -420, dy: 190 });
+    const shifted = shiftStandinEvents(events, { dx: -420, dy: 190 });
     // THEN — every coordinate moved, non-coordinate fields untouched
     expect(shifted.cursorTrack[0]).toEqual({ t: 0, x: -410, y: 210 });
     expect(shifted.clicks[0].x).toBe(-410);
