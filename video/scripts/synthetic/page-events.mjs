@@ -5,12 +5,11 @@
 // derived from the logged `src` (pet, from, to, x) transitions — never
 // hand-invented positions, per the bead's step 6.
 //
-// No Node/browser APIs here (pure data in, data out), so this module is
-// cheap to unit-test without Chromium or ffmpeg.
+// Pure data in, data out (no Chromium or ffmpeg is launched), so this
+// module is cheap to unit-test. It imports only PET_BOX_PX from
+// lib/browser.mjs, the one source of the seeded pet box size.
 
-const BOX_W = 64;
-const BOX_H = 64;
-const BOX_Y = 476; // conventions.units: boxes sit at y 476-540 (innerHeight - 64)
+import { PET_BOX_PX } from '../../lib/browser.mjs';
 
 /**
  * Returns every `src` event for `petId` that carries a numeric `x`, sorted
@@ -67,11 +66,15 @@ export function currentPetState(observed, petId, tMs) {
 /**
  * Builds a page shot's `tracks[]` (schema.ts TrackFrame[]) by sampling
  * every pet's interpolated x/state every `stepMs` across [0, durationMs].
- * y/w/h are the fixed sprite-box constants every page shot seeds with
- * (conventions.units, lib/browser.mjs seedStorage): only x and the
- * animation state vary, because that is all the recorder ever logs.
+ * Every box is PET_BOX_PX square and stands on the viewport bottom,
+ * y = innerHeight - PET_BOX_PX (lib/browser.mjs seedPositions): only x and
+ * the animation state vary, because that is all the recorder ever logs.
+ * `innerHeight` is the viewport the `observed` coordinates are in (540
+ * for the v1 fixture before its stand-in shift, 436 for a 16:9 v2 shot).
  */
-export function buildPageTrackFrames({ observed, petIds, durationMs, stepMs = 40 }) {
+export function buildPageTrackFrames({ observed, petIds, durationMs, innerHeight, stepMs = 40 }) {
+  if (!Number.isFinite(innerHeight)) throw new Error('buildPageTrackFrames: needs the viewport innerHeight');
+  const y = innerHeight - PET_BOX_PX;
   const frames = [];
   for (let t = 0; t <= durationMs; t += stepMs) {
     frames.push({
@@ -79,9 +82,9 @@ export function buildPageTrackFrames({ observed, petIds, durationMs, stepMs = 40
       pets: petIds.map((id) => ({
         id,
         x: interpolatePetX(observed, id, t),
-        y: BOX_Y,
-        w: BOX_W,
-        h: BOX_H,
+        y,
+        w: PET_BOX_PX,
+        h: PET_BOX_PX,
         src: currentPetState(observed, id, t),
       })),
     });

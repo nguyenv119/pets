@@ -7,7 +7,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { controlVerdict } from './gif-gate-control.mjs';
+import { controlVerdict, ENCODES, proofFilter } from './gif-gate-control.mjs';
 import {
   assertFramesFromRun,
   candidateSprites,
@@ -270,6 +270,24 @@ describe('assertFramesFromRun', () => {
     // GIVEN / WHEN / THEN
     expect(() => assertFramesFromRun('/v/build/run-1', { variants: { gif: { run: 'synthetic' } } })).toThrow(/rendered from run "synthetic", not run-1/);
     expect(() => assertFramesFromRun('/v/build/run-1', { variants: {} })).toThrow(/rendered from run "undefined"/);
+  });
+});
+
+describe('proofFilter', () => {
+  it.each(['tagged', 'untagged'])('%s: cuts the v1 proof capture to the v2 16:9 capture before its own encode filter', (variant) => {
+    /**
+     * What: both control encodes crop the 1920x1080 proof frames to the bottom 1920x872 (CSS y 104-540), the
+     * same cut make-synthetic-run gives the fixture's 16:9 stand-in, and only then apply the variant's filter.
+     * Why: the synthetic run's events put the pets on the v2 floor (CSS y 372); uncropped v1 proof footage has
+     * them at y 476, so the gate would compare Rex's tracked box with the wrong pixels.
+     * What breaks: the PASS control fails on geometry, not colour, and the control no longer tests the gate.
+     */
+    // GIVEN — the variant's own encode filter
+    const own = ENCODES[variant][1];
+    // WHEN
+    const vf = proofFilter(variant);
+    // THEN
+    expect(vf).toBe(`tpad=stop_mode=clone:stop_duration=2,crop=1920:872:0:208,${own}`);
   });
 });
 

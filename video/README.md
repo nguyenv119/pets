@@ -6,6 +6,17 @@ footage in Remotion, and writes the finished files to `out/`. It is its own
 npm project, so Playwright and Remotion never enter the extension's
 `npm ci` at the repo root.
 
+## What the film looks like
+
+Each page is filmed in a real 960x436 CSS viewport at device pixel ratio 2
+(1920x872). The edit stacks a drawn Mac window and dark browser chrome,
+208 px tall, on top of it, with the Pixel Pets icon pinned in the toolbar.
+The pets stand on the frame's bottom edge at every zoom. The 9:16 cut is
+the same window made narrow: the chrome over a 540x856 CSS viewport, filling
+1080x1920. The adoption card hangs from the pinned icon over a dimmed still
+of the last review frame. The music is "Funny and Cute Town Theme" by ISAo
+(credit below).
+
 ## Prerequisites
 
 - Node 24 or newer (`node -v`). The pipeline stops at once on an older Node.
@@ -33,7 +44,7 @@ fails and names it. Every line of output also goes to `out/pipeline.log`.
 | 1 record | `record/record.mjs` films every shot in `shots.json` at 16:9, re-records the page shots at 9:16, and films the popup adoption once, into `build/<timestamp>/`. |
 | 2 render | `scripts/render.mjs --run build/<timestamp>` four times: the 16:9 master, the 9:16 cut, the README GIF frames, and the still at Rex's wave (`src:rex:swipe+600`, no captions). Each render records its run and the sha256 of every recording it read in `out/render-manifest.json`. |
 | 3 loudness | Two-pass EBU R128 normalisation of both cuts to -16 LUFS, -1 dBTP, LRA 11. The video stream is copied untouched. |
-| 4 gif | Halves the GIF frames to 960x360 and encodes them with a 256-colour palette and no dither, then runs the colour gate (below). |
+| 4 gif | Halves the GIF frames to 960x360 and encodes each scene with its own 256-colour palette and no dither, then runs the colour gate (below). The GIF shows the page only, CSS y 76-436 of the capture, with no browser chrome. |
 | 5 thumbnail | Cuts an unscaled 1280x720 crop around Rex from the still and draws the icon and "Pixel Pets" at least 80 px from him. The X poster is the uncropped still. |
 | 6 describe | Fills `description.template.txt` with a credit (from `assets/CREDITS.json`) for every species in the recorded rosters and for the four species cells the popup card shows (chicken, crab, panda, snail), and with the music track the timeline used. |
 | 7 contact-sheet | One tile per second of the master, for a person to skim. Not a gate. |

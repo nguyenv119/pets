@@ -78,7 +78,9 @@ function buildPageEvents(shotId, shot, template) {
   // rule forbids.
   const trackedIds = ['rex', 'bao'];
   const petIds = shot.seed.roster.map((r) => r.id).filter((id) => trackedIds.includes(id));
-  const tracks = buildPageTrackFrames({ observed, petIds, durationMs: template.durationMs, stepMs: 40 });
+  // Built in the fixture's own (v1, 960x540) coordinates: buildPageShots then
+  // moves them onto each v2 viewport with shiftStandinEvents.
+  const tracks = buildPageTrackFrames({ observed, petIds, durationMs: template.durationMs, innerHeight: template.viewport.height, stepMs: 40 });
 
   return {
     ...template,
