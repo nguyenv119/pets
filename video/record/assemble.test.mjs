@@ -49,14 +49,16 @@ describe('buildConcatList', () => {
     expect(Math.abs(drift)).toBeLessThanOrEqual(1000 / 120 + 0.01);
   });
 
-  it('gives a frame whose timestamp steps backwards a minimal duration and lets the next frame start back on its own time', () => {
+  it('places a frame delivered late at its own earlier timestamp, so the frame before it keeps its full screen time', () => {
     /**
-     * CDP occasionally delivers a frame stamped earlier than the one before it
-     * (seen live on the popup take: -33.5 ms). That frame cannot be shown for a
-     * negative time, so it gets the 1/120 s minimum, but the frames after it
-     * must return to their own timestamps rather than inherit the overshoot.
-     * If this breaks, one late frame shifts the whole rest of the take, and the
-     * end clapper reads tens of ms late.
+     * CDP now and then delivers a frame stamped earlier than the one before
+     * it (the proof capture has 7 in 1062 frames, the worst -35.9 ms). The
+     * stamp is the true one: in win attempt 2's failed s1_inbox take, the
+     * frame delivered after the magenta clapper showed the keep-compositing
+     * dot's first shade with no magenta, content from before the clap. Shown
+     * in arrival order, the late frame took the newer frame's screen time.
+     * If this breaks, the newer frame flickers for 1/120 s and the stale one
+     * fills its place.
      */
     // GIVEN — four frames 16.7 ms apart where the third is stamped 33.5 ms before the second
     const frames = [
@@ -67,11 +69,49 @@ describe('buildConcatList', () => {
     ];
 
     // WHEN — the concat list is built and read back
-    const starts = assembledStartsMs(buildConcatList(frames));
+    const list = buildConcatList(frames);
+    const starts = assembledStartsMs(list);
+    const order = list.trim().split('\n').filter((l) => l.startsWith('file ')).slice(0, -1).map((l) => l.slice(6, -1));
 
-    // THEN — the stepped-back frame shows for 1/120 s, and the next frame starts at its own CDP time again
-    expect(starts[2] - starts[1]).toBeCloseTo(1000 / 120, 3);
-    expect(starts[3]).toBeCloseTo(50.1, 3);
+    // THEN — the late frame goes first, at its own time, and b shows from its stamp until d's
+    expect(order).toEqual(['c.png', 'a.png', 'b.png', 'd.png']);
+    expect(starts[1]).toBeCloseTo(16.8, 3);
+    expect(starts[3] - starts[2]).toBeCloseTo(33.4, 3);
+  });
+
+  it('keeps the start clapper on screen when the frame delivered after it was stamped before it', () => {
+    /**
+     * The failure that ended win attempt 2 (s1_inbox/16:9, take dir kept):
+     * the 160 ms clapper is a single screencast frame, because nothing moves
+     * under it, and the pre-clap frame arrived right after it. Arrival order
+     * gave the magenta frame 1/120 s and the stale white frame the 157 ms
+     * hold, so the 25 fps video had no start clapper and the sync step threw
+     * "found 1". The magenta frame must last from its own stamp to the next
+     * newer frame, the release.
+     */
+    // GIVEN — the failing take's leading frames: white pre-roll, the magenta
+    // clap, the stale pre-clap frame (stamped 2 ms before the clap), then the
+    // release 165.6 ms after the clap
+    const frames = [
+      { file: 'preroll.png', ts: 1000.0 },
+      { file: 'magenta.png', ts: 1000.530063 },
+      { file: 'stale.png', ts: 1000.528 },
+      { file: 'release.png', ts: 1000.695703 },
+      { file: 'next.png', ts: 1000.710484 },
+    ];
+
+    // WHEN — the concat list is built and read back
+    const list = buildConcatList(frames);
+    const files = list.trim().split('\n').filter((l) => l.startsWith('file ')).map((l) => l.slice(6, -1));
+    const starts = assembledStartsMs(list);
+    const magenta = files.indexOf('magenta.png');
+
+    // THEN — the magenta frame holds until the release's own CDP time
+    // (695.703 ms after the pre-roll frame), for well over the 40 ms a 25 fps
+    // frame needs; the stale frame's 1/120 s pad comes out of it
+    expect(files[magenta + 1]).toBe('release.png');
+    expect(starts[magenta + 1]).toBeCloseTo(695.703, 2);
+    expect(starts[magenta + 1] - starts[magenta]).toBeGreaterThan(150);
   });
 
   it('writes each well-spaced frame for exactly the gap to the next timestamp', () => {

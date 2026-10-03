@@ -218,7 +218,7 @@ What the viewer has at each point:
   - **Scene A (inbox):** from `cursor_depart` − 800 ms to `heart_on` + 1500 ms, about 4.9 s, with "hover: he waves." and "click: a treat."
   - **Scene B (review):** from `pets_ready` to `catch` + 2000 ms, about 3.8 s, with "double-click: a ball." and "good boy." Only Rex is on the page, and the dark theme keeps the ball visible.
 - **Crop band:** CSS y 180-540 on both takes.
-- **Encode:** 12.5 fps (8 cs per frame, exact), `palettegen=max_colors=256:stats_mode=diff`, `paletteuse=dither=none`, `loop=0`, no audio.
+- **Encode:** 12.5 fps (8 cs per frame, exact), one 256-colour palette per scene (`palettegen stats_mode=diff` plus every rostered pet's exact sprite colours reserved; one palette over the light and dark scenes starved the dark one), `paletteuse=dither=none`, `loop=0`, no audio.
 - **Colour check:** every opaque Rex pixel must be within 8 RGB units of a colour in his source GIF frame. Otherwise the encode fails.
 - **Loop:** a hard cut from Rex sitting after the catch back to the inbox before the cursor arrives.
 - **Credit under the GIF, in the README:** "Dog sprites: NVPH Studio (CC BY-ND 4.0), via vscode-pets by Anthony Shaw. Full credits below."

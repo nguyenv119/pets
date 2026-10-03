@@ -46,6 +46,15 @@ const ICON = 'icons/icon-128.png';
 const GIF_WIDTH = 1920;
 const RENDER_OPTS = { imageFormat: 'png', chromiumOptions: { gl: 'angle' } };
 const CONCURRENCY = 2;
+/**
+ * The master's encode (16x9 and 9x16). yuv444p, not yuv420p: ffmpeg's default yuv420p -> rgb24 path (what
+ * `ffmpeg -i master frame.png` and the eval run) darkens every pixel by about (2, 1, 2) RGB units, so on win
+ * attempt 1 a 16:9 page beat's master sat 1.10-2.30 from its own recording (1.69 on b3b_catch) while
+ * the unencoded Remotion frame sat 0.06 from it. crf, the scaler and the cursor moved that by <= 0.02.
+ * The recordings are yuv444p too. Playback cost: High 4:4:4 h264 has no hardware decode on most phones
+ * and Safari/QuickTime will not play it; YouTube, X and the short-form apps re-encode uploads.
+ */
+export const MASTER_ENCODE = { codec: 'h264', crf: 16, pixelFormat: 'yuv444p' };
 
 export function parseArgs(argv) {
   const args = { variant: '16x9' };
@@ -237,7 +246,7 @@ async function main() {
   const t0 = Date.now();
   try {
     await withBundle(port ? 'Promo9x16' : 'Promo16x9', plan, (serveUrl, composition) =>
-      renderMedia({ composition, serveUrl, codec: 'h264', outputLocation: partial, inputProps: plan, crf: 16, concurrency: CONCURRENCY, ...RENDER_OPTS }),
+      renderMedia({ composition, serveUrl, ...MASTER_ENCODE, outputLocation: partial, inputProps: plan, concurrency: CONCURRENCY, ...RENDER_OPTS }),
     );
   } catch (err) {
     if (existsSync(partial)) unlinkSync(partial);

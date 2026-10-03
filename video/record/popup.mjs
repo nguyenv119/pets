@@ -13,7 +13,7 @@ import { assembleFrames, extractGrayCrop, generateSignalStats, probeVideo } from
 import { installClap } from './clap.js';
 import { shotDir } from './layout.mjs';
 import { dropLeadingMisSizedFrames, startScreencast } from './screencast.mjs';
-import { computeSync, demoMsOf, findTrimBeforeMs, measureVideoLagFromChange, splitGrayFrames } from './sync.mjs';
+import { computeSync, demoMsOf, findTrimBeforeMsOrDiscard, measureVideoLagFromChange, splitGrayFrames } from './sync.mjs';
 import { ownProfileDir, profileDirs } from './tempdirs.mjs';
 import { VIDEO_LAG_MAX_MS } from './video-lag.mjs';
 
@@ -146,7 +146,7 @@ async function assertLayout(page, layoutExpect) {
   return result;
 }
 
-async function runPopupActions(page, actions, cursor) {
+export async function runPopupActions(page, actions, cursor) {
   const observed = [];
   let lastNameClickPoint = null;
 
@@ -200,9 +200,18 @@ async function runPopupActions(page, actions, cursor) {
         await page.mouse.down();
         const downT = await pageNow(page);
         observed.push({ t: downT, kind: action.event, x, y });
-        await sleep(action.release_after_ms ?? 240);
+        // Hold until the PAGE clock says release_after_ms has passed: a Node
+        // sleep of 240 ms measured 239.8 ms on the page clock once.
+        const releaseMs = action.release_after_ms ?? 240;
+        let upT = await pageNow(page);
+        while (upT - downT < releaseMs) {
+          await sleep(Math.max(1, Math.ceil(releaseMs - (upT - downT))));
+          upT = await pageNow(page);
+        }
+        // Logged as the mouseup is SENT: the mouseup runs addPet(), whose
+        // storage write can land before page.mouse.up() resolves, so a clock
+        // read after it put add_mouseup after roster_saved.
         await page.mouse.up();
-        const upT = await pageNow(page);
         observed.push({ t: upT, kind: 'add_mouseup', x, y });
         break;
       }
@@ -441,7 +450,14 @@ export async function recordPopupTake({ shot, doc, ext, opts, runId, buildDir })
 
     const dumpPath = join(take.workDir, 'sig.txt');
     const sig = generateSignalStats(mp4Path, dumpPath);
-    const trimBeforeMs = findTrimBeforeMs(sig);
+    const clapper = findTrimBeforeMsOrDiscard(sig);
+    if (clapper.discard) {
+      rmSync(take.workDir, { recursive: true, force: true });
+      rejections.push(clapper.discard.message);
+      console.log(`[${shot.id}] attempt ${attempt} discarded: ${clapper.discard.message}`);
+      continue;
+    }
+    const { trimBeforeMs } = clapper;
     // s2b_shelter has no heart, so it measures its own lag the way record.mjs
     // measures the heart's: the first demo.mp4 frame at or after the logged
     // first keystroke whose #pet-name field shows the typed "P", minus the

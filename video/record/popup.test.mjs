@@ -1,5 +1,12 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { buildPopupEvents } from './popup.mjs';
+import { evaluateRule } from './accept.mjs';
+import { buildPopupEvents, runPopupActions } from './popup.mjs';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const s2bShot = JSON.parse(readFileSync(join(HERE, '..', 'shots.json'), 'utf-8')).shots.find((s) => s.id === 's2b_shelter');
 
 /**
  * A popup take shaped like the real one that exposed the old origin: capture
@@ -64,5 +71,79 @@ describe('buildPopupEvents', () => {
     expect(at('popup_ready')).toBeCloseTo(9.2, 6);
     expect(events.tracks[0].t).toBeCloseTo(-590.8, 6);
     expect(events.tracks[1].t).toBeCloseTo(1309.2, 6);
+  });
+});
+
+/**
+ * A stand-in for the popup's Playwright page (a browser-only API, so no real
+ * or in-memory alternative runs here). Its clock is the real one. Like the
+ * shipped popup, the mouseup itself runs addPet(), so storage changes while
+ * page.mouse.up() is still being awaited, before any later page.evaluate.
+ */
+function fakePopupPage() {
+  const sent = [];
+  let rosterSaved = null;
+  const now = () => performance.timeOrigin + performance.now();
+  const page = {
+    evaluate: async (_fn, selector) => (selector === undefined ? now() : { x: 100, y: 100, w: 80, h: 30 }),
+    mouse: {
+      move: async () => {},
+      down: async () => { sent.push({ kind: 'down', t: now() }); },
+      up: async () => {
+        sent.push({ kind: 'up', t: now() });
+        rosterSaved = { t: now(), roster: [{ id: '1b4e28ba-2fa1-4d2e-8b6a-1b4e28ba2fa1', type: 'chicken', color: 'white', name: 'Pip' }] };
+        await new Promise((r) => setTimeout(r, 2)); // CDP's reply arrives after the page has handled the event
+      },
+    },
+    waitForFunction: async () => ({ jsonValue: async () => rosterSaved }),
+  };
+  return { page, sent };
+}
+
+describe('runPopupActions: the Add Pet press', () => {
+  const press = s2bShot.actions.find((a) => a.kind === 'press');
+  const waitSaved = s2bShot.actions.find((a) => a.kind === 'wait_state' && a.state === 'roster_saved');
+  const ruleOf = (prefix) => s2bShot.accept.find((r) => r.startsWith(prefix));
+
+  it('logs add_mouseup at the moment the mouseup is sent, before the storage change it causes', () => {
+    /**
+     * The mouseup runs addPet(), which writes pixel-pets-v1 straight away.
+     * Reading the page clock AFTER page.mouse.up() resolved put add_mouseup
+     * after roster_saved (-0.4 ms on the real take), so the roster rule
+     * (0-1000 ms after the mouseup) discarded good takes. Logged as sent,
+     * the mouseup precedes everything it causes.
+     */
+    // GIVEN — a popup page whose mouseup saves the roster synchronously
+    const { page, sent } = fakePopupPage();
+
+    // WHEN — the shot's own press and roster_saved wait run
+    return runPopupActions(page, [press, waitSaved], { x: 0, y: 0 }).then((observed) => {
+      // THEN — add_mouseup is logged no later than the mouseup was sent, and before roster_saved
+      const up = observed.find((o) => o.kind === 'add_mouseup');
+      const saved = observed.find((o) => o.kind === 'roster_saved');
+      expect(up.t).toBeLessThanOrEqual(sent.find((s) => s.kind === 'up').t);
+      expect(saved.t - up.t).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  it('passes the eval rules timed from that mouseup (240 ms after the mousedown, roster saved within 1000 ms)', () => {
+    /**
+     * Logging the mouseup earlier must not break the other side of the
+     * window: the mouseup is still at add_mousedown+240 or later, as the
+     * shot's rule and the epic eval's rederive both require.
+     */
+    // GIVEN — the same press on a page whose mouseup saves the roster
+    const { page } = fakePopupPage();
+
+    // WHEN — the actions run and the two mouseup rules are judged on their log
+    return runPopupActions(page, [press, waitSaved], { x: 0, y: 0 }).then((observed) => {
+      const events = { observed, roster: [], tracks: [] };
+      const timing = evaluateRule(ruleOf('the mouseup on Add Pet is sent'), events);
+      const saved = evaluateRule(ruleOf('within 1000 ms of that mouseup'), events);
+
+      // THEN — both pass
+      expect(timing.pass, timing.detail).toBe(true);
+      expect(saved.pass, saved.detail).toBe(true);
+    });
   });
 });

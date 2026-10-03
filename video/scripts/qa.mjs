@@ -9,8 +9,9 @@
 //   provenance out/render-manifest.json names this run for 16x9, 9x16, gif and
 //              still, with each source's sha256 = this run's demo.mp4; and the
 //              GIF's first treat frame (out/gif-frames/ at the inbox scene's
-//              heart_on) matches THIS run's s1_inbox recording at the same
-//              moment over Rex's tracked box, SSIM >= 0.8
+//              heart_on) matches THIS run's s1_inbox recording at the moment
+//              that frame shows, one frame against one frame, over Rex's
+//              tracked box, SSIM >= 0.8
 //   recorder   wave, chase_start, catch, eat, greet and sleep observed across
 //              the 16:9 shots and, separately, the 9:16 shots; the popup take
 //              logs type_selected (chicken), color_selected (white) and
@@ -24,7 +25,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { POPUP_SHOT_ID, shotDir } from '../record/layout.mjs';
 import { demoMsShowing, loggedMsAt } from '../src/remotion/cameraPath.ts';
-import { checkGif, FRAMES_DIR, GIF_PATH, gifFrameAt, planScenes, rexAt } from './gif.mjs';
+import { checkGif, FRAMES_DIR, GIF_PATH, gifFrameAt, gifFrameMoment, planScenes, rexAt } from './gif.mjs';
 import { measureLufs } from './loudness.mjs';
 import { CUT_FILES, isMain, OUT_DIR, probe, readJson, runArg, VIDEO_DIR } from './stage-io.mjs';
 
@@ -35,11 +36,13 @@ export const CUTS = {
 export const LUFS = [-18, -14];
 /**
  * The GIF's treat frame against this run's recording, over Rex's tracked box
- * at that moment. Measured on the dry run (qa.test.mjs "provenance
- * controls"): this run 0.952; the synthetic run's and the fixture's footage
- * (the same file) 0.450; this run 80 ms early 0.455. Over the whole GIF band
- * the same footage scored 0.994 and 0.977, so a band-wide 0.8 passed
- * anything filmed on the inbox page.
+ * at the moment the frame shows, one frame against one frame. Measured on
+ * win attempts 3 and 4 (qa.test.mjs "provenance controls"): this run 0.992
+ * and 1.000; the synthetic run's and the fixture's footage (the same file)
+ * 0.429 and 0.458; this run one recording frame (40 ms) early 0.539 and
+ * 0.496, 80 ms early 0.539 and 0.546. Over the whole GIF band the synthetic
+ * footage scored 0.839, so a band-wide 0.8 passed anything filmed on the
+ * inbox page.
  */
 export const PROVENANCE_SSIM_MIN = 0.8;
 /** A region smaller than this (CSS px, either side) is too small for SSIM to mean anything. */
@@ -110,30 +113,37 @@ export function forbiddenInRosters(eventsList) {
 }
 
 /**
- * The GIF frame and the recording moment of the inbox scene's first
- * heart_on (the treat): { k, demoMs }, or null when the scene shows none.
- * The screen shows a logged event videoLagMs after the log.
+ * The GIF frame showing the inbox scene's first heart_on (the treat):
+ * { k, demoMs, heartMs }, or null when the scene shows none. heartMs is the
+ * demo ms the heart appears (the screen shows a logged event videoLagMs
+ * after the log); demoMs is the demo ms frame k itself shows. GIF frames sit
+ * on a 1000/fps grid, so the two differ by up to half a GIF frame (40 ms at
+ * 12.5 fps, a whole 25 fps recording frame), and the frame is only ever the
+ * recording at demoMs.
  */
 export function treatMoment(scenes, fps, events, shotId = 's1_inbox') {
   for (const o of events?.observed ?? []) {
     if (o.kind !== 'heart_on') continue;
-    const demoMs = demoMsShowing(events, o.t);
-    const k = gifFrameAt(scenes, fps, shotId, demoMs);
-    if (k !== null) return { k, demoMs };
+    const heartMs = demoMsShowing(events, o.t);
+    const k = gifFrameAt(scenes, fps, shotId, heartMs);
+    if (k !== null) return { k, demoMs: gifFrameMoment(scenes, fps, k).demoMs, heartMs };
   }
   return null;
 }
 
 /**
  * SSIM of `region` (CSS px inside the GIF band) between a GIF source frame
- * (the band drawn at DPR 2) and demo.mp4 at `seconds`, where the band sits at
- * `band` (CSS px of the page). NaN when ffmpeg cannot compare them.
+ * (the band drawn at DPR 2) and the one demo.mp4 frame at `seconds`, where
+ * the band sits at `band` (CSS px of the page). NaN when ffmpeg cannot
+ * compare them. trim=end_frame=1 matters: the ssim filter repeats the still
+ * against every frame decoded before -frames:v stops it and prints their
+ * mean, so unbounded it scored mean(t, t + 1 frame).
  */
 export function regionSsim(png, demoMp4, seconds, band, region) {
   const [x, y, w, h] = [region.x, region.y, region.w, region.h].map((n) => Math.round(n * 2));
   const r = spawnSync('ffmpeg', [
     '-nostdin', '-hide_banner', '-i', png, '-ss', String(seconds), '-i', demoMp4,
-    '-lavfi', `[0:v]crop=${w}:${h}:${x}:${y},format=rgb24[a];[1:v]crop=${w}:${h}:${x + band.x * 2}:${y + band.y * 2},format=rgb24[b];[a][b]ssim`,
+    '-lavfi', `[0:v]crop=${w}:${h}:${x}:${y},format=rgb24[a];[1:v]trim=end_frame=1,crop=${w}:${h}:${x + band.x * 2}:${y + band.y * 2},format=rgb24[b];[a][b]ssim`,
     '-frames:v', '1', '-f', 'null', '-',
   ]);
   const m = /All:([0-9.]+)/.exec(r.stderr.toString());
@@ -168,7 +178,7 @@ export function checkGifProvenance({ scenes, fps, events, framesDir, demoMp4 }) 
   const region = rexRegion(events, t.demoMs, band);
   if (!region) return { bad: [`GIF provenance: Rex is not tracked inside the GIF band at the treat (${(t.demoMs / 1000).toFixed(3)} s)`], info: null };
   const s = regionSsim(png, demoMp4, t.demoMs / 1000, band, region);
-  const info = `GIF treat frame ${t.k} vs s1_inbox/demo.mp4 @ ${(t.demoMs / 1000).toFixed(3)} s over Rex (${region.w}x${region.h} at ${region.x},${region.y}): SSIM ${s}`;
+  const info = `GIF treat frame ${t.k} vs s1_inbox/demo.mp4 @ ${(t.demoMs / 1000).toFixed(3)} s (heart ${(t.heartMs / 1000).toFixed(3)} s) over Rex (${region.w}x${region.h} at ${region.x},${region.y}): SSIM ${s}`;
   const bad = s >= PROVENANCE_SSIM_MIN ? [] : [`GIF provenance: treat frame ${t.k} matches this run's s1_inbox at SSIM ${s}, want >= ${PROVENANCE_SSIM_MIN}`];
   return { bad, info };
 }

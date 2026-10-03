@@ -194,9 +194,10 @@ export function checkInsideRect(inner: Rect, outer: Rect, element: string): Chec
  * declared `steady_at` spot, as verify.mjs v10 requires (`f.at.x ===
  * c.at.x && f.at.y === c.at.y`), and that spot is on even output pixels.
  *
- * No tolerance here: the master is yuv420p, and round 7 measured card B
- * at (325, 73), 1.41 px from the even (324, 72), scoring 0.918 SSIM
- * against 0.994. A 2 px allowance would also pass (326, 72), a card the
+ * No tolerance here: the eval demands the exact spot, and on a yuv420p
+ * encode (round 7) card B at (325, 73), 1.41 px from the even (324, 72),
+ * scored 0.918 SSIM against 0.994. The master is now yuv444p, but the
+ * even spots stay so the rule holds for any encode. A 2 px allowance would also pass (326, 72), a card the
  * eval rejects as off its steady spot. The 2 px tolerance belongs to
  * `checkSteadyAtOnAnchor`, between `steady_at` and the placement rule.
  */

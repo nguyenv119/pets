@@ -28,19 +28,25 @@ export const LOSSLESS_H264 = ['-c:v', 'libx264', '-qp', '0'];
 /**
  * Writes an ffmpeg concat-demuxer list from CDP screencast frames.
  * `frames` is `[{ file, ts }]` (ts = the CDP frame's own metadata.timestamp,
- * epoch seconds). Each frame lasts until the next frame's own timestamp, so
+ * epoch seconds). Frames go on the timeline in timestamp order, not arrival
+ * order: CDP now and then delivers a frame after a newer one (the proof
+ * capture has 7 in 1062 frames, up to 35.9 ms back), and its stamp is the
+ * true one. In arrival order such a frame took the newer frame's screen
+ * time; when the newer frame was the start clapper (one frame, since
+ * nothing moves under it) the clapper was left 1/120 s and the 25 fps video
+ * lost it. Each frame lasts until the next frame's own timestamp, so
  * frame N starts at ts[N] - ts[0] on the assembled timeline. A frame stamped
- * less than 1/120 s after the previous one (CDP sends bursts, and now and
- * then a frame stamped earlier than its predecessor) still needs a positive
- * duration, so it gets 1/120 s and the next frame's duration absorbs the
- * overshoot. Padding each of those without taking the time back made the
+ * less than 1/120 s after the previous one (CDP sends bursts) still needs a
+ * positive duration, so it gets 1/120 s and the next frame's duration
+ * absorbs the overshoot. Padding each of those without taking the time back made the
  * assembled clip drift late (215.7 ms by the end clapper on the proof's
  * frames), which the clapper check read as a residual no capture lag caused.
  * The last frame repeats the previous gap (concat requires every entry but
  * the last to declare one).
  */
-export function buildConcatList(frames) {
-  if (frames.length < 2) throw new Error(`buildConcatList needs at least 2 frames, got ${frames.length}`);
+export function buildConcatList(arrived) {
+  if (arrived.length < 2) throw new Error(`buildConcatList needs at least 2 frames, got ${arrived.length}`);
+  const frames = [...arrived].sort((a, b) => a.ts - b.ts);
   const ts0 = frames[0].ts;
   const lines = [];
   let at = 0; // seconds of the assembled timeline already written

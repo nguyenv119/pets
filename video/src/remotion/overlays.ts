@@ -184,7 +184,13 @@ export function buildOverlays(input: OverlayInput): TextItem[] {
           if (placement.anchor.cy === undefined) throw new Error('overlays: overlays.popup_card.placement.16x9.anchor has no cy');
           rect = { x: cr.x, y: Math.round(placement.anchor.cy - h / 2), w, h };
         }
-        items.push({ kind: 'card_caption', beat: beat.name, lines, fontPx: px, fromFrame: from, toFrame: to, rect, align: port ? 'center' : 'left' });
+        // The caption is part of the card layer: it shows on card frames only. Its anchors are lagged and
+        // rounded (frameOf) while the card beats' bounds are not, so caption_out ("add_mousedown+160", the
+        // last card beat's own `out`) can land a frame or two past the card, onto the next page shot's pets.
+        const cardBeats = edit.beats.filter((b) => b.shotId === eb.shotId && b.card);
+        const cardK0 = Math.min(...cardBeats.map((b) => b.k0));
+        const cardK1 = Math.max(...cardBeats.map((b) => b.k1));
+        items.push({ kind: 'card_caption', beat: beat.name, lines, fontPx: px, fromFrame: Math.max(from, cardK0), toFrame: Math.min(to, cardK1), rect, align: port ? 'center' : 'left' });
       } else {
         const px = port ? 80 : 72;
         const lines = port ? wrapCaption(beat.caption, 18) : [beat.caption];

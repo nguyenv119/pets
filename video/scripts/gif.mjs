@@ -3,8 +3,9 @@
 // Encodes render.mjs --variant gif's frames (out/gif-frames/, 1920x720 PNGs
 // at 12.5 fps, two no-zoom scenes) into out/pixel-pets.gif: halved
 // nearest-neighbour to 960x360 (an integer factor, so text strokes and sprite
-// pixels survive), palettegen max_colors=256 stats_mode=diff, paletteuse
-// dither=none (bayer crosshatches text), loop forever.
+// pixels survive), one palette per scene (palettegen stats_mode=diff, plus
+// every rostered pet's exact sprite colours reserved), paletteuse dither=none
+// (bayer crosshatches text), loop forever.
 //
 // Then the colour gate: on every judgeable GIF frame, each opaque Rex pixel
 // (his source sprite frame's alpha, placed at his tracked box the way the
@@ -18,7 +19,8 @@
 // Usage: npx tsx scripts/gif.mjs --run build/<run>
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { basename, join, relative } from 'node:path';
 import { shotDir } from '../record/layout.mjs';
 import { loggedMsAt } from '../src/remotion/cameraPath.ts';
@@ -371,12 +373,69 @@ export function assertFramesFromRun(runDir, manifest) {
  */
 export const HALVE = 'scale=iw/2:ih/2:flags=neighbor+full_chroma_inp+full_chroma_int';
 
-export function encodeGif(framesDir, outPath, fps) {
-  ffmpeg([
-    '-y', '-v', 'error', '-framerate', String(fps), '-i', join(framesDir, 'frame-%04d.png'),
-    '-vf', `${HALVE},split[a][b];[a]palettegen=max_colors=256:stats_mode=diff[p];[b][p]paletteuse=dither=none`,
-    '-loop', '0', outPath,
-  ]);
+/** Every opaque colour any sprite state of each rostered pet can show, as packed RGB ints (the colours the GIF keeps exact). */
+export function petSpriteColours(roster) {
+  const set = new Set();
+  for (const pet of roster ?? []) {
+    for (const st of STATES) {
+      const path = join(REPO_DIR, 'assets', pet.type, `${pet.color}_${st}_8fps.gif`);
+      if (existsSync(path)) for (const frame of decodeRgba(path).frames) for (const c of framePalette(frame)) set.add(c);
+    }
+  }
+  return [...set];
+}
+
+/**
+ * A 256-entry palette: every `reserved` colour, then the `generated` ones
+ * (palettegen's, which repeats its last colour to fill 16x16) until full,
+ * padded by repeating a real colour.
+ */
+export function mergePalette(generated, reserved) {
+  if (reserved.length > 256) throw new Error(`gif: ${reserved.length} reserved colours do not fit a 256-colour palette`);
+  const pal = [...new Set([...reserved, ...generated])].slice(0, 256);
+  while (pal.length < 256) pal.push(pal[pal.length - 1] ?? 0);
+  return pal;
+}
+
+/**
+ * Encodes the halved frames with one palette per scene. A single palette over
+ * a light and a dark page scene starves one of them: on a real run the dark
+ * code-review scene's colours went 10-80 units off. `palettes` =
+ * [{ fromFrame, frames, reserve }]: each scene's frame range and the packed
+ * colours its palette must hold exactly (its pets' sprite colours).
+ */
+export function encodeGif(framesDir, outPath, fps, palettes) {
+  const tmp = mkdtempSync(join(tmpdir(), 'gif-pal-'));
+  try {
+    const input = ['-framerate', String(fps), '-i', join(framesDir, 'frame-%04d.png')];
+    const palPaths = palettes.map((p, i) => {
+      const gen = join(tmp, `gen-${i}.png`);
+      ffmpeg([
+        '-y', '-v', 'error', '-framerate', String(fps), '-start_number', String(p.fromFrame), '-i', join(framesDir, 'frame-%04d.png'),
+        // trim bounds palettegen's INPUT to this scene; `-frames:v` after `-i` limits only output, and palettegen still read every later scene's frames
+        '-vf', `trim=end_frame=${p.frames},${HALVE},palettegen=max_colors=${256 - p.reserve.length}:reserve_transparent=0:stats_mode=diff`,
+        '-update', '1', gen,
+      ]);
+      const raw = execFileSync('ffmpeg', ['-nostdin', '-v', 'error', '-i', gen, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { maxBuffer: 1 << 20 });
+      const generated = [];
+      for (let o = 0; o + 3 <= raw.length; o += 3) generated.push((raw[o] << 16) | (raw[o + 1] << 8) | raw[o + 2]);
+      const merged = mergePalette(generated, p.reserve);
+      const out = join(tmp, `pal-${i}.png`);
+      const buf = Buffer.alloc(256 * 3);
+      merged.forEach((c, j) => buf.set([c >> 16, (c >> 8) & 255, c & 255], j * 3));
+      execFileSync('ffmpeg', ['-nostdin', '-v', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', '16x16', '-i', '-', '-frames:v', '1', '-update', '1', out], { input: buf });
+      return out;
+    });
+    const n = palettes.length;
+    const graph = [
+      `[0:v]${HALVE},split=${n}${palettes.map((_, i) => `[s${i}]`).join('')}`,
+      ...palettes.map((p, i) => `[s${i}]trim=start_frame=${p.fromFrame}:end_frame=${p.fromFrame + p.frames},setpts=PTS-STARTPTS[t${i}];[t${i}][${i + 1}:v]paletteuse=dither=none[u${i}]`),
+      `${palettes.map((_, i) => `[u${i}]`).join('')}concat=n=${n}:v=1:a=0[out]`,
+    ].join(';');
+    ffmpeg(['-y', '-v', 'error', ...input, ...palPaths.flatMap((pp) => ['-i', pp]), '-filter_complex', graph, '-map', '[out]', '-loop', '0', outPath]);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
 }
 
 /** The encoded GIF's size, length and byte count against `spec` (from its ffprobe result): failure strings. */
@@ -403,7 +462,7 @@ export function makeGif({ runDir, framesDir = FRAMES_DIR, outPath = GIF_PATH, ma
   const first = probe(join(framesDir, 'frame-0000.png')).streams[0];
   const source = { width: spec.size.width * 2, height: spec.size.height * 2 }; // render.mjs --variant gif draws at 2x; the GIF halves it
   if (first.width !== source.width || first.height !== source.height) throw new Error(`gif: frames are ${first.width}x${first.height}, not ${source.width}x${source.height}`);
-  encodeGif(framesDir, outPath, fps);
+  encodeGif(framesDir, outPath, fps, scenes.map((sc) => ({ fromFrame: sc.fromFrame, frames: sc.frames, reserve: petSpriteColours(eventsByShotId[sc.shotId]?.roster) })));
 
   const p = probe(outPath);
   const v = p.streams.find((s) => s.codec_type === 'video');

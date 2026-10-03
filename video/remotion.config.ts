@@ -10,6 +10,8 @@ Config.setEntryPoint('src/remotion/index.ts');
 Config.setPublicDir('.cache/public');
 Config.setVideoImageFormat('png');
 Config.setCrf(16);
+// yuv444p: see MASTER_ENCODE in scripts/render.mjs.
+Config.setPixelFormat('yuv444p');
 // Measured on the 16 GB Mac (bead "Proven facts"): angle renders 2x faster than the default, 5x with motion blur.
 Config.setChromiumOpenGlRenderer('angle');
 Config.setConcurrency(2);

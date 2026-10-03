@@ -13,18 +13,24 @@ import {
   candidateSprites,
   checkGif,
   colourGate,
+  decodeRgba,
+  decodeGifRgb,
+  encodeGif,
   erodedMask,
   gifFrameAt,
   gifFrameMoment,
   GIF_SPEC,
   makeGif,
   MAX_COLOUR_ERROR,
+  mergePalette,
   MIN_JUDGED_FRAMES,
+  petSpriteColours,
   rexColourError,
   spriteLayout,
   spritePath,
   unjudgeable,
 } from './gif.mjs';
+import { REPO_DIR } from './stage-io.mjs';
 
 let tmp;
 afterEach(() => {
@@ -391,5 +397,182 @@ describe('rexAt', () => {
     // THEN — the near one finds Rex, the far one finds nothing
     expect(near?.box).toEqual({ x: 10, y: 10, w: 64, h: 64 });
     expect(far).toBeNull();
+  });
+});
+
+describe('mergePalette', () => {
+  it('keeps every reserved colour, even when the generated palette is full', () => {
+    /**
+     * The reserved colours are the pets' exact sprite colours; a palette that
+     * dropped one would map that sprite pixel to its nearest neighbour, the
+     * drift the colour gate fails (10 units on the dark s2_review scene).
+     */
+    // GIVEN — a full 256-colour generated palette and 3 reserved colours, one already in it
+    const generated = Array.from({ length: 256 }, (_, i) => i * 1000);
+    const reserved = [0xc9d2d9, 0xf38b95, 5000];
+
+    // WHEN
+    const pal = mergePalette(generated, reserved);
+
+    // THEN — 256 entries, every reserved colour among them, no duplicates
+    expect(pal).toHaveLength(256);
+    for (const c of reserved) expect(pal).toContain(c);
+    expect(new Set(pal).size).toBe(256);
+  });
+
+  it('pads a short palette to 256 entries without inventing colours', () => {
+    /** paletteuse reads a 16x16 palette image; padding must repeat a real colour, not add black. */
+    // GIVEN — 2 generated colours (palettegen repeats its last one), 1 reserved
+    // WHEN
+    const pal = mergePalette([0x102030, 0x405060, 0x405060], [0xabcdef]);
+
+    // THEN
+    expect(pal).toHaveLength(256);
+    expect(new Set(pal)).toEqual(new Set([0xabcdef, 0x102030, 0x405060]));
+  });
+
+  it('refuses more than 256 reserved colours', () => {
+    /** A GIF palette holds 256 colours; silently dropping a reserved one would defeat the reservation. */
+    // GIVEN / WHEN / THEN
+    expect(() => mergePalette([], Array.from({ length: 257 }, (_, i) => i))).toThrow(/257 reserved colours/);
+  });
+});
+
+describe('petSpriteColours', () => {
+  it('returns every opaque colour of every state of each rostered pet', () => {
+    /**
+     * The palette reserves these, so each must be exact: Rex's 22 sprite
+     * colours (every state shares one palette per pet) and nothing else.
+     */
+    // GIVEN — the cast roster entry for Rex, and the real sprite files
+    const roster = [{ id: 'rex', type: 'dog', color: 'brown' }];
+
+    // WHEN
+    const colours = petSpriteColours(roster);
+
+    // THEN — every opaque colour of brown_idle's first frame is in there
+    const idle = decodeRgba(join(REPO_DIR, 'assets', 'dog', 'brown_idle_8fps.gif'));
+    const want = new Set();
+    for (let p = 0; p < idle.frames[0].length; p += 4) if (idle.frames[0][p + 3] === 255) want.add((idle.frames[0][p] << 16) | (idle.frames[0][p + 1] << 8) | idle.frames[0][p + 2]);
+    for (const c of want) expect(colours).toContain(c);
+    expect(new Set(colours).size).toBe(colours.length);
+  });
+
+  it('is empty for an empty roster', () => {
+    /** The tests' tiny scene plans carry no roster; the encode must still run. */
+    expect(petSpriteColours(undefined)).toEqual([]);
+  });
+});
+
+describe('encodeGif (real ffmpeg)', () => {
+  /** Writes GIF-size images (W x H RGB arrays of packed colours) as 2x source PNGs, every GIF px a 2x2 block. */
+  function writeFrames(images, W, H) {
+    tmp = mkdtempSync(join(tmpdir(), 'gif-enc-'));
+    const dir = join(tmp, 'frames');
+    mkdirSync(dir);
+    const buf = Buffer.alloc(images.length * W * H * 12);
+    images.forEach((img, f) => {
+      for (let y = 0; y < 2 * H; y++) for (let x = 0; x < 2 * W; x++) {
+        const c = img[Math.floor(y / 2) * W + Math.floor(x / 2)];
+        buf.set([c >> 16, (c >> 8) & 255, c & 255], f * W * H * 12 + (y * 2 * W + x) * 3);
+      }
+    });
+    execFileSync('ffmpeg', ['-nostdin', '-v', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', `${2 * W}x${2 * H}`, '-r', '12.5', '-i', '-', '-start_number', '0', join(dir, 'frame-%04d.png')], { input: buf });
+    return dir;
+  }
+  /** Worst per-channel error of GIF frame `k` against the packed image it was made from. */
+  function worstError(gif, img) {
+    let worst = 0;
+    for (let i = 0; i < img.length; i++) {
+      const o = i * 3;
+      const c = img[i];
+      worst = Math.max(worst, Math.abs(gif.data[o] - (c >> 16)), Math.abs(gif.data[o + 1] - ((c >> 8) & 255)), Math.abs(gif.data[o + 2] - (c & 255)));
+    }
+    return worst;
+  }
+  /** Deterministic pseudo-random packed colours. */
+  function randomColours(n, seed) {
+    let s = seed;
+    return Array.from({ length: n }, () => {
+      s = (s * 1103515245 + 12345) % 2147483648;
+      return s & 0xffffff;
+    });
+  }
+
+  it('gives each scene its own palette, so a scene never loses colours to another', () => {
+    /**
+     * The README GIF has a light page scene and a dark one. One palette over
+     * both starved the dark scene: its colours went 10-80 units off (Rex
+     * failed the colour gate; green code text came out beige). With one
+     * palette per scene, each scene's 200 colours fit and come out exact.
+     */
+    // GIVEN — two scenes of 2 frames each, 200 distinct colours apiece (400 together, over one palette's 256)
+    const W = 20;
+    const H = 10;
+    const a = randomColours(W * H, 1);
+    const b = randomColours(W * H, 2);
+    const dir = writeFrames([a, a, b, b], W, H);
+    const out = join(tmp, 'out.gif');
+
+    // WHEN
+    encodeGif(dir, out, FPS, [{ fromFrame: 0, frames: 2, reserve: [] }, { fromFrame: 2, frames: 2, reserve: [] }]);
+
+    // THEN — every frame decodes to its source colours (within the 1 unit the halving's rounding adds)
+    const gif = decodeGifRgb(out);
+    expect(gif).toHaveLength(4);
+    for (const [k, img] of [a, a, b, b].entries()) expect(worstError(gif[k], img)).toBeLessThanOrEqual(1);
+  });
+
+  it("builds the first scene's palette from that scene's frames only, even when a later scene moves", () => {
+    /**
+     * palettegen's frame limit must bound its input. As an output limit
+     * (`-frames:v` after `-i`) it still read every frame to the end of the
+     * sequence, so the first scene's palette also counted the next scene's
+     * colours once that scene had motion, and starved the first scene. The
+     * static-scene test above can't see this: stats_mode=diff counts nothing
+     * for a frame identical to the one before it.
+     */
+    // GIVEN — a static scene of 200 colours, then a moving scene of 200 other colours (the same colours shuffled between its two frames)
+    const W = 20;
+    const H = 10;
+    const a = randomColours(W * H, 1);
+    const b1 = randomColours(W * H, 2);
+    const b2 = [...b1.slice(1), b1[0]];
+    const dir = writeFrames([a, a, b1, b2], W, H);
+    const out = join(tmp, 'out.gif');
+
+    // WHEN
+    encodeGif(dir, out, FPS, [{ fromFrame: 0, frames: 2, reserve: [] }, { fromFrame: 2, frames: 2, reserve: [] }]);
+
+    // THEN — every frame of both scenes decodes to its source colours (within the halving's 1 unit)
+    const gif = decodeGifRgb(out);
+    expect(gif).toHaveLength(4);
+    for (const [k, img] of [a, a, b1, b2].entries()) expect(worstError(gif[k], img)).toBeLessThanOrEqual(1);
+  });
+
+  it('keeps a reserved colour exact in a scene with more colours than a palette holds', () => {
+    /**
+     * A sprite pixel of a colour the page barely uses gets merged into a
+     * neighbour by palettegen. Reserving the pets' sprite colours keeps them
+     * exact whatever the page around them does.
+     */
+    // GIVEN — 800 distinct colours crowded around the reserved one, which fills just 1 GIF px
+    const W = 40;
+    const H = 20;
+    const REX = 0xc9d2d9;
+    const img = randomColours(W * H, 7).map((r) => REX + (((r >> 16) % 40) - 20) * 65536 + ((((r >> 8) & 255) % 40) - 20) * 256 + ((r & 255) % 40) - 20);
+    img[0] = REX;
+    const dir = writeFrames([img], W, H);
+    const reserved = join(tmp, 'reserved.gif');
+    const plain = join(tmp, 'plain.gif');
+
+    // WHEN — encoded with and without the reservation
+    encodeGif(dir, reserved, FPS, [{ fromFrame: 0, frames: 1, reserve: [REX] }]);
+    encodeGif(dir, plain, FPS, [{ fromFrame: 0, frames: 1, reserve: [] }]);
+
+    // THEN — reserved, that pixel is within the halving's 1 unit; unreserved (the control), it drifts further
+    const drift = (path) => Math.max(...[...decodeGifRgb(path)[0].data.subarray(0, 3)].map((v, i) => Math.abs(v - [0xc9, 0xd2, 0xd9][i])));
+    expect(drift(reserved)).toBeLessThanOrEqual(1);
+    expect(drift(plain)).toBeGreaterThan(1);
   });
 });

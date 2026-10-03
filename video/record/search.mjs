@@ -62,10 +62,10 @@ export const FIXED_SEED_REPEAT_LIMIT = 3;
  * once it has been seen FIXED_SEED_REPEAT_LIMIT times on a fixed seed (the
  * same seed failing the same way again cannot be a seed-search miss: stop
  * and report), else null. A searched shot never stops early here, and a
- * capture-side discard (`capture: true`: the clapper residual, a frame at
- * the wrong size, a heart lag out of bounds) never counts: the seed fixes
- * the pets' behaviour, not the screencast's timing, so those can pass on a
- * retry of the same seed.
+ * capture-side discard (`capture: true`: the clapper residual, a missing
+ * clapper, a frame at the wrong size, a heart lag out of bounds) never
+ * counts: the seed fixes the pets' behaviour, not the screencast's
+ * timing, so those can pass on a retry of the same seed.
  */
 export function createRepeatGuard({ fixedSeed }) {
   const counts = new Map();
