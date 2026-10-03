@@ -4,6 +4,8 @@
 // log, this module only transforms it. See the bead's step 6 ("Event
 // rules") for the derivation each function implements.
 
+import { findPetsReady, isHoveredAt } from './timeline.mjs';
+
 const CATCH_WINDOW_MS = 60;
 const CATCH_X_TOLERANCE = 40;
 const CATCH_Y_ABOVE_BOX_TOP = 48;
@@ -37,10 +39,11 @@ function debounceOnOff(marks, base, windowMs) {
  * Rebases every `t` in a raw capture onto the start clapper's release edge
  * (`raw.clapStart.tOff`): the events.json contract's t=0, so demo.mp4 time =
  * trimBeforeMs + t, where trimBeforeMs is the video's own clapper release.
- * Anything logged before the clapper (a boot greet, the first tracks) comes
- * out negative; validateEvents
- * allows observed[].t down to -trimBeforeMs. Every epoch time the raw log
- * carries (hourSetT, petsReadyT, feedMouseupT) is shifted here,
+ * record.mjs flashes the start clapper on the pre-roll about:blank before
+ * the set page loads, so a recorded take has nothing before it; a log that
+ * does (an older capture) comes out negative, which validateEvents allows
+ * down to -trimBeforeMs. Every epoch time the raw log
+ * carries (hourSetT, petsReadyT, feedMouseupT, firstPaintT) is shifted here,
  * so nothing downstream picks its own origin.
  */
 function rebase(raw) {
@@ -60,17 +63,8 @@ function rebase(raw) {
     hourSetMs: raw.hourSetT !== undefined ? shift(raw.hourSetT) : undefined,
     petsReadyMs: raw.petsReadyT !== undefined ? shift(raw.petsReadyT) : undefined,
     feedMouseupMs: raw.feedMouseupT !== undefined ? shift(raw.feedMouseupT) : undefined,
+    firstPaintMs: raw.firstPaintT !== undefined ? shift(raw.firstPaintT) : undefined,
   };
-}
-
-/** True if `pet` is under an active (unpaired mouseout) hover at time `t`. */
-function isHoveredAt(hoverEvents, pet, t) {
-  let hovered = false;
-  for (const e of hoverEvents) {
-    if (e.pet !== pet || e.t > t) continue;
-    hovered = e.kind === 'mouseover';
-  }
-  return hovered;
 }
 
 /**
@@ -173,6 +167,23 @@ function deriveEat(marks, feedMouseupMs) {
   return heart ? { t: heart.t, kind: 'eat' } : null;
 }
 
+/**
+ * pets_ready = the first tracked frame on which every visible roster pet is
+ * drawn (timeline.mjs findPetsReady): observe.js tracks from the moment the
+ * content script creates its host, so this is when the pets appeared, not
+ * when the choreography noticed. A raw log tracked from later than that
+ * (the legacy proof log) falls back to the choreography's own petsReadyT.
+ */
+function derivePetsReady(r, roster) {
+  const visibleIds = roster.filter((p) => !p.hidden).map((p) => p.id);
+  const firstTrackHasPets = (r.tracks[0]?.pets ?? []).some((p) => p.id);
+  if (r.tracks.length > 0 && !firstTrackHasPets) {
+    const t = findPetsReady(r.tracks, visibleIds);
+    if (t !== undefined) return t;
+  }
+  return r.petsReadyMs;
+}
+
 /** sleep = the first frame after the hour flip on which every visible roster pet shows the lie sprite. */
 function deriveSleep(tracks, hourSetMs, roster) {
   if (hourSetMs === undefined) return null;
@@ -208,12 +219,14 @@ export function deriveEvents(raw, context) {
   const catches = deriveCatches(r.marks, r.tracks);
   const eat = deriveEat(r.marks, r.feedMouseupMs);
   const sleep = deriveSleep(r.tracks, r.hourSetMs, context.roster);
+  const petsReadyMs = derivePetsReady(r, context.roster);
+  const firstPaintMs = r.firstPaintMs ?? context.firstPaintMs;
 
   const observed = [
     { t: r.clapStartMs, kind: 'clap' },
     ...(r.clapEndMs !== undefined ? [{ t: r.clapEndMs, kind: 'clap' }] : []),
-    ...(context.firstPaintMs !== undefined ? [{ t: context.firstPaintMs, kind: 'first_paint' }] : []),
-    ...(r.petsReadyMs !== undefined ? [{ t: r.petsReadyMs, kind: 'pets_ready' }] : []),
+    ...(firstPaintMs !== undefined ? [{ t: firstPaintMs, kind: 'first_paint' }] : []),
+    ...(petsReadyMs !== undefined ? [{ t: petsReadyMs, kind: 'pets_ready' }] : []),
     // The shim is in place from page load; it is marked at playback start
     // (t=0), which is always inside demo.mp4. Observation start is not: it
     // can precede the video's first frame, i.e. fall below -trimBeforeMs.
@@ -255,4 +268,4 @@ export function deriveEvents(raw, context) {
   };
 }
 
-export const _internal = { rebase, isHoveredAt, deriveWaveGreet, deriveChaseStarts, deriveCatches, deriveEat, deriveSleep, debounceOnOff };
+export const _internal = { rebase, isHoveredAt, deriveWaveGreet, deriveChaseStarts, deriveCatches, deriveEat, deriveSleep, debounceOnOff, derivePetsReady };

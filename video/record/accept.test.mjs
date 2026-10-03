@@ -6,12 +6,34 @@ import { evaluateRule, evaluateShotRules, familyNameForRule, mergeAcceptRules, R
 
 const FAMILY_REGEX_BY_NAME = Object.fromEntries(RULE_FAMILIES.map(([regex, evaluator]) => [evaluator.name, regex]));
 
-// evalPopupTypeGrid is the only family that reads ctx (layout_expect from shots.json, not carried by the rule text itself).
-const CTX = { layoutExpect: { type_order: Array.from({ length: 14 }, (_, i) => `t${i}`) } };
-
 const HERE = dirname(fileURLToPath(import.meta.url));
 const shots = JSON.parse(readFileSync(join(HERE, '..', 'shots.json'), 'utf-8'));
 const fixtureShots = JSON.parse(readFileSync(join(HERE, '..', 'fixtures', 'shots.sample.json'), 'utf-8'));
+const s2bShot = shots.shots.find((s) => s.id === 's2b_shelter');
+
+/**
+ * Real logs from the 2026-10-03 shakedown run (trimmed: every 4th popup
+ * frame plus the frame nearest each event): the kept s2b_shelter take, and
+ * the kept 9:16 s2_review take, whose dblclick was sent at (300, 500).
+ */
+const realPopup = () => JSON.parse(readFileSync(join(HERE, 'testdata', 's2b_shelter.events.json'), 'utf-8'));
+const realS2v916 = () => JSON.parse(readFileSync(join(HERE, 'testdata', 's2_review_v916.events.json'), 'utf-8'));
+
+/** The popup take's rule context as popup.mjs builds it (popupAcceptCtx), from the shot in shots.json. */
+const POPUP_CTX = {
+  layoutExpect: s2bShot.layout_expect,
+  nunito: { status: 'loaded', t: 3.6 },
+  popup: { beats: s2bShot.beats, viewportWidth: s2bShot.viewport.width, forbiddenTypes: s2bShot.layout_expect.forbidden_types },
+};
+
+// ctx carries what events.json has no field for: layout_expect, the
+// dblclick's logged point and elementFromPoint target (choreo.mjs), the
+// Nunito FontFace status and the popup crop context (popup.mjs).
+const CTX = {
+  ...POPUP_CTX,
+  layoutExpect: { type_order: Array.from({ length: 14 }, (_, i) => `t${i}`) },
+  dblclick: { x: 800, y: 410, element: 'div#dbl-zone' },
+};
 
 /** Every rule text shots.json (or its 9:16 variant / popup take) can hand to the recorder — the ones accept.mjs must recognise. */
 function collectRuleTexts(doc) {
@@ -57,6 +79,13 @@ function rosterOf(...names) {
 
 const CLICK = { label: 'x', tDepartMs: 0, tDownMs: 0, x: 0, y: 0, rect: { x: 0, y: 0, w: 1, h: 1 } };
 
+/** The real popup log with one forbidden cell's logged rect moved on every frame (an edited copy of a real log). */
+function popupWithCellMoved(type, patch) {
+  const ev = realPopup();
+  for (const f of ev.tracks) for (const c of f.cells ?? []) if (c.type === type) Object.assign(c, patch);
+  return ev;
+}
+
 const SEEDED_ROSTER = [
   { id: '6f1c2a4e-1b2c-4d3e-8f40-0a1b2c3d4e5f', name: 'Rex', type: 'dog', color: 'brown' },
   { id: '7a2d3b5f-2c3d-4e4f-9051-1b2c3d4e5f60', name: 'Bao', type: 'panda', color: 'black' },
@@ -94,10 +123,15 @@ const BUILDERS = {
     bad: () => wrap({ shim: 'NO_SEED' }),
   },
   evalFirstTransition: {
-    good: (m) => wrap({
-      roster: rosterOf(m[1]),
-      observed: [{ t: 0, kind: 'pets_ready' }, { t: (Number(m[3]) + Number(m[4])) / 2, kind: 'src', pet: m[1].toLowerCase(), from: 'idle', to: 'walk' }],
-    }),
+    good: (m) => {
+      const walkT = (Number(m[3]) + Number(m[4])) / 2;
+      const step = m[2] === 'walkRight' ? 2 : -2;
+      return wrap({
+        roster: rosterOf(m[1]),
+        observed: [{ t: 0, kind: 'pets_ready' }, { t: walkT, kind: 'src', pet: m[1].toLowerCase(), from: 'idle', to: 'walk' }],
+        tracks: [0, 1, 2, 3].map((i) => ({ t: walkT + i * 16.7, pets: [{ id: m[1].toLowerCase(), x: 700 + i * step, y: 476, w: 64, h: 64, src: 'dog/brown_walk_8fps.gif' }] })),
+      });
+    },
     bad: (m) => wrap({
       roster: rosterOf(m[1]),
       observed: [{ t: 0, kind: 'pets_ready' }, { t: Number(m[4]) + 5000, kind: 'src', pet: m[1].toLowerCase(), from: 'idle', to: 'walk' }],
@@ -120,7 +154,10 @@ const BUILDERS = {
     bad: (m) => wrap({ clicks: [{ ...CLICK, kind: 'click', tMs: 0 }], observed: [{ t: Number(m[1]) - 10, kind: 'heart_on' }, { t: Number(m[1]) - 5, kind: 'heart_on' }] }),
   },
   evalDblclickTarget: {
-    good: (m) => wrap({ observed: [{ t: 0, kind: 'pets_ready' }, { t: Number(m[3]) - 10, kind: 'dblclick' }] }),
+    good: (m) => wrap({
+      observed: [{ t: 0, kind: 'pets_ready' }, { t: Number(m[3]) - 10, kind: 'dblclick' }],
+      tracks: [{ t: 0, pets: [{ id: 'rex', x: 520, y: 476, w: 64, h: 64, src: 'dog/brown_idle_8fps.gif' }] }],
+    }),
     bad: (m) => wrap({ observed: [{ t: 0, kind: 'pets_ready' }, { t: Number(m[3]) + 5000, kind: 'dblclick' }] }),
   },
   evalBallOnAfterDblclick: {
@@ -155,7 +192,10 @@ const BUILDERS = {
     bad: (m) => wrap({ roster: rosterOf(m[1]), observed: [{ t: 0, kind: 'src', pet: m[1].toLowerCase(), from: 'idle', to: 'swipe' }] }),
   },
   evalAllIdleUntilOut: {
-    good: (m) => wrap({ observed: [{ t: 0, kind: 'pets_ready' }, { t: 50, kind: 'greet_end' }], tracks: [{ t: 100, pets: [{ id: 'a', x: 0, y: 0, w: 1, h: 1, src: 'x_idle_y' }] }] }),
+    good: (m) => wrap({
+      observed: [{ t: 0, kind: 'pets_ready' }, { t: 50, kind: 'greet_end' }],
+      tracks: [100, Number(m[1]) + 20].map((t) => ({ t, pets: [{ id: 'a', x: 0, y: 0, w: 1, h: 1, src: 'x_idle_y' }] })),
+    }),
     bad: (m) => wrap({ observed: [{ t: 0, kind: 'pets_ready' }, { t: 50, kind: 'greet_end' }], tracks: [{ t: 100, pets: [{ id: 'a', x: 0, y: 0, w: 1, h: 1, src: 'x_walk_y' }] }] }),
   },
   evalAllIdleAtHourSet: {
@@ -167,7 +207,7 @@ const BUILDERS = {
     bad: (m) => wrap({ observed: [{ t: 0, kind: 'hour_set' }, { t: Number(m[1]) + 5000, kind: 'sleep' }] }),
   },
   evalAllLieUntilEnd: {
-    good: (m) => wrap({ observed: [{ t: 0, kind: 'sleep' }], tracks: [{ t: 10, pets: [{ id: 'a', x: 0, y: 0, w: 1, h: 1, src: 'x_lie_y' }] }] }),
+    good: (m) => wrap({ observed: [{ t: 0, kind: 'sleep' }], tracks: [10, Number(m[1]) + 20].map((t) => ({ t, pets: [{ id: 'a', x: 0, y: 0, w: 1, h: 1, src: 'x_lie_y' }] })) }),
     bad: (m) => wrap({ observed: [{ t: 0, kind: 'sleep' }], tracks: [{ t: 10, pets: [{ id: 'a', x: 0, y: 0, w: 1, h: 1, src: 'x_idle_y' }] }] }),
   },
   evalBoxRightEdge: {
@@ -197,12 +237,13 @@ const BUILDERS = {
     }),
   },
   evalPopupFontLoaded: {
-    good: () => wrap({ observed: [{ t: 0, kind: 'shelter_click' }] }),
-    bad: () => wrap({ observed: [] }),
+    good: () => wrap({ observed: [{ t: 10, kind: 'shelter_click' }] }),
+    // the first action fires before the logged loaded status (CTX.nunito.t)
+    bad: () => wrap({ observed: [{ t: 0, kind: 'shelter_click' }] }),
   },
   evalPopupCropsDisjoint: {
-    good: () => wrap({ tracks: [{ t: 0, cells: [{ type: 'chicken', x: 0, y: 0, w: 1, h: 1 }] }] }),
-    bad: () => wrap({ tracks: [{ t: 0 }] }),
+    good: () => realPopup(),
+    bad: () => popupWithCellMoved('dog', { y: 200 }),
   },
   evalPopupTypeColorSelected: {
     good: () => wrap({ observed: [{ t: 0, kind: 'type_selected', type: 'chicken' }, { t: 0, kind: 'color_selected', color: 'white' }] }),
@@ -213,16 +254,25 @@ const BUILDERS = {
     bad: () => wrap({ observed: [{ t: 0, kind: 'add_mousedown' }, { t: 100, kind: 'add_mouseup' }] }),
   },
   evalPopupRosterSaved: {
-    good: () => wrap({ observed: [{ t: 0, kind: 'add_mousedown' }, { t: 500, kind: 'roster_saved', roster: [{ name: 'Rex' }, { name: 'Bao' }, { name: 'Pip' }] }] }),
-    bad: () => wrap({ observed: [{ t: 0, kind: 'add_mousedown' }, { t: 1500, kind: 'roster_saved', roster: [{ name: 'Rex' }, { name: 'Bao' }, { name: 'Pip' }] }] }),
+    good: () => realPopup(),
+    bad: () => {
+      const ev = realPopup();
+      ev.observed.find((e) => e.kind === 'roster_saved').t += 1100;
+      return ev;
+    },
   },
   evalPopupListGrowsFormCollapses: {
     good: () => addPetLog(),
     bad: () => addPetLog({ grownListH: 150 }),
   },
   evalPopupClicksInsideCrop: {
-    good: () => wrap({ observed: [{ t: 0, kind: 'shelter_click', x: 10, y: 10 }, { t: 0, kind: 'name_click', x: 10, y: 10 }, { t: 0, kind: 'type_selected', x: 10, y: 10 }, { t: 0, kind: 'color_selected', x: 10, y: 10 }, { t: 0, kind: 'add_mousedown', x: 10, y: 10 }] }),
-    bad: () => wrap({ observed: [{ t: 0, kind: 'shelter_click' }] }),
+    good: () => realPopup(),
+    // the Name click sent at the field's live centre (x 286), outside crop B (x 20-177.6)
+    bad: () => {
+      const ev = realPopup();
+      ev.observed.find((e) => e.kind === 'name_click').x = 286;
+      return ev;
+    },
   },
 };
 
@@ -460,5 +510,196 @@ describe('rules timed from pets_ready', () => {
       expect(r.pass, r.rule).toBe(false);
       expect(r.detail, r.rule).toMatch(/no pets_ready observed/);
     }
+  });
+});
+
+describe('accept details carry the measured value (no rubber stamps)', () => {
+  const dblRule = 'elementFromPoint at (800, 410) is div#dbl-zone and no pet box contains the point; the dblclick lands within 1600 ms of pets_ready';
+
+  it('judges a 9:16 dblclick at the dblclick_css point it was really sent at, and says so', () => {
+    /**
+     * The 9:16 s2_review take sends its dblclick at the variant's
+     * dblclick_css (300, 500), not the rule's 16:9 (800, 410). The shakedown
+     * recorded the (800, 410) rule as PASS for a click it never judged; the
+     * result must judge the real point and name the replacement.
+     */
+    // GIVEN — the real kept 9:16 s2_review log and the point choreo.mjs logged for it
+    const events = realS2v916();
+    const ctx = { dblclick: { x: 300, y: 500, element: 'div#dbl-zone' }, dblclickCss: { x: 300, y: 500 } };
+
+    // WHEN — the dblclick-target rule is evaluated
+    const result = evaluateRule(dblRule, events, ctx);
+
+    // THEN — it passes on the real point and the detail names the replacement and the measured timing
+    expect(result.pass, result.detail).toBe(true);
+    expect(result.detail).toMatch(/at \(300, 500\): the rule's \(800, 410\) replaced in 9:16 by dblclick_css/);
+    expect(result.detail).toMatch(/dblclick 1449\.5ms after pets_ready/);
+  });
+
+  it('fails a dblclick sent somewhere that is neither the rule point nor a dblclick_css', () => {
+    /** Without a variant override, a click at (300, 500) is not the rule's (800, 410) click and must not pass as one. */
+    // GIVEN — the same real log, with no dblclick_css in the context
+    const events = realS2v916();
+
+    // WHEN — evaluated with only the logged point
+    const result = evaluateRule(dblRule, events, { dblclick: { x: 300, y: 500, element: 'div#dbl-zone' } });
+
+    // THEN — it fails naming both points
+    expect(result.pass).toBe(false);
+    expect(result.detail).toMatch(/neither the rule's \(800, 410\)/);
+  });
+
+  it('fails when elementFromPoint returned something other than div#dbl-zone', () => {
+    /** The rule's first clause is what elementFromPoint returned at the point; it was never checked before. */
+    // GIVEN — the real log, with the logged element being the page body
+    const events = realS2v916();
+    const ctx = { dblclick: { x: 300, y: 500, element: 'body' }, dblclickCss: { x: 300, y: 500 } };
+
+    // WHEN — evaluated
+    const result = evaluateRule(dblRule, events, ctx);
+
+    // THEN — it fails naming the element
+    expect(result.pass).toBe(false);
+    expect(result.detail).toMatch(/is body, not div#dbl-zone/);
+  });
+
+  it("fails when the tracked pet box at the dblclick contains the point", () => {
+    /** "no pet box contains the point", judged on the logged boxes, not on choreo.mjs's word. */
+    // GIVEN — the real log with Rex's box moved under (300, 500) on every frame
+    const events = realS2v916();
+    for (const f of events.tracks) for (const p of f.pets) Object.assign(p, { x: 280, y: 476 });
+    const ctx = { dblclick: { x: 300, y: 500, element: 'div#dbl-zone' }, dblclickCss: { x: 300, y: 500 } };
+
+    // WHEN — evaluated
+    const result = evaluateRule(dblRule, events, ctx);
+
+    // THEN — it fails naming the pet
+    expect(result.pass).toBe(false);
+    expect(result.detail).toMatch(/rex's box contains the dblclick point/);
+  });
+
+  it('fails a walkLeft rule when the tracked box moves right', () => {
+    /** "first transition is walkLeft": the direction is read from the tracked x, so a walkRight at the right time fails. */
+    // GIVEN — a walk at pets_ready+2300 whose box x rises
+    const rule = "Rex's first transition is walkLeft, 2000-2600 ms after pets_ready";
+    const events = wrap({
+      roster: rosterOf('Rex'),
+      observed: [{ t: 0, kind: 'pets_ready' }, { t: 2300, kind: 'src', pet: 'rex', from: 'idle', to: 'walk' }],
+      tracks: [0, 1, 2].map((i) => ({ t: 2300 + i * 16.7, pets: [{ id: 'rex', x: 700 + i * 2, y: 476, w: 64, h: 64, src: 'dog/brown_walk_8fps.gif' }] })),
+    });
+
+    // WHEN — evaluated
+    const result = evaluateRule(rule, events);
+
+    // THEN — it fails and reports the measured direction
+    expect(result.pass).toBe(false);
+    expect(result.detail).toMatch(/x 700\.0 -> 704\.0 \(right\)/);
+  });
+
+  it('reports roster_saved against the mouseup, as the rule text says, with the saved roster', () => {
+    /** The shakedown reported the time since the mousedown (242.8 ms) under a rule timed from the mouseup. */
+    // GIVEN — the real kept s2b_shelter log (mouseup 4159.6, roster_saved 4159.9)
+    const rule = 'within 1000 ms of that mouseup, pixel-pets-v1 holds exactly Rex, Bao and a white chicken named Pip (chrome.storage.onChanged, src/store.ts:3, 43-49)';
+
+    // WHEN — evaluated
+    const result = evaluateRule(rule, realPopup(), POPUP_CTX);
+
+    // THEN — the detail is the time since the mouseup and names the three pets
+    expect(result.pass, result.detail).toBe(true);
+    expect(result.detail).toBe('roster_saved 0.3ms after the mouseup: chicken/white/Pip, dog/brown/Rex, panda/black/Bao');
+  });
+
+  it('fails the Nunito rule when the FontFace status read was not loaded', () => {
+    /** The font rule judges the status popup.mjs read from document.fonts, not "asserted live". */
+    // GIVEN — the real popup log and a status of 'loading'
+    const rule = "Nunito is loaded (a FontFace with family Nunito has status 'loaded' in document.fonts) before the first action";
+
+    // WHEN — evaluated
+    const result = evaluateRule(rule, realPopup(), { ...POPUP_CTX, nunito: { status: 'loading', t: 3.6 } });
+
+    // THEN — it fails naming the status
+    expect(result.pass).toBe(false);
+    expect(result.detail).toMatch(/status was 'loading'/);
+  });
+
+  it('measures the real popup crops and click margins', () => {
+    /** The crop and click rules compute each crop from the logged DOMRects; the detail carries the frame counts and margins. */
+    // GIVEN — the real kept s2b_shelter log
+    const crops = "every crop A, B and C rect is disjoint from every forbidden cell's DOMRect on every frame in its beat";
+    const clicks = 'every popup click and the Add Pet press log the CSS point they were sent at (x, y), and each point lies inside the crop on screen at that moment (A for shelter_click, B for name_click and type_selected, C for color_selected and add_mousedown), at least 4 CSS px inside its edges';
+
+    // WHEN — both are evaluated
+    const c = evaluateRule(crops, realPopup(), POPUP_CTX);
+    const k = evaluateRule(clicks, realPopup(), POPUP_CTX);
+
+    // THEN — both pass with measured details: frame counts per crop, and each click's margin inside its crop
+    expect(c.pass, c.detail).toBe(true);
+    expect(c.detail).toMatch(/^A_list \d+ frames, B_pick \d+ frames, C_add \d+ frames; nearest forbidden cell [\d.]+ native px away$/);
+    expect(k.pass, k.detail).toBe(true);
+    expect(k.detail).toMatch(/name_click [\d.]+px inside B_pick/);
+  });
+
+  it('fails the feed-heart rule when a second, non-catch heart appears in the take', () => {
+    /** "exactly one feed heart appears in the take": the whole take, as the epic eval counts it, not only the 400 ms window. */
+    // GIVEN — one heart 200 ms after the mouseup and another 3 s later with no catch
+    const rule = 'heart_on arrives within 400 ms of the mouseup, and exactly one feed heart appears in the take (treats go from 10 to 9 once)';
+    const events = wrap({ clicks: [{ ...CLICK, kind: 'click', tMs: 0 }], observed: [{ t: 200, kind: 'heart_on' }, { t: 3200, kind: 'heart_on' }] });
+
+    // WHEN — evaluated
+    const result = evaluateRule(rule, events);
+
+    // THEN — it fails on the take-wide count
+    expect(result.pass).toBe(false);
+    expect(result.detail).toMatch(/2 non-catch heart_on events in the take/);
+  });
+});
+
+describe('"before out" rules are judged up to the shot\'s out anchor', () => {
+  const rule = 'Bao (61 px from Pip, 120 px from Rex) never plays swipe before out';
+  const events = () => wrap({
+    roster: rosterOf('Bao'),
+    observed: [{ t: 350, kind: 'pets_ready' }, { t: 3600, kind: 'src', pet: 'bao', from: 'idle', to: 'swipe' }],
+  });
+
+  it('passes a swipe after out (pets_ready+2950) and fails one before it', () => {
+    /**
+     * s3's out is pets_ready+2950 (bead step 8: "before out" rules are
+     * evaluated up to the shot's out anchor). A Bao greet after the cut is
+     * never on film; one before it is.
+     */
+    // GIVEN — Bao swipes at t=3600, out at 350+2950=3300
+    const ctx = { outAnchor: 'pets_ready+2950' };
+
+    // WHEN — evaluated with that out, and with the swipe moved before it
+    const after = evaluateRule(rule, events(), ctx);
+    const early = events();
+    early.observed[1].t = 3000;
+    const before = evaluateRule(rule, early, ctx);
+
+    // THEN
+    expect(after.pass, after.detail).toBe(true);
+    expect(after.detail).toMatch(/before out \(pets_ready\+2950, t=3300\.0\)/);
+    expect(before.pass).toBe(false);
+  });
+
+  it('judges the first greet, not a later second one, for the greet_start rule', () => {
+    /** A second greet later in the take must not replace the boot greet's timing (seed 2's shakedown read 2584 ms). */
+    // GIVEN — Rex and Pip greet at pets_ready+30, and again 2.5 s later
+    const greet = 'greet_start arrives within 150 ms of pets_ready: Rex and Pip play swipe from the first frames, 59 px apart, neither hovered';
+    const ev = wrap({
+      roster: rosterOf('Rex', 'Pip'),
+      observed: [
+        { t: 0, kind: 'pets_ready' },
+        { t: 30, kind: 'greet_start', pet: 'rex' },
+        { t: 30, kind: 'greet_start', pet: 'pip' },
+        { t: 2530, kind: 'greet_start', pet: 'rex' },
+        { t: 2530, kind: 'greet_start', pet: 'pip' },
+      ],
+    });
+
+    // WHEN / THEN
+    const result = evaluateRule(greet, ev);
+    expect(result.pass, result.detail).toBe(true);
+    expect(result.detail).toMatch(/swipe 30\.0ms after pets_ready/);
   });
 });
