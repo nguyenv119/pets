@@ -10,20 +10,34 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+const MIN_FRAME_S = 1 / 120;
+
 /**
  * Writes an ffmpeg concat-demuxer list from CDP screencast frames.
  * `frames` is `[{ file, ts }]` (ts = the CDP frame's own metadata.timestamp,
- * epoch seconds). Frame N's duration is ts[N+1] - ts[N]; the last frame
- * repeats the previous duration (concat requires every entry but the last
- * to declare one).
+ * epoch seconds). Each frame lasts until the next frame's own timestamp, so
+ * frame N starts at ts[N] - ts[0] on the assembled timeline. A frame stamped
+ * less than 1/120 s after the previous one (CDP sends bursts, and now and
+ * then a frame stamped earlier than its predecessor) still needs a positive
+ * duration, so it gets 1/120 s and the next frame's duration absorbs the
+ * overshoot. Padding each of those without taking the time back made the
+ * assembled clip drift late (215.7 ms by the end clapper on the proof's
+ * frames), which the clapper check read as a residual no capture lag caused.
+ * The last frame repeats the previous gap (concat requires every entry but
+ * the last to declare one).
  */
 export function buildConcatList(frames) {
   if (frames.length < 2) throw new Error(`buildConcatList needs at least 2 frames, got ${frames.length}`);
+  const ts0 = frames[0].ts;
   const lines = [];
+  let at = 0; // seconds of the assembled timeline already written
   for (let i = 0; i < frames.length; i++) {
     lines.push(`file '${frames[i].file}'`);
-    const duration = i < frames.length - 1 ? frames[i + 1].ts - frames[i].ts : frames[i].ts - frames[i - 1].ts;
-    lines.push(`duration ${Math.max(duration, 1 / 120).toFixed(6)}`);
+    const isLast = i === frames.length - 1;
+    const nextStart = isLast ? at + Math.max(frames[i].ts - frames[i - 1].ts, MIN_FRAME_S) : frames[i + 1].ts - ts0;
+    const duration = Number(Math.max(nextStart - at, MIN_FRAME_S).toFixed(6));
+    lines.push(`duration ${duration.toFixed(6)}`);
+    at += duration;
   }
   // The concat demuxer ignores the final entry's duration; repeat the last
   // file once more so the true last frame gets its own screen time.
@@ -77,6 +91,18 @@ export function generateSignalStats(mp4Path, dumpPath, filter = 'signalstats') {
     '-an', '-f', 'null', '-',
   ]);
   return readFileSync(dumpPath, 'utf-8');
+}
+
+/**
+ * Reads one rectangle (device px, `{ x, y, w, h }`) of every frame of an mp4
+ * as 8-bit grey, w*h bytes per frame, for sync.mjs's splitGrayFrames.
+ */
+export function extractGrayCrop(mp4Path, { x, y, w, h }) {
+  return execFileSync(
+    'ffmpeg',
+    ['-nostdin', '-v', 'error', '-i', mp4Path, '-vf', `crop=${w}:${h}:${x}:${y},format=gray`, '-an', '-f', 'rawvideo', '-'],
+    { maxBuffer: 1 << 30 },
+  );
 }
 
 /** ffprobe's `color_space`/`width`/`height` for the acceptance check's `color_space=bt709` assertion. */

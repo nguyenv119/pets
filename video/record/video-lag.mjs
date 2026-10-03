@@ -1,10 +1,12 @@
 // Shared run-scoped state for videoLagMs's fallback rule (bead step 9): a
-// heart-less take (s3_sheet, s4_article_night, s2b_shelter) uses the
-// median of this run's own heart-measured kept shots, or the proof
-// render's own measured value if none have been kept yet. Both record.mjs
-// (page shots) and popup.mjs (the heart-less s2b_shelter take) read and
-// contribute to the same list, so it must live outside either file to
-// avoid a circular import between them.
+// heart-less page take (s3_sheet, s4_article_night) uses the median of this
+// run's own heart-measured kept shots, or the proof render's own measured
+// value if none have been kept yet. The popup take (s2b_shelter) does not
+// borrow: it measures its own lag from its typed text (popup.mjs), because
+// a page shot's lag says nothing about the popup's capture.
+
+/** The epic eval's bound on every shot's videoLagMs (verify.mjs VIDEO_LAG_MAX_MS): a measured lag outside 0..this is discarded, never written. */
+export const VIDEO_LAG_MAX_MS = 120;
 
 /** The proof render's own measured heart-appearance lag (bead step 9's ultimate fallback). */
 export const PROOF_VIDEO_LAG_MS = 56;

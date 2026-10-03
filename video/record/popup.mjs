@@ -9,13 +9,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { launchWithExtension, logPopupRects, openPopup, seedStorage } from '../lib/browser.mjs';
 import { evaluateRules } from './accept.mjs';
-import { assembleFrames, generateSignalStats, probeVideo } from './assemble.mjs';
+import { assembleFrames, extractGrayCrop, generateSignalStats, probeVideo } from './assemble.mjs';
 import { installClap } from './clap.js';
 import { startScreencast } from './screencast.mjs';
-import { computeSync } from './sync.mjs';
-import { fallbackVideoLagMs } from './video-lag.mjs';
+import { computeSync, measureVideoLagFromChange, splitGrayFrames } from './sync.mjs';
+import { VIDEO_LAG_MAX_MS } from './video-lag.mjs';
 
 const CLAP_MS = 160;
+const SETTLE_BEFORE_CLAP_MS = 500;
 const TAKE_BUDGET = 5; // no seed search; a small retry budget only for transient CDP/layout timing
 
 export class DiscardPopupTake extends Error {
@@ -73,9 +74,21 @@ async function glide(page, cursor, x, y, durationMs) {
  * Installs, in the popup page's main world, a chrome.storage.onChanged
  * listener collecting the saved roster (for roster_saved) into
  * window.__ppPopup, so the driver can poll it without its own message loop.
+ * It also logs every `input` event on #pet-name with its time and the
+ * field's DOMRect: the first one ("P") is the visible change this take
+ * measures its own videoLagMs from, since the popup shows no heart.
  */
 function installPopupObserver() {
-  window.__ppPopup = { rosterSaved: null };
+  window.__ppPopup = { rosterSaved: null, nameInputs: [] };
+  document.addEventListener(
+    'input',
+    (e) => {
+      if (e.target.id !== 'pet-name') return;
+      const r = e.target.getBoundingClientRect();
+      window.__ppPopup.nameInputs.push({ t: performance.timeOrigin + performance.now(), value: e.target.value, rect: { x: r.x, y: r.y, w: r.width, h: r.height } });
+    },
+    true,
+  );
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
     if (changes['pixel-pets-v1']) {
@@ -231,6 +244,14 @@ async function captureOnePopupTake({ shot, ext, timezoneId, homeDaysOverride, do
     // epoch every other timestamp here uses — capture that epoch now so
     // tracks can be converted to it below.
     const tracksInstallEpoch = await pageNow(page);
+    // Let the screencast settle before the start clapper, as record.mjs does
+    // (its 500 ms wait). Clapped straight after logPopupRects, about 190 ms
+    // into the capture, the start clapper's release reached the screencast
+    // 34-36 ms after its logged time in 10 of 16 live takes (3-19 ms in the
+    // rest), against 3-20 ms for the end clapper, so endClapResidualMs ran
+    // as high as +59 ms with no drift in the clip at all.
+    // After 500 ms it arrived 4-6 ms after the log (4 of 4 takes).
+    await sleep(SETTLE_BEFORE_CLAP_MS);
     const clapStart = await page.evaluate(([label, ms]) => window.__clap(label, ms), ['start', CLAP_MS]);
     const popupReadyT = await pageNow(page);
 
@@ -246,6 +267,7 @@ async function captureOnePopupTake({ shot, ext, timezoneId, homeDaysOverride, do
     await screencast.stop();
 
     const rawTracks = await page.evaluate(() => window.__ppTracks ?? []);
+    const nameInputs = await page.evaluate(() => window.__ppPopup.nameInputs);
     const tracks = rawTracks.map((f) => ({ ...f, t: tracksInstallEpoch + f.t }));
 
     return {
@@ -259,10 +281,41 @@ async function captureOnePopupTake({ shot, ext, timezoneId, homeDaysOverride, do
       layout,
       observed,
       tracks,
+      nameInputs,
     };
   } finally {
     await context.close().catch(() => {});
   }
+}
+
+/**
+ * Measures the take's videoLagMs from its first #pet-name keystroke (see
+ * sync.mjs measureVideoLagFromChange). Returns `{ videoLagMs, source }`, or
+ * `{ reject }` when the keystroke is missing, never shows in the video, or
+ * lands outside the epic eval's 0-VIDEO_LAG_MAX_MS bound: a lag out there is
+ * a recorder bug to fix, never a value to write (bead step 9).
+ */
+function measurePopupLag({ take, mp4Path, dpr, fps, shift }) {
+  const first = take.nameInputs[0];
+  if (!first) return { reject: 'no input event on #pet-name to measure videoLagMs from' };
+  // Inset 3 CSS px inside the field so its 1 px border, whose colour
+  // transitions on focus, stays out of the crop.
+  const inset = 3;
+  const crop = {
+    x: Math.round((first.rect.x + inset) * dpr),
+    y: Math.round((first.rect.y + inset) * dpr),
+    w: Math.round((first.rect.w - 2 * inset) * dpr),
+    h: Math.round((first.rect.h - 2 * inset) * dpr),
+  };
+  const frames = splitGrayFrames(extractGrayCrop(mp4Path, crop), { width: crop.w, height: crop.h, fps });
+  const sinceMs = shift(first.t);
+  const videoLagMs = measureVideoLagFromChange({ frames, sinceMs });
+  const source = `measured from the typed "${first.value}" in #pet-name, logged at ${sinceMs.toFixed(1)}ms`;
+  if (videoLagMs === null) return { reject: `the typed "${first.value}" never showed in #pet-name after ${sinceMs.toFixed(1)}ms` };
+  if (videoLagMs < 0 || videoLagMs > VIDEO_LAG_MAX_MS) {
+    return { reject: `videoLagMs ${videoLagMs.toFixed(1)}ms outside the epic eval's 0-${VIDEO_LAG_MAX_MS}ms bound (${source})` };
+  }
+  return { videoLagMs, source };
 }
 
 /** Records the s2b_shelter take once (no seed search) and writes build/<run>/s2b_shelter/{demo.mp4,events.json}. */
@@ -345,14 +398,23 @@ export async function recordPopupTake({ shot, doc, ext, opts, runId, buildDir })
 
     const dumpPath = join(take.workDir, 'sig.txt');
     const sig = generateSignalStats(mp4Path, dumpPath);
-    // s2b_shelter has no heart (bead step 9): borrow the fallback (median of
-    // this run's heart-measured kept shots, else the proof's own value).
-    const { videoLagMs, source: videoLagSource } = fallbackVideoLagMs();
+    // s2b_shelter has no heart, so it measures its own lag the way record.mjs
+    // measures the heart's: the first demo.mp4 frame at or after the logged
+    // first keystroke whose #pet-name field shows the typed "P", minus the
+    // logged time. A borrowed page-shot lag does not describe this capture.
+    const lag = measurePopupLag({ take, mp4Path, dpr, fps: doc.fps ?? 25, shift });
+    if (lag.reject) {
+      rmSync(take.workDir, { recursive: true, force: true });
+      rejections.push(lag.reject);
+      console.log(`[${shot.id}] attempt ${attempt} discarded: ${lag.reject}`);
+      continue;
+    }
+    const { videoLagMs, source: videoLagSource } = lag;
     const sync = computeSync({ signalStatsText: sig, startClapLoggedMs: take.clapStart.tOff, endClapLoggedMs: take.clapEnd.tOff, videoLagMs });
 
     const probe = earlyProbe;
     console.log(`[${shot.id}] KEPT attempt ${attempt}; ${mp4Path} ${probe.width}x${probe.height} color_space=${probe.color_space}`);
-    console.log(`[${shot.id}] videoLagMs=${videoLagMs.toFixed(1)} (${videoLagSource}; epic eval bound 0-120ms)`);
+    console.log(`[${shot.id}] videoLagMs=${videoLagMs.toFixed(1)} (${videoLagSource}; epic eval bound 0-${VIDEO_LAG_MAX_MS}ms)`);
     console.log(`[${shot.id}] clapper check: |${sync.endClapResidualMs.toFixed(1)} + ${videoLagMs.toFixed(1)}| = ${Math.abs(sync.correctedResidualMs).toFixed(1)} <= 40 -> ${sync.pass}`);
     if (!sync.pass) {
       rmSync(take.workDir, { recursive: true, force: true });

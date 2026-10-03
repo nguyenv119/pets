@@ -23,7 +23,7 @@ import { installObservers } from './observe.js';
 import { recordPopupTake } from './popup.mjs';
 import { startScreencast } from './screencast.mjs';
 import { computeSync, HEART_MASK_FILTER, measureVideoLagFromHeart } from './sync.mjs';
-import { fallbackVideoLagMs, keptHeartLagsMs } from './video-lag.mjs';
+import { fallbackVideoLagMs, keptHeartLagsMs, VIDEO_LAG_MAX_MS } from './video-lag.mjs';
 
 const VIDEO_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
 const CACHE_TAKES_DIR = join(VIDEO_DIR, '.cache', 'takes');
@@ -339,7 +339,7 @@ async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId })
     // silently accepted, even when this take's own clapper check happens to
     // pass (both sides of the check can grow together under heavy system
     // load without the corrected residual crossing 40ms).
-    if (measuredFromHeart && (videoLagMs < 0 || videoLagMs > 120)) {
+    if (measuredFromHeart && (videoLagMs < 0 || videoLagMs > VIDEO_LAG_MAX_MS)) {
       rmSync(take.workDir, { recursive: true, force: true });
       const detail = `videoLagMs ${videoLagMs.toFixed(1)}ms outside the epic eval's 0-120ms bound (${videoLagSource})`;
       rejections.push(detail);
