@@ -101,8 +101,12 @@ describe('floorAnchoredCrop', () => {
      * even though the 16:9 cut is correct — the bug the generic StageConfig
      * parameter exists to prevent.
      */
-    const crop = floorAnchoredCrop(STAGE_9X16, 1, 540);
-    expect(floorMarginAtZoom(crop, STAGE_9X16)).toBe(96);
+    const full = floorAnchoredCrop(STAGE_9X16, 1, 540);
+    expect(full).toEqual({ x: 0, y: 0, w: 1080, h: 1920 });
+    // shots.json variants.vertical_9x16.camera.crop: "1460 + 460/z" -> the 2.0x crop is 540x960 at canvas y 730.
+    const zoomed = floorAnchoredCrop(STAGE_9X16, 2, 540);
+    expect(zoomed).toEqual({ x: 270, y: 730, w: 540, h: 960 });
+    expect(floorMarginAtZoom(zoomed, STAGE_9X16) * 2).toBe(460);
   });
 });
 

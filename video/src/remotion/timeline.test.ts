@@ -5,13 +5,13 @@ import { describe, expect, it } from 'vitest';
 import type { Events } from '../schema';
 import { STAGE_16X9 } from './camera';
 import {
-  beatCropAt,
-  beatHoldWindow,
   buildTimeline,
   classifyMove,
   resolveAnyAnchor,
   resolveEditAnchor,
   resolveFocusX,
+  steadyRun,
+  timelineJson,
   type Shot,
   type ShotBeat,
   type ShotsDoc,
@@ -196,61 +196,6 @@ describe('resolveFocusX', () => {
   });
 });
 
-describe('beatHoldWindow', () => {
-  const events = loadFixtureEvents();
-
-  it('gives a plain hold beat the whole beat span as its hold window', () => {
-    const beat: ShotBeat = { name: 'x', camera: { zoom: 2, focus: 'page', move: 'hold', sample: 2 } };
-    expect(beatHoldWindow(beat, 1000, 2000, { events })).toEqual({ hold_in: 1000, hold_out: 2000 });
-  });
-
-  it('ends a "Hold until X" beat\'s hold at the resolved until-anchor, not the beat\'s own end', () => {
-    /**
-     * Verifies the epic's rule: "'Hold 1.0x ... until <anchor>' beats
-     * ... from master_in to that anchor." A hold that ran to master_out
-     * instead would claim stillness through the push, which the hold
-     * check derives independently from camera.move and would fail.
-     */
-    const beat: ShotBeat = {
-      name: 'x',
-      camera: { zoom: 2, focus: 'page', move: 'Hold 1.0x (page) until in+500, then push to 2.0x.', sample: 1 },
-    };
-    expect(beatHoldWindow(beat, 1000, 5000, { events, beatInMs: 1000 })).toEqual({ hold_in: 1000, hold_out: 1500 });
-  });
-
-  it('returns no hold window for a continuous (follow) beat', () => {
-    const beat: ShotBeat = { name: 'x', camera: { zoom: 2, focus: 'pet:rex', move: 'follow', sample: 2 } };
-    expect(beatHoldWindow(beat, 1000, 2000, { events })).toBeUndefined();
-  });
-});
-
-describe('beatCropAt', () => {
-  const events = loadFixtureEvents();
-
-  it('renders the full-stage crop for a 1.0x page-focus hold beat', () => {
-    const beat: ShotBeat = { name: 'x', camera: { zoom: 1, focus: 'page', move: 'hold', sample: 1 } };
-    const crop = beatCropAt(beat, STAGE_16X9, events, 0, { events });
-    expect(crop).toEqual({ x: 0, y: 0, w: 1920, h: 1080 });
-  });
-
-  it('renders the pre-push zoom before the until-anchor, and the target zoom after it', () => {
-    /**
-     * Verifies beatCropAt actually switches behaviour at the until-anchor
-     * boundary, not just that classifyMove parses it — a render that
-     * samples camera.zoom's crop throughout would show the pet zoomed in
-     * during what should still be the wide establishing hold.
-     */
-    const beat: ShotBeat = {
-      name: 'x',
-      camera: { zoom: 2, focus: 'page', move: 'Hold 1.0x (page) until in+500, then push to 2.0x.', sample: 1 },
-    };
-    const before = beatCropAt(beat, STAGE_16X9, events, 200, { events, beatInMs: 0 });
-    const after = beatCropAt(beat, STAGE_16X9, events, 800, { events, beatInMs: 0 });
-    expect(before.w).toBe(1920); // 1.0x: full stage width
-    expect(after.w).toBe(960); // 2.0x: half stage width
-  });
-});
-
 describe('buildTimeline (integration, real fixture data)', () => {
   const shotsDoc = loadFixtureShots();
   const events = loadFixtureEvents();
@@ -264,6 +209,7 @@ describe('buildTimeline (integration, real fixture data)', () => {
       eventsByShotId: { [shot.id]: events },
       sourceByShotId: { [shot.id]: '/build/fixture/sample_hover_treat_catch/demo.mp4' },
       music: 'assets/music/cat_caffe.ogg',
+      allowEmptyBeats: true,
     });
     expect(timeline.beats.map((b) => b.name)).toEqual(shot.beats.map((b: Shot['beats'][number]) => b.name));
   });
@@ -284,6 +230,7 @@ describe('buildTimeline (integration, real fixture data)', () => {
       eventsByShotId: { [shot.id]: events },
       sourceByShotId: { [shot.id]: '/build/fixture/sample_hover_treat_catch/demo.mp4' },
       music: 'assets/music/cat_caffe.ogg',
+      allowEmptyBeats: true,
     });
     for (const beat of timeline.beats) {
       expect(beat.master_out).toBeGreaterThanOrEqual(beat.master_in);
@@ -297,21 +244,25 @@ describe('buildTimeline (integration, real fixture data)', () => {
       eventsByShotId: { [shot.id]: events },
       sourceByShotId: { [shot.id]: '/build/fixture/sample_hover_treat_catch/demo.mp4' },
       music: 'assets/music/cat_caffe.ogg',
+      allowEmptyBeats: true,
     });
     for (let i = 1; i < timeline.beats.length; i++) {
       expect(timeline.beats[i].master_in).toBe(timeline.beats[i - 1].master_out);
     }
   });
 
-  it('gives every non-card beat a crop and a hold_in/hold_out (every fixture beat is a plain hold)', () => {
+  it('gives every drawn non-card beat a crop and a whole-beat hold (every fixture beat is a plain hold)', () => {
     const timeline = buildTimeline({
       shots: singleShotDoc,
       stage: STAGE_16X9,
       eventsByShotId: { [shot.id]: events },
       sourceByShotId: { [shot.id]: '/build/fixture/sample_hover_treat_catch/demo.mp4' },
       music: 'assets/music/cat_caffe.ogg',
+      allowEmptyBeats: true,
     });
-    for (const beat of timeline.beats) {
+    const drawn = timeline.beats.filter((b) => b.k1 > b.k0);
+    expect(drawn.length).toBeGreaterThan(0);
+    for (const beat of drawn) {
       expect(beat.crop).toBeDefined();
       expect(beat.hold_in).toBe(beat.master_in);
       expect(beat.hold_out).toBe(beat.master_out);
@@ -332,6 +283,7 @@ describe('buildTimeline (integration, real fixture data)', () => {
       eventsByShotId: { [shot.id]: events },
       sourceByShotId: { [shot.id]: absPath },
       music: 'assets/music/cat_caffe.ogg',
+      allowEmptyBeats: true,
     });
     for (const beat of timeline.beats) {
       expect(beat.source).toBe(absPath);
@@ -343,5 +295,71 @@ describe('buildTimeline (integration, real fixture data)', () => {
     expect(() =>
       buildTimeline({ shots: badDoc, stage: STAGE_16X9, eventsByShotId: {}, sourceByShotId: {}, music: 'x' }),
     ).toThrow(/nope/);
+  });
+});
+
+describe('buildTimeline: frame grid and declared samples', () => {
+  const shotsDoc = loadFixtureShots();
+  const events = loadFixtureEvents();
+  const shot = shotsDoc.shots.find((s) => s.id === 'sample_hover_treat_catch')!;
+  const edit = buildTimeline({
+    shots: { edit_order: [shot.id], shots: [shot] },
+    stage: STAGE_16X9,
+    eventsByShotId: { [shot.id]: events },
+    sourceByShotId: { [shot.id]: '/abs/demo.mp4' },
+    music: '/abs/cat_caffe.ogg',
+    allowEmptyBeats: true,
+  });
+
+  it('maps master to source by a whole number of frames, so every master frame shows one whole source frame', () => {
+    /**
+     * verify.mjs samples the master at t and the recording at source_t + (t - master_t). If that offset
+     * were not a multiple of 40 ms, the two would show different frames and every SSIM would sag.
+     */
+    for (const b of edit.beats) {
+      expect(Math.abs(((b.master_t - b.source_t) / 40) % 1)).toBeLessThan(1e-9);
+      expect(Math.abs((b.master_in / 40) % 1)).toBeLessThan(1e-9);
+    }
+  });
+
+  it('puts master_t on a frame inside the declared hold, showing the declared crop', () => {
+    /** The eval aims at master_t with the declared crop and requires hold_in <= master_t <= hold_out. */
+    for (const b of edit.beats.filter((x) => x.frameCrops)) {
+      expect(b.master_t).toBeGreaterThanOrEqual(b.hold_in!);
+      expect(b.master_t).toBeLessThanOrEqual(b.hold_out!);
+      expect(b.frameCrops![Math.round(b.master_t / 40) - b.k0]).toEqual(b.crop);
+    }
+  });
+
+  it('throws on a beat that spans no frame unless the caller allows it (fixture only)', () => {
+    /** On a real take an empty beat means the anchors resolved out of order; rendering past it would drop a beat silently. */
+    expect(() =>
+      buildTimeline({ shots: { edit_order: [shot.id], shots: [shot] }, stage: STAGE_16X9, eventsByShotId: { [shot.id]: events }, sourceByShotId: { [shot.id]: '/abs/demo.mp4' }, music: 'm' }),
+    ).toThrow(/spans no master frame/);
+  });
+
+  it('extends the final hold toward the length rule by at most 1.0 s', () => {
+    /** master.length_rule: "Under 28.3 s: extend the final hold by up to 1.0 s." */
+    const longer = buildTimeline({ shots: { edit_order: [shot.id], shots: [shot] }, stage: STAGE_16X9, eventsByShotId: { [shot.id]: events }, sourceByShotId: { [shot.id]: '/abs/demo.mp4' }, music: 'm', allowEmptyBeats: true, minLengthMs: 28300 });
+    expect(longer.totalFrames - edit.totalFrames).toBe(25);
+  });
+
+  it('writes timeline.json in seconds with only the schema fields', () => {
+    /** verify.mjs reads seconds; render-only fields (frameCrops, shiftMs) must never leak into the frozen schema. */
+    const json = timelineJson(edit);
+    const last = json.beats[json.beats.length - 1];
+    expect(last.master_out).toBeCloseTo(edit.totalFrames / 25, 6);
+    expect(Object.keys(last)).not.toContain('frameCrops');
+    expect(Object.keys(last)).not.toContain('shiftMs');
+  });
+});
+
+describe('steadyRun', () => {
+  it('picks the longest run of identical crops at the sample zoom', () => {
+    /** camera.sample names the zoom master_t samples; a 1.0x-sample beat must not sample its 2.0x tail. */
+    const full = { x: 0, y: 0, w: 1920, h: 1080 };
+    const z = { x: 400, y: 492, w: 960, h: 540 };
+    expect(steadyRun([full, full, full, z, z, z, z, z], 1920, 1)).toEqual({ first: 0, last: 2 });
+    expect(steadyRun([full, full, full, z, z, z, z, z], 1920, 2)).toEqual({ first: 3, last: 7 });
   });
 });
