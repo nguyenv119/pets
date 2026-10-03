@@ -9,35 +9,79 @@
 // cut hard on the frame the anchors name (master.motion.cuts: "Hard cuts
 // on an action frame only"). Text layers are siblings of the beats, so the
 // popup caption can run across b3c-b3e and the brand line into b7.
+//
+// Motion blur (motionBlur.ts): a page frame inside a camera move renders
+// the whole stage through CameraMotionBlur; a held frame blurs only a
+// moving cursor; holds and the popup card are never blurred.
 
 import React from 'react';
-import { AbsoluteFill, Sequence, useCurrentFrame, useVideoConfig } from 'remotion';
-import { staticFile } from 'remotion';
+import { CameraMotionBlur } from '@remotion/motion-blur';
+import { AbsoluteFill, Sequence, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
 import { AudioMap } from './AudioMap';
 import { BrandLine, CaptionPill, Clock, Cta, NameTag } from './Captions';
 import { Cursor } from './Cursor';
 import { PopupCard } from './PopupCard';
 import { Stage } from './Stage';
+import { BLUR_SAMPLES, BLUR_SHUTTER_ANGLE, cameraMovesInto, cursorMovesInto, exposureOf, subframeCrop } from './motionBlur';
 import type { PlanBeat, PromoPlan } from './plan';
 
 export type PromoProps = PromoPlan;
+
+/** The logged-clock ms master frame `k` (fractional inside a blur sample) shows on this beat's shot. */
+const loggedMsOf = (beat: PlanBeat, k: number, fps: number) => ((k - beat.shiftFrames) * 1000) / fps - beat.cursor.trimBeforeMs - beat.cursor.videoLagMs;
+
+/** One exposure sample of a page frame: the camera at subframeCrop(u), the cursor at that instant, the recording pinned to the frame. */
+const PageSample: React.FC<{ beat: PlanBeat; plan: PromoPlan; local: number; camera: boolean; cursor: boolean }> = ({ beat, plan, local, camera, cursor }) => {
+  const u = exposureOf(useCurrentFrame(), local);
+  const { fps, width } = useVideoConfig();
+  const crops = beat.frameCrops ?? [];
+  const crop = camera ? subframeCrop(crops, local, u) : crops[local];
+  const k = beat.k0 + local - 1 + (cursor ? u : 1);
+  return (
+    <Stage stage={plan.stage} crop={crop} outputWidth={width} videoSrc={staticFile(beat.stagedSrc)} trimBeforeFrames={beat.k0 - beat.shiftFrames} pinFrame={local}>
+      <Cursor track={beat.cursor.track} clicks={beat.cursor.clicks} loggedMs={loggedMsOf(beat, k, fps)} cssToLayer={2} offsetY={-plan.stage.pageTopNative} />
+    </Stage>
+  );
+};
+
+/** One exposure sample of the cursor alone (a held frame whose cursor moves). */
+const CursorSampleLayer: React.FC<{ beat: PlanBeat; plan: PromoPlan; local: number }> = ({ beat, plan, local }) => {
+  const u = exposureOf(useCurrentFrame(), local);
+  const { fps } = useVideoConfig();
+  return <Cursor track={beat.cursor.track} clicks={beat.cursor.clicks} loggedMs={loggedMsOf(beat, beat.k0 + local - 1 + u, fps)} cssToLayer={2} offsetY={-plan.stage.pageTopNative} />;
+};
 
 const BeatLayer: React.FC<{ beat: PlanBeat; plan: PromoPlan }> = ({ beat, plan }) => {
   const local = useCurrentFrame();
   const { fps, width } = useVideoConfig();
   const k = beat.k0 + local;
   const trimBeforeFrames = beat.k0 - beat.shiftFrames; // the source frame on the beat's first master frame
-  const loggedMs = ((k - beat.shiftFrames) * 1000) / fps - beat.cursor.trimBeforeMs - beat.cursor.videoLagMs;
+  const loggedMs = loggedMsOf(beat, k, fps);
 
   if (beat.card) {
     const i = Math.min(local, beat.card.frames.length - 1);
     return <PopupCard frame={beat.card.frames[i]} envelope={beat.card.envelopes[i]} stagedSrc={beat.stagedSrc} trimBeforeFrames={trimBeforeFrames} cursor={beat.cursor} loggedMs={loggedMs} />;
   }
   const crops = beat.frameCrops ?? [];
-  const crop = crops[Math.min(local, crops.length - 1)];
+  const i = Math.min(local, crops.length - 1);
+  const cursorMoving = cursorMovesInto(beat.cursor.track, loggedMs, 1000 / fps);
+  if (cameraMovesInto(crops, i)) {
+    return (
+      <CameraMotionBlur shutterAngle={BLUR_SHUTTER_ANGLE} samples={BLUR_SAMPLES}>
+        <PageSample beat={beat} plan={plan} local={i} camera cursor={cursorMoving} />
+      </CameraMotionBlur>
+    );
+  }
+  const cursor = <Cursor track={beat.cursor.track} clicks={beat.cursor.clicks} loggedMs={loggedMs} cssToLayer={2} offsetY={-plan.stage.pageTopNative} />;
   return (
-    <Stage stage={plan.stage} crop={crop} outputWidth={width} videoSrc={staticFile(beat.stagedSrc)} trimBeforeFrames={trimBeforeFrames}>
-      <Cursor track={beat.cursor.track} clicks={beat.cursor.clicks} loggedMs={loggedMs} cssToLayer={2} offsetY={-plan.stage.pageTopNative} />
+    <Stage stage={plan.stage} crop={crops[i]} outputWidth={width} videoSrc={staticFile(beat.stagedSrc)} trimBeforeFrames={trimBeforeFrames}>
+      {cursorMoving ? (
+        <CameraMotionBlur shutterAngle={BLUR_SHUTTER_ANGLE} samples={BLUR_SAMPLES}>
+          <CursorSampleLayer beat={beat} plan={plan} local={i} />
+        </CameraMotionBlur>
+      ) : (
+        cursor
+      )}
     </Stage>
   );
 };

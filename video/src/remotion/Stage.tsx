@@ -4,7 +4,7 @@
 // component only applies as CSS.
 
 import React from 'react';
-import { OffthreadVideo } from 'remotion';
+import { Freeze, OffthreadVideo } from 'remotion';
 import type { Rect } from '../schema';
 import type { StageConfig } from './camera';
 
@@ -19,6 +19,12 @@ export interface StageProps {
   videoSrc: string;
   /** Frames into the video to start playback from (Remotion OffthreadVideo trimBefore). */
   trimBeforeFrames: number;
+  /**
+   * Inside a motion-blur sample (whose frame is fractional): the beat-local
+   * frame the recording must show, so every sample draws the same page
+   * frame and only the camera moves within the exposure.
+   */
+  pinFrame?: number;
   children?: React.ReactNode;
 }
 
@@ -29,7 +35,7 @@ export interface StageProps {
  * exactly. Nearest-neighbour scaling keeps native/2x holds pixel-clean
  * (storyboard: "Holds only at 1.0x and 2.0x... nearest-neighbour").
  */
-export const Stage: React.FC<StageProps> = ({ stage, crop, outputWidth, videoSrc, trimBeforeFrames, children }) => {
+export const Stage: React.FC<StageProps> = ({ stage, crop, outputWidth, videoSrc, trimBeforeFrames, pinFrame, children }) => {
   const cameraScale = outputWidth / crop.w;
 
   return (
@@ -48,18 +54,20 @@ export const Stage: React.FC<StageProps> = ({ stage, crop, outputWidth, videoSrc
       >
         {/* The page video, its hidden top strip cropped off via a negative offset. */}
         <div style={{ position: 'absolute', left: 0, top: 0, width: stage.width, height: stage.floorLine, overflow: 'hidden' }}>
-          <OffthreadVideo
-            src={videoSrc}
-            trimBefore={trimBeforeFrames}
-            muted
-            style={{
-              position: 'absolute',
-              left: 0,
-              top: -stage.pageTopNative,
-              width: stage.width,
-              imageRendering: 'pixelated',
-            }}
-          />
+          <Freeze frame={pinFrame ?? 0} active={pinFrame !== undefined}>
+            <OffthreadVideo
+              src={videoSrc}
+              trimBefore={trimBeforeFrames}
+              muted
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: -stage.pageTopNative,
+                width: stage.width,
+                imageRendering: 'pixelated',
+              }}
+            />
+          </Freeze>
         </div>
         {/* The cream floor band beneath the page. */}
         <div
