@@ -231,15 +231,14 @@
     "hour": 14,
     "prng": {
      "seed": null,
-     "sim_pass_rate": "12.1% of 2000",
+     "sim_pass_rate": "12.1% of 2000 (Rex walks left about 2000 + 2000 x r1 - 24 ms after pets_ready when r2 < 0.4; the candidates walk at +2270, +2267, +2238 and +2161 ms, clear of the 2000 and 2600 edges. v2 run: seed 7 walked at +2000.4 and +1999.9 ms, on the edge, so it was dropped)",
      "sim_candidates": [
-      7,
-      19,
-      23,
-      51
+      51,
+      66,
+      105,
+      23
      ],
-     "prefer": "Rex's walk starts closest to pets_ready+2300",
-     "v2_status": "v1 values, kept as placeholders: the seed search and sim_candidates are re-run for the v2 viewports by pets-3it.4"
+     "prefer": "Rex's walk starts closest to pets_ready+2300"
     },
     "visible": true,
     "homeAnchorDaysAgo": 3
@@ -446,16 +445,15 @@
     "hour": 14,
     "prng": {
      "seed": null,
-     "sim_pass_rate": "81.2% of 2000 (median catch 1.12 s after the dblclick)",
+     "sim_pass_rate": "89.3% of 2000 at 960x436 (median catch 0.98 s after the dblclick; the browser caught at 0.99 s on seed 1)",
      "sim_candidates": [
       1,
-      2,
       3,
-      4,
-      5
+      8,
+      2,
+      4
      ],
-     "prefer": "catch within 1300 ms of the dblclick (first landing), then the smallest abs(ball vx)",
-     "v2_status": "v1 values, kept as placeholders: the seed search and sim_candidates are re-run for the v2 viewports by pets-3it.4"
+     "prefer": "catch within 1300 ms of the dblclick (first landing), then the smallest abs(ball vx)"
     },
     "visible": true,
     "homeAnchorDaysAgo": 3
@@ -960,10 +958,14 @@
     "hour": 14,
     "prng": {
      "seed": null,
-     "sim_pass_rate": "unknown with three pets (two pets: 28.8% of 2000); re-run the state-machine port with this roster",
-     "sim_candidates": [],
-     "prefer": "none",
-     "v2_status": "v1 values, kept as placeholders: the seed search and sim_candidates are re-run for the v2 viewports by pets-3it.4"
+     "sim_pass_rate": "13.9% of 2000 (all three spawn timers, drawn in roster order rex, bao, pip, must outlast out at pets_ready+2950, or a pet walks or lies; the candidates' first transitions come at +3321, +3471, +3399 and +3126 ms. v2 run: seeds 10 and 11 passed in the browser with only 30-50 ms to spare)",
+     "sim_candidates": [
+      31,
+      73,
+      80,
+      25
+     ],
+     "prefer": "none"
     },
     "visible": true,
     "homeAnchorDaysAgo": 9
@@ -1446,14 +1448,13 @@
       "Rex's box right edge stays at or under CSS x 444 for the whole take",
       "no wall bounce (no direction flip at x 0) before out"
      ],
-     "sim_pass_rate": "12.1% of 2000",
+     "sim_pass_rate": "12.1% of 2000 (Rex walks left about 2000 + 2000 x r1 - 24 ms after pets_ready when r2 < 0.4; the candidates walk at +2270, +2267, +2238 and +2161 ms, clear of the 2000 and 2600 edges. v2 run: seed 7 walked at +2000.4 and +1999.9 ms, on the edge, so it was dropped)",
      "sim_candidates": [
-      7,
-      19,
-      23,
-      51
-     ],
-     "v2_status": "v1 values, kept as placeholders: the seed search and sim_candidates are re-run for the v2 viewports by pets-3it.4"
+      51,
+      66,
+      105,
+      23
+     ]
     },
     "s2_review": {
      "roster_hidden": [
@@ -1471,23 +1472,22 @@
       "x": 300,
       "y": 500,
       "target": "#dbl-zone (narrow layout)",
-      "note": "v1 point, re-derived for the 540x856 narrow review by pets-3it.4"
+      "note": "Inside the narrow #dbl-zone (x 200-400, y 470-530), clear of the pets (y 792-856); elementFromPoint there is div#dbl-zone in the 540x856 review."
      },
      "extra_accept": [
-      "a catch by Rex within 2800 ms of the dblclick, replacing the 16:9 limit of 2600 ms (the 856 px page gives a longer fall; re-measured by pets-3it.4)",
+      "a catch by Rex within 2800 ms of the dblclick, replacing the 16:9 limit of 2600 ms (the 856 px page gives a longer fall: 1.42 s on seed 1, against 0.99 s at 960x436)",
       "the ball is at CSS x 380 or less at the catch",
       "Rex's box right edge stays at or under CSS x 444 for the whole take",
       "no wall bounce before out"
      ],
-     "sim_pass_rate": "44.3% of 2000",
+     "sim_pass_rate": "47.8% of 2000 with the extra rules at 540x856 (median catch 1.42 s after the dblclick; the browser caught at 1.42 s on seed 1)",
      "sim_candidates": [
       1,
-      2,
       3,
-      4,
-      5
-     ],
-     "v2_status": "v1 values, kept as placeholders: the seed search and sim_candidates are re-run for the v2 viewports by pets-3it.4"
+      8,
+      2,
+      4
+     ]
     },
     "s2b_shelter": {
      "reuse": "the 16:9 popup take: the popup does not depend on the page viewport, so it is recorded once",
@@ -1513,9 +1513,13 @@
      "extra_accept": [
       "every pet box's right edge stays at or under CSS x 444 for the whole take"
      ],
-     "sim_pass_rate": "unknown with three pets (two pets: 28.8% of 2000)",
-     "sim_candidates": [],
-     "v2_status": "v1 values, kept as placeholders: the seed search and sim_candidates are re-run for the v2 viewports by pets-3it.4"
+     "sim_pass_rate": "13.9% of 2000 (all three spawn timers, drawn in roster order rex, bao, pip, must outlast out at pets_ready+2950, or a pet walks or lies; the candidates' first transitions come at +3321, +3471, +3399 and +3126 ms. v2 run: seeds 10 and 11 passed in the browser with only 30-50 ms to spare)",
+     "sim_candidates": [
+      31,
+      73,
+      80,
+      25
+     ]
     },
     "s4_article_night": {
      "positions": {

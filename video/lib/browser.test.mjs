@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { acquireLock, lockPath } from './lock.mjs';
+import { seedPositions } from './browser.mjs';
 
 const VIDEO_DIR = fileURLToPath(new URL('..', import.meta.url));
 const REPO_ROOT = join(VIDEO_DIR, '..');
@@ -40,6 +41,43 @@ describe('storage key equality', () => {
     expect(rosterKey).toBe('pixel-pets-v1');
     expect(positionsKey).toBe('pixel-pets-positions-v1');
     expect(settingsKey).toBe('pixel-pets-settings-v1');
+  });
+});
+
+describe('seedPositions', () => {
+  it('stands every seeded pet on the viewport bottom: y = innerHeight - 64 (372 wide, 792 narrow)', () => {
+    /**
+     * Verifies the stored y is derived from the take's own viewport, not a
+     * constant from an older one (v1 wrote 476 for a 540 px viewport).
+     *
+     * This matters because the stored y is what the content script reads on
+     * boot; a stale y from another viewport would put the first painted
+     * frame's pets off the floor in the 436 px and 856 px takes.
+     *
+     * If this breaks, the boxes start above or below the page bottom.
+     */
+    // GIVEN — Rex and Bao's seeded x
+    const positions = { rex: { x: 700 }, bao: { x: 16 } };
+
+    // WHEN — positions are built for the wide and narrow viewports
+    const wide = seedPositions(positions, 436);
+    const narrow = seedPositions(positions, 856);
+
+    // THEN — x is kept and y sits 64 px above the bottom
+    expect(wide).toEqual({ rex: { x: 700, y: 372 }, bao: { x: 16, y: 372 } });
+    expect(narrow.rex).toEqual({ x: 700, y: 792 });
+  });
+
+  it('throws when positions are given without a viewport height', () => {
+    /**
+     * A caller that forgets the height must fail loudly instead of storing
+     * y NaN, which would silently leave the pets wherever the extension
+     * defaults them.
+     */
+    // GIVEN / WHEN / THEN — no innerHeight, one position
+    expect(() => seedPositions({ rex: { x: 1 } })).toThrow(/innerHeight/);
+    // and the popup's empty positions need none
+    expect(seedPositions({})).toEqual({});
   });
 });
 

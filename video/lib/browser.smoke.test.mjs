@@ -36,7 +36,7 @@ describe('the real browser harness', () => {
      */
     // GIVEN — a built extension, a fresh Chromium context, and the fixture set page routed
     const ext = await buildExtension();
-    const { context, serviceWorker } = await launchWithExtension({ ext, viewport: { width: 960, height: 540 } });
+    const { context, serviceWorker } = await launchWithExtension({ ext, viewport: { width: 960, height: 436 } });
 
     try {
       const routeLog = await routeSet(context, FIXTURE_SET_DIR, { seed: '1', hour: 14 });
@@ -47,7 +47,7 @@ describe('the real browser harness', () => {
         theme: 'light',
         visible: true,
         homeAnchorDaysAgo: 3,
-      });
+      }, 436);
 
       const page = await context.newPage();
       await page.goto('https://pixelpets.demo/article.html');

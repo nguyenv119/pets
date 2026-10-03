@@ -616,23 +616,31 @@ function evalPopupListGrowsFormCollapses(rule, _m, events) {
 }
 
 /**
- * Each popup click's logged point, judged against its crop computed on the
- * logged frame nearest the click (the eval's nearestTrack): at least 4 CSS
- * px inside every edge. Needs ctx.popup.viewportWidth.
+ * Every logged popup click and the Add Pet press (every event of every kind
+ * in POPUP_CROP_OF_EVENT, not only the first of each), judged against its
+ * crop computed on the logged frame nearest the click (the eval's
+ * nearestTrack): at least 4 CSS px inside every edge. Needs
+ * ctx.popup.viewportWidth.
  */
 function evalPopupClicksInsideCrop(rule, _m, events, ctx) {
   const vw = ctx.popup?.viewportWidth;
   if (!vw) return fail(rule, 'no popup viewport width to compute the crops with');
   const parts = [];
-  for (const [kind, crop] of Object.entries(POPUP_CROP_OF_EVENT)) {
-    const e = firstObserved(events, kind);
-    if (!e) return fail(rule, `no ${kind} observed`);
-    if (!Number.isFinite(e.x) || !Number.isFinite(e.y)) return fail(rule, `${kind} logged no x/y`);
+  for (const kind of Object.keys(POPUP_CROP_OF_EVENT)) {
+    if (!firstObserved(events, kind)) return fail(rule, `no ${kind} observed`);
+  }
+  const seen = {};
+  for (const e of events.observed) {
+    const crop = POPUP_CROP_OF_EVENT[e.kind];
+    if (!crop) continue;
+    seen[e.kind] = (seen[e.kind] ?? 0) + 1;
+    const name = `${e.kind} #${seen[e.kind]}`;
+    if (!Number.isFinite(e.x) || !Number.isFinite(e.y)) return fail(rule, `${name} logged no x/y`);
     const rect = popupCropRect(crop, nearestFrame(events, e.t), vw);
-    if (!rect) return fail(rule, `${crop} cannot be computed at ${kind}`);
+    if (!rect) return fail(rule, `${crop} cannot be computed at ${name}`);
     const insideCss = Math.min(e.x * 2 - rect.x, rect.x + rect.w - e.x * 2, e.y * 2 - rect.y, rect.y + rect.h - e.y * 2) / 2;
-    if (insideCss < CLICK_INSIDE_CSS) return fail(rule, `${kind} at CSS (${e.x.toFixed(1)}, ${e.y.toFixed(1)}) is ${insideCss.toFixed(1)} CSS px inside ${crop} ${JSON.stringify(rect)}, under ${CLICK_INSIDE_CSS}`);
-    parts.push(`${kind} ${insideCss.toFixed(1)}px inside ${crop}`);
+    if (insideCss < CLICK_INSIDE_CSS) return fail(rule, `${name} at CSS (${e.x.toFixed(1)}, ${e.y.toFixed(1)}) is ${insideCss.toFixed(1)} CSS px inside ${crop} ${JSON.stringify(rect)}, under ${CLICK_INSIDE_CSS}`);
+    parts.push(`${name} ${insideCss.toFixed(1)}px inside ${crop}`);
   }
   return pass(rule, parts.join('; '));
 }

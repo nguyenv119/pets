@@ -124,17 +124,27 @@ export async function routeSet(context, root, { seed, hour } = {}) {
 }
 
 /**
+ * The stored positions for a seed: each pet's x with y = innerHeight - 64
+ * (conventions: boxes stand on the viewport bottom, so y 372 at 960x436 and
+ * 792 at 540x856). Throws when there are positions but no viewport height,
+ * rather than writing a y from some other viewport.
+ */
+export function seedPositions(positions = {}, innerHeight) {
+  const entries = Object.entries(positions);
+  if (entries.length && !Number.isFinite(innerHeight)) throw new Error('seedPositions: positions need the viewport innerHeight');
+  return Object.fromEntries(entries.map(([id, pos]) => [id, { x: pos.x, y: innerHeight - 64 }]));
+}
+
+/**
  * Writes the seeded roster/positions/settings/visibility into
  * chrome.storage.local from the service worker, before the page navigates
  * there (so the content script reads it at boot with no reload). Keys match
  * src/store.ts and src/settings.ts (asserted by browser.test.mjs).
  */
-export async function seedStorage(serviceWorker, seed) {
+export async function seedStorage(serviceWorker, seed, innerHeight) {
   const now = Date.now();
   const roster = { roster: seed.roster };
-  const positions = Object.fromEntries(
-    Object.entries(seed.positions ?? {}).map(([id, pos]) => [id, { x: pos.x, y: 476 }]),
-  );
+  const positions = seedPositions(seed.positions, innerHeight);
   const settings = {
     theme: seed.theme ?? 'light',
     treats: seed.treats ?? 10,
