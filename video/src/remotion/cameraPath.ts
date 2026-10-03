@@ -8,14 +8,20 @@
 // disagree (the same split cardTimeline.ts uses for the popup card).
 //
 // Moves, from video/shots.json camera.move and master.motion.pushes:
-// - "hold": one crop for the whole beat. Consecutive holds on the same
-//   focus and zoom share the previous crop while it still contains the
-//   focus pets, so a hold never jitters by a few px at a beat boundary.
+// - "hold": one crop for the whole beat, on the focus at the beat's middle;
+//   when the focus pet moves out of that crop during the hold, the crop is
+//   centred on the pet's whole span across the beat instead (if it fits).
+//   Consecutive holds on the same focus and zoom share the previous crop
+//   while it still contains the focus pets, so a hold never jitters by a
+//   few px at a beat boundary.
 // - "Hold 1.0x ... until <anchor>, then push": 1.0x until anchor+videoLagMs,
 //   then a 450 ms ease-out-expo push (3000 ms ease-in-out when the text says
 //   "easing in and out", the night push) to the beat's resting 2.0x crop.
-//   A push longer than its beat carries on into the next one.
-// - "the push ends at <anchor>, then hold": the carried push, then a hold.
+// - "the push ends at <anchor>, then hold": when the previous beat's push
+//   is still running at this beat's start (b5's night push into b6), that
+//   push continues onto this beat's resting crop; otherwise a 450 ms push
+//   that ends at anchor+videoLagMs. Then a hold. Any other beat after an
+//   unfinished push starts on its own crop (a hard cut).
 // - "At <anchor>, push from 1.0x to 2.0x over N ms ..., then follow": 1.0x,
 //   then an eased push onto the live follow crop, then the follow.
 // - "follow": the floor-anchored crop on the focus, 400 ms smoothed, every frame.
@@ -130,6 +136,20 @@ export function shotFrameCrops(input: ShotCameraInput): Rect[][] {
     zoomOf(b) === 1 ? full : floorAnchoredCrop(stage, zoomOf(b), resolveFocusX(b.camera.focus, stage, events, loggedMs));
   const anchor = (spec: string, s: CameraBeatSpan) => resolveAnyAnchor(spec, { events, beatInMs: s.sourceIn });
 
+  /** The focus pets' boxes on every master frame of a beat (stage px). */
+  const focusBoxesOver = (s: CameraBeatSpan): Rect[] => {
+    const ids = focusPets(s.beat.camera.focus, events);
+    const boxes: Rect[] = [];
+    for (let k = s.k0; k < s.k1; k++) {
+      for (const id of ids) {
+        const b = petBoxStage(events, id, loggedMsAt(events, demoAt(k)), stage);
+        if (b) boxes.push(b);
+      }
+    }
+    return boxes;
+  };
+  const framesFocus = (crop: Rect, boxes: readonly Rect[]) => boxes.every((b) => contains(crop, b, SHARE_MARGIN_STAGE_PX));
+
   // Pass 1: each beat's resting crop (where it holds), sharing the previous beat's when it still frames the focus.
   const rest: (Rect | null)[] = [];
   spans.forEach((s, i) => {
@@ -140,13 +160,23 @@ export function shotFrameCrops(input: ShotCameraInput): Rect[][] {
     }
     // hold_until rests after its push, so frame the focus near the beat's end; others at the middle.
     const at = kind === 'hold_until' ? s.sourceOut - frameMs : (s.sourceIn + s.sourceOut) / 2;
-    const own = cropAtFocus(s.beat, loggedMsAt(events, at));
+    let own = cropAtFocus(s.beat, loggedMsAt(events, at));
+    // A held crop frames the focus pets on EVERY frame of the beat, not only at its middle: when the pet moves
+    // during the hold (out of the crop computed at the middle), centre the crop on its whole span if that fits.
+    const held = kind === 'hold' || kind === 'push_then_hold';
+    const boxes = held && zoomOf(s.beat) !== 1 ? focusBoxesOver(s) : [];
+    if (boxes.length && !framesFocus(own, boxes)) {
+      const left = Math.min(...boxes.map((b) => b.x));
+      const right = Math.max(...boxes.map((b) => b.x + b.w));
+      const span = floorAnchoredCrop(stage, zoomOf(s.beat), (left + right) / 2);
+      if (framesFocus(span, boxes)) own = span;
+    }
     const prev = i > 0 ? rest[i - 1] : null;
     const pb = i > 0 ? spans[i - 1].beat : null;
     if (prev && pb && zoomOf(pb) === zoomOf(s.beat) && pb.camera.focus === s.beat.camera.focus) {
       const mid = loggedMsAt(events, (s.sourceIn + s.sourceOut) / 2);
-      const boxes = focusPets(s.beat.camera.focus, events).map((p) => petBoxStage(events, p, mid, stage));
-      if (boxes.every((b) => b && contains(prev, b, SHARE_MARGIN_STAGE_PX))) {
+      const midBoxes = focusPets(s.beat.camera.focus, events).map((p) => petBoxStage(events, p, mid, stage));
+      if (midBoxes.every((b) => b && contains(prev, b, SHARE_MARGIN_STAGE_PX)) && framesFocus(prev, boxes)) {
         rest.push(prev);
         return;
       }

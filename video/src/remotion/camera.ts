@@ -81,8 +81,7 @@ export function floorMarginAtZoom(crop: Rect, stage: StageConfig): number {
 // a 3000 ms ease-in-out: the film's one slow move." This section turns
 // those two named curves into a per-frame progress function, and combines
 // it with floorAnchoredCrop to interpolate zoom+focus smoothly across a
-// push window instead of the hard cut timeline.ts's beatCropAt uses at its
-// single sampled instant.
+// push window; cameraPath.ts samples it once per master frame of a push.
 
 /** cubic-bezier(0.16, 1, 0.3, 1) — ease-out-expo, per master.motion.pushes. Solved by bisection on x(t), since the curve is monotonic in x for these control points. */
 export function easeOutExpoBezier(u: number): number {
