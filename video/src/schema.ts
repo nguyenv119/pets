@@ -343,7 +343,10 @@ export function validateShots(shots: unknown, species: SpeciesAllowlist): string
 /**
  * Validates an Events-shaped document: only known observed kinds, roster
  * entries with both type and colour, a monotonically non-decreasing
- * cursorTrack, and every observed[].t inside [0, durationMs].
+ * cursorTrack, and every observed[].t inside [-trimBeforeMs, durationMs].
+ * Times are ms after the start clapper's release, so an event logged before
+ * the clapper (pets_ready, a boot greet) is negative; it is still inside
+ * demo.mp4 as long as trimBeforeMs + t >= 0.
  */
 export function validateEvents(events: unknown, species: SpeciesAllowlist): string[] {
   const errors: string[] = [];
@@ -353,6 +356,7 @@ export function validateEvents(events: unknown, species: SpeciesAllowlist): stri
   const doc = events as Partial<Events>;
 
   const durationMs = typeof doc.durationMs === 'number' ? doc.durationMs : undefined;
+  const minT = typeof doc.trimBeforeMs === 'number' ? -doc.trimBeforeMs : 0;
 
   if (Array.isArray(doc.roster)) {
     for (const entry of doc.roster) {
@@ -389,8 +393,8 @@ export function validateEvents(events: unknown, species: SpeciesAllowlist): stri
         errors.push(`observed event has unknown kind "${String(event.kind)}"`);
       }
       if (typeof event.t === 'number' && durationMs !== undefined) {
-        if (event.t < 0 || event.t > durationMs) {
-          errors.push(`observed event kind="${String(event.kind)}" has t=${event.t} outside [0, ${durationMs}]`);
+        if (event.t < minT || event.t > durationMs) {
+          errors.push(`observed event kind="${String(event.kind)}" has t=${event.t} outside [${minT}, ${durationMs}]`);
         }
       }
     }

@@ -331,6 +331,41 @@ describe('validateEvents — FAIL controls', () => {
     expect(errors.some((e) => e.includes('outside [0'))).toBe(true);
   });
 
+  it('accepts an event before the start clapper that is still inside demo.mp4', () => {
+    /**
+     * Verifies event times are measured from the start clapper's release:
+     * an event logged before it (pets_ready, a boot greet) has a negative t
+     * and is valid while trimBeforeMs + t >= 0, i.e. still inside demo.mp4.
+     *
+     * The eval and the edit both place an event at demo.mp4 time
+     * trimBeforeMs + t. Forcing t >= 0 pushed recorders to measure t from
+     * capture start instead, which put every event ~trimBeforeMs late.
+     */
+    // GIVEN — a take whose clapper releases 680 ms into demo.mp4
+    const events = { durationMs: 4000, trimBeforeMs: 680, observed: [{ t: -600, kind: 'pets_ready' }] };
+
+    // WHEN — validated
+    const errors = validateEvents(events, species);
+
+    // THEN — accepted
+    expect(errors).toEqual([]);
+  });
+
+  it('rejects an event earlier than the start of demo.mp4', () => {
+    /**
+     * Verifies the lower bound is -trimBeforeMs: an event before demo.mp4's
+     * first frame cannot be shown, so a t that far back is a time-base bug.
+     */
+    // GIVEN — an event 700 ms before a clapper that releases 680 ms in
+    const events = { durationMs: 4000, trimBeforeMs: 680, observed: [{ t: -700, kind: 'pets_ready' }] };
+
+    // WHEN — validated
+    const errors = validateEvents(events, species);
+
+    // THEN — rejected
+    expect(errors.some((e) => e.includes('outside [-680'))).toBe(true);
+  });
+
   it('rejects a roster entry with no type or color', () => {
     /**
      * Verifies an events.roster entry missing `type` or `color` is
