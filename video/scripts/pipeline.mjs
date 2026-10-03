@@ -23,7 +23,7 @@
 
 import { spawn } from 'node:child_process';
 import { createWriteStream, existsSync, mkdirSync, readdirSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { BUILD_DIR, isMain, OUT_DIR, REPO_DIR, VIDEO_DIR } from './stage-io.mjs';
 
 export const MIN_NODE_MAJOR = 24;
@@ -106,10 +106,15 @@ function runStep({ cmd, args, cwd, quiet }, log) {
   });
 }
 
-export async function runPipeline(argv) {
+/**
+ * Runs `plan` (stagePlan() by default) in order; returns the exit code.
+ * `buildDir` is where the record stage adds its run and `logPath` the tee'd
+ * log; tests pass their own.
+ */
+export async function runPipeline(argv, { plan = stagePlan(), buildDir = BUILD_DIR, logPath = join(OUT_DIR, 'pipeline.log') } = {}) {
   const opts = parseArgs(argv);
-  mkdirSync(OUT_DIR, { recursive: true });
-  const log = createWriteStream(join(OUT_DIR, 'pipeline.log'));
+  mkdirSync(dirname(logPath), { recursive: true });
+  const log = createWriteStream(logPath);
   const say = (line) => {
     console.log(line);
     log.write(`${line}\n`);
@@ -118,7 +123,7 @@ export async function runPipeline(argv) {
   const t0 = Date.now();
   try {
     if (ctx.run && !existsSync(ctx.run)) throw Object.assign(new Error(`--run ${ctx.run} does not exist`), { stage: 'prepare' });
-    for (const [i, stage] of stagePlan().entries()) {
+    for (const [i, stage] of plan.entries()) {
       if (stage.skip?.(ctx)) {
         say(`== stage ${i} ${stage.name}: skipped (reusing ${relative(VIDEO_DIR, ctx.run)})`);
         continue;
@@ -127,16 +132,16 @@ export async function runPipeline(argv) {
       say(`== stage ${i} ${stage.name}`);
       try {
         if (stage.name === 'prepare') checkNode(process.versions.node);
-        const before = stage.recordsRun ? (existsSync(BUILD_DIR) ? readdirSync(BUILD_DIR) : []) : null;
+        const before = stage.recordsRun ? (existsSync(buildDir) ? readdirSync(buildDir) : []) : null;
         for (const step of stage.steps(ctx)) await runStep(step, log);
-        if (stage.recordsRun) ctx.run = join(BUILD_DIR, pickNewRun(before, readdirSync(BUILD_DIR)));
+        if (stage.recordsRun) ctx.run = join(buildDir, pickNewRun(before, existsSync(buildDir) ? readdirSync(buildDir) : []));
       } catch (err) {
         err.stage = stage.name;
         throw err;
       }
       say(`== stage ${i} ${stage.name} done in ${((Date.now() - ts) / 1000).toFixed(1)} s${stage.recordsRun ? ` -> ${relative(VIDEO_DIR, ctx.run)}` : ''}`);
     }
-    say(`pipeline: done in ${((Date.now() - t0) / 60000).toFixed(1)} min from ${relative(VIDEO_DIR, ctx.run)}; outputs in out/`);
+    say(`pipeline: done in ${((Date.now() - t0) / 60000).toFixed(1)} min from ${ctx.run ? relative(VIDEO_DIR, ctx.run) : 'no run'}; outputs in out/`);
   } catch (err) {
     say(`pipeline: FAILED at stage "${err.stage ?? '?'}": ${err.message}`);
     await new Promise((r) => log.end(r));

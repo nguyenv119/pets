@@ -1,7 +1,21 @@
-// pipeline.mjs's pure parts: the node check, the stage plan, run detection.
+// pipeline.mjs: the node check, the stage plan, run detection, and
+// runPipeline itself on small injected plans of real child processes.
 
-import { describe, expect, it } from 'vitest';
-import { checkNode, parseArgs, pickNewRun, stagePlan, STILL_AT } from './pipeline.mjs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { checkNode, parseArgs, pickNewRun, runPipeline, stagePlan, STILL_AT } from './pipeline.mjs';
+
+let tmp;
+afterEach(() => {
+  if (tmp) rmSync(tmp, { recursive: true, force: true });
+  tmp = undefined;
+});
+
+/** A step that runs `code` in a real node child process inside `cwd`. */
+const node = (cwd, code) => ({ cmd: process.execPath, args: ['-e', code], cwd, quiet: true });
+const touch = (cwd, name, text = '') => node(cwd, `require('fs').writeFileSync(${JSON.stringify(join(cwd, name))}, ${JSON.stringify(text)})`);
 
 describe('checkNode', () => {
   it('rejects node below 24 with the version it found', () => {
@@ -83,5 +97,66 @@ describe('pickNewRun / parseArgs', () => {
     // GIVEN / WHEN / THEN
     expect(parseArgs(['--run', 'build/x'])).toEqual({ run: 'build/x' });
     expect(() => parseArgs(['--fast'])).toThrow(/unrecognised/);
+  });
+});
+
+describe('runPipeline', () => {
+  it('stops at the first failing stage, names it, and runs nothing after it', async () => {
+    /**
+     * A failed render must never be followed by loudness, gif or qa working
+     * on stale files from an earlier run, and the log must say which stage
+     * to look at.
+     */
+    // GIVEN — three stages; the middle one exits 1
+    tmp = mkdtempSync(join(tmpdir(), 'pipeline-test-'));
+    const plan = [
+      { name: 'first', steps: () => [touch(tmp, 'first-ran')] },
+      { name: 'middle', steps: () => [node(tmp, 'process.exit(1)')] },
+      { name: 'last', steps: () => [touch(tmp, 'last-ran')] },
+    ];
+    const logPath = join(tmp, 'pipeline.log');
+    // WHEN
+    const code = await runPipeline([], { plan, buildDir: join(tmp, 'build'), logPath });
+    // THEN
+    expect(code).toBe(1);
+    expect(existsSync(join(tmp, 'first-ran'))).toBe(true);
+    expect(existsSync(join(tmp, 'last-ran'))).toBe(false);
+    expect(readFileSync(logPath, 'utf8')).toContain('pipeline: FAILED at stage "middle"');
+  });
+
+  it('hands later stages the one run the record stage added to build/', async () => {
+    /**
+     * Every stage after recording works from that run. Picking an older
+     * build/ entry would render and publish someone else's footage.
+     */
+    // GIVEN — build/ already holds an old run; the record stage adds "new"
+    tmp = mkdtempSync(join(tmpdir(), 'pipeline-test-'));
+    const buildDir = join(tmp, 'build');
+    mkdirSync(join(buildDir, 'old'), { recursive: true });
+    const record = { ...stagePlan().find((s) => s.name === 'record'), steps: () => [node(tmp, `require('fs').mkdirSync(${JSON.stringify(join(buildDir, 'new'))})`)] };
+    const use = { name: 'use', steps: (ctx) => [touch(tmp, 'used-run', ctx.run)] };
+    // WHEN
+    const code = await runPipeline([], { plan: [record, use], buildDir, logPath: join(tmp, 'pipeline.log') });
+    // THEN
+    expect(code).toBe(0);
+    expect(readFileSync(join(tmp, 'used-run'), 'utf8')).toBe(join(buildDir, 'new'));
+  });
+
+  it('skips recording with --run and works from that run', async () => {
+    /** --run re-renders an existing recording; filming again would waste an hour and change the footage. */
+    // GIVEN — an existing run and a record stage that would leave a marker
+    tmp = mkdtempSync(join(tmpdir(), 'pipeline-test-'));
+    const existing = join(tmp, 'build', 'kept');
+    mkdirSync(existing, { recursive: true });
+    const record = { ...stagePlan().find((s) => s.name === 'record'), steps: () => [touch(tmp, 'recorded')] };
+    const use = { name: 'use', steps: (ctx) => [touch(tmp, 'used-run', ctx.run)] };
+    const logPath = join(tmp, 'pipeline.log');
+    // WHEN
+    const code = await runPipeline(['--run', existing], { plan: [record, use], buildDir: join(tmp, 'build'), logPath });
+    // THEN
+    expect(code).toBe(0);
+    expect(existsSync(join(tmp, 'recorded'))).toBe(false);
+    expect(readFileSync(join(tmp, 'used-run'), 'utf8')).toBe(existing);
+    expect(readFileSync(logPath, 'utf8')).toMatch(/stage 0 record: skipped/);
   });
 });

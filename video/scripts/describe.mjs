@@ -9,8 +9,9 @@
 //
 // Usage: npx tsx scripts/describe.mjs --run build/<run>
 
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { shotDir } from '../record/layout.mjs';
 import { isMain, OUT_DIR, readJson, runArg, VIDEO_DIR } from './stage-io.mjs';
 
 export const STORE_URL = 'https://chromewebstore.google.com/detail/pixel-pets/mgamneidfkkigbniedjohbglcmecjffg';
@@ -24,13 +25,19 @@ export const STORE_URL = 'https://chromewebstore.google.com/detail/pixel-pets/mg
 export const CROP_B_SPECIES = ['chicken', 'crab', 'panda', 'snail'];
 
 /**
- * The music beds (video/assets/LICENSES.md), keyed by the file stem
- * timeline.json's `music` path contains.
+ * One credit line per music bed, read from the `video/assets/music/*.ogg`
+ * rows of assets/LICENSES.md (Path | Title | Author | Licence | Source URL),
+ * keyed by the file stem timeline.json's `music` path contains.
  */
-export const MUSIC_CREDITS = {
-  cat_caffe: 'Music: "Cat caffe" by TAD (opengameart.org/content/lofi-compilation), CC0.',
-  forgotten_path: 'Music: "forgotten path" by johndekale (opengameart.org/content/forgotten-path), CC0.',
-};
+export function musicCredits(licencesMd) {
+  const out = {};
+  const row = /^\| `video\/assets\/music\/([a-z0-9_]+)\.ogg` \| ([^|]+?) \| ([^|]+?) \| ([^|]+?) \| https?:\/\/([^|\s]+) \|/gm;
+  for (const m of licencesMd.matchAll(row)) out[m[1]] = `Music: "${m[2]}" by ${m[3]} (${m[5]}), ${m[4]}.`;
+  if (!Object.keys(out).length) throw new Error('describe: assets/LICENSES.md lists no video/assets/music/*.ogg rows');
+  return out;
+}
+
+export const MUSIC_CREDITS = musicCredits(readFileSync(join(VIDEO_DIR, 'assets', 'LICENSES.md'), 'utf8'));
 
 /** Every species in the given rosters plus CROP_B_SPECIES, once each. */
 export function creditedSpecies(rosters) {
@@ -68,22 +75,18 @@ export function fillDescription(template, { credits, music }) {
   return text;
 }
 
-/** Every events.json roster under a run dir (16:9 shots, v916/ shots and the popup take's saved roster). */
-export function runRosters(runDir) {
+/** Every recorded roster of a run: each shot of `shots` in both aspect ratios (the popup take once), plus the popup take's saved roster. */
+export function runRosters(runDir, shots = readJson(join(VIDEO_DIR, 'shots.json'))) {
   const rosters = [];
-  const visit = (dir) => {
-    for (const e of readdirSync(dir, { withFileTypes: true })) {
-      if (!e.isDirectory()) continue;
-      const ev = join(dir, e.name, 'events.json');
-      if (existsSync(ev)) {
-        const events = readJson(ev);
-        rosters.push(events.roster ?? []);
-        const saved = (events.observed ?? []).find((o) => o.kind === 'roster_saved');
-        if (saved?.roster) rosters.push(saved.roster);
-      } else visit(join(dir, e.name));
-    }
-  };
-  visit(runDir);
+  const dirs = new Set(shots.edit_order.flatMap((id) => [shotDir(runDir, id, '16:9'), shotDir(runDir, id, '9:16')]));
+  for (const dir of dirs) {
+    const ev = join(dir, 'events.json');
+    if (!existsSync(ev)) continue;
+    const events = readJson(ev);
+    rosters.push(events.roster ?? []);
+    const saved = (events.observed ?? []).find((o) => o.kind === 'roster_saved');
+    if (saved?.roster) rosters.push(saved.roster);
+  }
   if (!rosters.length) throw new Error(`describe: no events.json under ${runDir}`);
   return rosters;
 }

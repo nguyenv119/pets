@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { creditedSpecies, creditsBlock, CROP_B_SPECIES, fillDescription, musicCredit, runRosters, STORE_URL } from './describe.mjs';
+import { creditedSpecies, creditsBlock, CROP_B_SPECIES, fillDescription, musicCredit, musicCredits, MUSIC_CREDITS, runRosters, STORE_URL } from './describe.mjs';
 
 const VIDEO = join(import.meta.dirname, '..');
 const credits = JSON.parse(readFileSync(join(VIDEO, 'assets', 'CREDITS.json'), 'utf8'));
@@ -73,6 +73,27 @@ describe('creditsBlock', () => {
     const species = creditedSpecies([[{ type: 'horse' }]]);
     // WHEN / THEN
     expect(() => creditsBlock(credits, species)).toThrow(/horse/);
+  });
+});
+
+describe('musicCredits', () => {
+  it('builds each bed\'s credit from its assets/LICENSES.md row', () => {
+    /**
+     * LICENSES.md is the one record of each bed's title, author, licence and
+     * source; a second hand-typed copy here could credit the wrong author.
+     */
+    // GIVEN — the committed LICENSES.md, read at import
+    // WHEN / THEN
+    expect(MUSIC_CREDITS).toEqual({
+      cat_caffe: 'Music: "Cat caffe" by TAD (opengameart.org/content/lofi-compilation), CC0.',
+      forgotten_path: 'Music: "forgotten path" by johndekale (opengameart.org/content/forgotten-path), CC0.',
+    });
+  });
+
+  it('throws when the licence table lists no music', () => {
+    /** A renamed column or path must stop the stage, not ship a description with no music credit. */
+    // GIVEN / WHEN / THEN
+    expect(() => musicCredits('| `video/assets/fonts/VT323-Regular.ttf` | VT323 | x | OFL | https://x |')).toThrow(/no video\/assets\/music/);
   });
 });
 
