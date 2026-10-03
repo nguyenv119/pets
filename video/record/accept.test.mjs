@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { evaluateRule, evaluateShotRules, familyNameForRule, mergeAcceptRules, RULE_FAMILIES } from './accept.mjs';
+import { acceptRulesFor, evaluateRule, evaluateRules, familyNameForRule, RULE_FAMILIES } from './accept.mjs';
 
 const FAMILY_REGEX_BY_NAME = Object.fromEntries(RULE_FAMILIES.map(([regex, evaluator]) => [evaluator.name, regex]));
 
@@ -389,79 +389,99 @@ describe('frame-window rules fail when no tracked frame falls in the window', ()
   });
 });
 
-describe('9:16 base-rule replacement (mergeAcceptRules / evaluateShotRules)', () => {
+describe('9:16 accept rules: every base and extra text is judged on its own (acceptRulesFor)', () => {
   const s2 = shots.shots.find((s) => s.id === 's2_review');
-  const variant = shots.variants.vertical_9x16.shots.s2_review;
   const baseCatchRule = 'a catch by Rex (conventions.states.catch) within 2600 ms of the dblclick';
-  const replacingExtraRule = 'a catch by Rex within 2800 ms of the dblclick, replacing the 16:9 limit of 2600 ms (the 730 px page gives a 1.34 s fall)';
+  const extraCatchRule = 'a catch by Rex within 2800 ms of the dblclick, replacing the 16:9 limit of 2600 ms (the 730 px page gives a 1.34 s fall)';
 
-  it('substitutes the replacing extra rule for its matching base rule, keyed by the base text', () => {
-    // GIVEN — s2_review's real base accept[] and its 9:16 extra_accept[] (both copied from shots.json)
-    // WHEN — they are merged
-    const merged = mergeAcceptRules(s2.accept, variant.extra_accept);
+  /** verify.mjs's own rule list for one shot and aspect (loop-evals/pets-o3p/verify.mjs, section 4), restated here. */
+  const verifyRules = (doc, id, port) => {
+    const sh = doc.shots.find((s) => s.id === id);
+    const reused = port && !!doc.variants?.vertical_9x16?.shots?.[id]?.reuse;
+    return [...(sh.accept || []), ...(port && !reused ? doc.variants?.vertical_9x16?.shots?.[id]?.extra_accept || [] : [])].map(String);
+  };
 
-    // THEN — exactly one merged entry reports under the base catch rule's verbatim text but evaluates the extra rule's 2800ms limit
-    const entry = merged.find((e) => e.reportText === baseCatchRule);
-    expect(entry).toBeDefined();
-    expect(entry.evalText).toBe(replacingExtraRule);
-    expect(entry.replaced).toBe(true);
-    // AND the base rule's own text does not additionally appear as its own separately-evaluated entry
-    expect(merged.filter((e) => e.evalText === baseCatchRule)).toHaveLength(0);
+  it('records exactly the rule texts the epic eval looks for, each once, for every shot and aspect', () => {
+    /**
+     * The epic eval requires every base accept text and every 9:16
+     * extra_accept text to appear exactly once in events.accept[] (by rule
+     * text). The old recorder swapped a "replacing" extra rule in for its base
+     * rule, so the 9:16 extra text was never recorded and the eval failed the
+     * whole run. If this breaks, a kept take is missing (or doubles) a rule
+     * the eval reads, and the run fails after hours of recording.
+     */
+    for (const id of shots.edit_order) {
+      for (const port of [false, true]) {
+        if (port && shots.variants.vertical_9x16.shots[id]?.reuse) continue; // the 9:16 cut reuses the 16:9 popup take
+        // GIVEN — the texts the recorder judges for this shot and aspect, and the list verify.mjs builds
+        const shot = shots.shots.find((s) => s.id === id);
+        const texts = acceptRulesFor(shots, shot, port ? '9:16' : '16:9');
+        const want = verifyRules(shots, id, port);
+
+        // WHEN — the recorder evaluates them (as record.mjs does) on an empty log
+        const recorded = evaluateRules(texts, wrap({}), CTX).map((r) => r.rule);
+
+        // THEN — the recorded texts are exactly the eval's list, each verify text found once
+        expect([...recorded].sort(), `${id} ${port ? '9:16' : '16:9'}`).toEqual([...want].sort());
+        for (const rule of want) expect(recorded.filter((r) => r === rule), `${id}: ${rule}`).toHaveLength(1);
+      }
+    }
   });
 
-  it('judges a replaced rule at the extra value: a catch inside 2800ms but outside 2600ms passes, reported under the base text', () => {
-    // GIVEN — a catch 2700ms after the dblclick (fails the base 16:9 limit of 2600ms, passes the 9:16 limit of 2800ms)
-    const events = {
-      roster: [{ id: 'rex', name: 'Rex', type: 'dog', color: 'brown' }],
-      observed: [{ t: 0, kind: 'dblclick' }, { t: 2700, kind: 'catch', pet: 'rex' }],
-      tracks: [],
-    };
+  it('judges both catch rules in 9:16: a catch at 2700 ms passes the 2800 ms rule and fails the base 2600 ms rule', () => {
+    /**
+     * Each text is judged on its own terms: the 9:16 extra rule's 2800 ms
+     * limit never stands in for the base rule's 2600 ms. A take whose catch
+     * lands at 2700 ms fails the base rule, so the recorder discards it
+     * instead of keeping a take the epic eval would fail.
+     */
+    // GIVEN — s2_review's 9:16 rules and a catch 2700 ms after the dblclick
+    const texts = acceptRulesFor(shots, s2, '9:16');
+    const events = wrap({ roster: rosterOf('Rex'), observed: [{ t: 0, kind: 'dblclick' }, { t: 2700, kind: 'catch', pet: 'rex', x: 300 }] });
 
-    // WHEN — the shot's rules are evaluated with the 9:16 extra_accept merged in
-    const results = evaluateShotRules(s2.accept, variant.extra_accept, events);
+    // WHEN — the recorder evaluates them
+    const results = evaluateRules(texts, events, CTX);
 
-    // THEN — the catch rule passes (judged at 2800ms) and is reported under the BASE rule's verbatim text, with a detail noting the swap
-    const catchResult = results.find((r) => r.rule === baseCatchRule);
-    expect(catchResult).toBeDefined();
-    expect(catchResult.pass).toBe(true);
-    expect(catchResult.detail).toMatch(/^replaced in 9:16 by extra_accept/);
+    // THEN — both catch texts are recorded under their own text: the base fails, the 9:16 extra passes
+    const byText = (rule) => results.filter((r) => r.rule === rule);
+    expect(byText(baseCatchRule)).toHaveLength(1);
+    expect(byText(extraCatchRule)).toHaveLength(1);
+    expect(byText(baseCatchRule)[0].pass).toBe(false);
+    expect(byText(extraCatchRule)[0].pass, byText(extraCatchRule)[0].detail).toBe(true);
   });
 
-  it('still fails a replaced rule when the catch misses even the wider 9:16 limit', () => {
-    // GIVEN — a catch 3000ms after the dblclick (outside both the 2600ms base and the 2800ms 9:16 limit)
-    const events = {
-      roster: [{ id: 'rex', name: 'Rex', type: 'dog', color: 'brown' }],
-      observed: [{ t: 0, kind: 'dblclick' }, { t: 3000, kind: 'catch', pet: 'rex' }],
-      tracks: [],
-    };
+  it('passes both catch rules in 9:16 when the catch lands inside 2600 ms', () => {
+    /**
+     * The control for the test above: a catch inside both limits passes both
+     * texts, so the base rule failing at 2700 ms is the limit at work, not a
+     * rule that always fails in 9:16.
+     */
+    // GIVEN — s2_review's 9:16 rules and a catch 2500 ms after the dblclick
+    const texts = acceptRulesFor(shots, s2, '9:16');
+    const events = wrap({ roster: rosterOf('Rex'), observed: [{ t: 0, kind: 'dblclick' }, { t: 2500, kind: 'catch', pet: 'rex', x: 300 }] });
 
-    // WHEN — the shot's rules are evaluated with the 9:16 extra_accept merged in
-    const results = evaluateShotRules(s2.accept, variant.extra_accept, events);
+    // WHEN — the recorder evaluates them
+    const results = evaluateRules(texts, events, CTX);
 
-    // THEN — the (replaced) catch rule fails
-    const catchResult = results.find((r) => r.rule === baseCatchRule);
-    expect(catchResult.pass).toBe(false);
+    // THEN — both catch texts pass
+    for (const rule of [baseCatchRule, extraCatchRule]) {
+      const hit = results.find((r) => r.rule === rule);
+      expect(hit.pass, hit.detail).toBe(true);
+    }
   });
 
-  it('keeps a non-replacing extra_accept rule as its own separate entry, reported under its own text', () => {
-    // GIVEN — s2_review's extra_accept list, which also has non-replacing rules (e.g. the box right-edge margin)
-    // WHEN — merged
-    const merged = mergeAcceptRules(s2.accept, variant.extra_accept);
+  it('judges only the base rules in 16:9', () => {
+    /**
+     * extra_accept belongs to the 9:16 re-record only. A 16:9 take judged
+     * against the 9:16 rules (the 444 px box edge, say) would be discarded
+     * for a limit its own page never had.
+     */
+    // GIVEN — s2_review in 16:9
+    // WHEN — its rule texts are listed
+    const texts = acceptRulesFor(shots, s2, '16:9');
 
-    // THEN — a non-replacing extra rule appears verbatim, evaluated as itself
-    const edgeRule = variant.extra_accept.find((r) => r.includes('right edge stays'));
-    const entry = merged.find((e) => e.reportText === edgeRule);
-    expect(entry).toBeDefined();
-    expect(entry.evalText).toBe(edgeRule);
-    expect(entry.replaced).toBe(false);
-  });
-
-  it('throws when a replacing extra rule names a limit no base rule has', () => {
-    // GIVEN — a replacing rule whose "16:9 limit" doesn't match any base rule's own limit (an authoring mismatch)
-    const badExtra = 'a catch by Rex within 2800 ms of the dblclick, replacing the 16:9 limit of 9999 ms (bogus)';
-
-    // WHEN / THEN — mergeAcceptRules refuses to guess which base rule it meant
-    expect(() => mergeAcceptRules(s2.accept, [badExtra])).toThrow();
+    // THEN — they are exactly the base accept[]
+    expect(texts).toEqual(s2.accept);
   });
 });
 

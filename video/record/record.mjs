@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildExtension, launchWithExtension, routeSet, seedStorage } from '../lib/browser.mjs';
-import { evaluateShotRules } from './accept.mjs';
+import { acceptRulesFor, evaluateRules } from './accept.mjs';
 import { shotDir } from './layout.mjs';
 import { assembleFrames, generateSignalStats, probeVideo } from './assemble.mjs';
 import { DiscardTake, runActions } from './choreo.mjs';
@@ -212,7 +212,7 @@ async function captureOneTake({ shot, aspect, viewport, seedValue, ext, setDir, 
 async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId }) {
   const viewport = aspect === '16:9' ? doc.viewport : doc.variants.vertical_9x16.viewport;
   const variantDoc = aspect === '9:16' ? doc.variants.vertical_9x16 : undefined;
-  const extraRules = aspect === '9:16' ? (variantDoc.shots?.[shot.id]?.extra_accept ?? []) : [];
+  const rules = acceptRulesFor(doc, shot, aspect);
   const actions = actionsFor(shot, aspect, viewport, variantDoc, doc.viewport.width);
 
   let takes = 0;
@@ -270,7 +270,7 @@ async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId })
 
     const outAnchor = [...(shot.beats ?? [])].reverse().find((b) => b.out)?.out;
     const ctx = { dblclick: take.dblclickTarget, dblclickCss: variantDoc?.shots?.[shot.id]?.dblclick_css, outAnchor };
-    const results = evaluateShotRules(shot.accept ?? [], extraRules, events, ctx);
+    const results = evaluateRules(rules, events, ctx);
     const failed = results.filter((r) => !r.pass);
 
     if (failed.length > 0) {

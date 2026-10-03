@@ -146,7 +146,7 @@ async function assertLayout(page, layoutExpect) {
   return result;
 }
 
-async function runPopupActions(page, actions, cursor) {
+export async function runPopupActions(page, actions, cursor) {
   const observed = [];
   let lastNameClickPoint = null;
 
@@ -201,8 +201,11 @@ async function runPopupActions(page, actions, cursor) {
         const downT = await pageNow(page);
         observed.push({ t: downT, kind: action.event, x, y });
         await sleep(action.release_after_ms ?? 240);
-        await page.mouse.up();
+        // Logged as the mouseup is SENT: the mouseup runs addPet(), whose
+        // storage write can land before page.mouse.up() resolves, so a clock
+        // read after it put add_mouseup after roster_saved.
         const upT = await pageNow(page);
+        await page.mouse.up();
         observed.push({ t: upT, kind: 'add_mouseup', x, y });
         break;
       }
