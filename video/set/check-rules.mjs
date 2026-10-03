@@ -3,20 +3,39 @@
 // here takes plain data (numbers, strings) and returns plain data — no DOM,
 // no Playwright.
 
-// The wide-layout crop line: every 2.0x hold shows CSS y 294-540, so page
-// text must end above y 286 (video/shots.json page_rules).
-export const BAND = { top: 286, bottom: 302 };
+// The bottom-150 rule: no text and nothing interactive in the bottom 150 CSS
+// px of each viewport, where the pets stand.
+// ponytail: the 150 is not a number anywhere in shots.json; it comes from
+// the page_rules prose ("Bottom 150 CSS px ..."), so it lives here once.
+export const BOTTOM_ZONE_PX = 150;
 
-// Nothing interactive and no text for the pets to stand on in the bottom
-// 200 CSS px, in either layout (the inbox end note is the one exception).
-export const BOTTOM_ZONE = {
-  wide: { top: 340, bottom: 540 },
-  narrow: { top: 530, bottom: 730 },
-};
-
-// Narrow layout (used at 540x730): text ends above CSS y 357, where the
-// 9:16's 2.0x crop begins.
-export const NARROW_TEXT_LIMIT = 357;
+/**
+ * The page rules for both layouts, derived from video/shots.json numbers so
+ * they cannot drift from the shot contract:
+ *   - crop line: the top edge of a 2.0x hold, bottom-anchored. A 2.0x hold
+ *     shows canvas.height / 2 output px = canvas.height / 4 page CSS px (at
+ *     device_scale_factor 2), so the line is viewport.height - canvas.height / 4
+ *     (wide 436 - 1080/4 = 166; narrow 856 - 1920/4 = 376).
+ *   - bottom zone: [viewport.height - 150, viewport.height].
+ * Returns { straddleY: {wide, narrow}, bottomZone: {wide, narrow} }.
+ */
+export function deriveRules(shots) {
+  const narrow = shots.variants.vertical_9x16;
+  const layouts = {
+    wide: { viewportH: shots.viewport.height, canvasH: shots.master.height },
+    narrow: { viewportH: narrow.viewport.height, canvasH: narrow.canvas.height },
+  };
+  const straddleY = {};
+  const bottomZone = {};
+  for (const [name, { viewportH, canvasH }] of Object.entries(layouts)) {
+    if (!Number.isFinite(viewportH) || !Number.isFinite(canvasH)) {
+      throw new Error(`shots.json is missing the ${name} viewport or canvas height`);
+    }
+    straddleY[name] = viewportH - canvasH / 4;
+    bottomZone[name] = { top: viewportH - BOTTOM_ZONE_PX, bottom: viewportH };
+  }
+  return { straddleY, bottomZone };
+}
 
 /**
  * True if the closed interval [rectTop, rectBottom) overlaps
@@ -42,23 +61,18 @@ export function isFontAllowed(computedFontFamily, allowedFamilies) {
   return allowedFamilies.includes(firstFontFamily(computedFontFamily));
 }
 
-/** True if a wide-layout text rect illegally crosses the 286-302 band. */
-export function findBandViolation(rect, exempt) {
-  if (exempt) return false;
-  return rectsOverlap(rect.top, rect.bottom, BAND.top, BAND.bottom);
+/** True if a text rect is cut by the crop line at `lineY` (touching it is fine). */
+export function findStraddleViolation(rect, lineY) {
+  if (!Number.isFinite(lineY)) throw new Error(`crop line must be a number, got ${lineY}`);
+  return rect.top < lineY && rect.bottom > lineY;
 }
 
-/** True if a text rect illegally sits in the bottom-200 zone for `layout`. */
-export function findBottomZoneViolation(rect, layout, exempt) {
-  if (exempt) return false;
-  const zone = layout === 'narrow' ? BOTTOM_ZONE.narrow : BOTTOM_ZONE.wide;
+/** True if a text rect overlaps the bottom zone `{top, bottom}`. */
+export function findBottomZoneViolation(rect, zone) {
+  if (!zone || !Number.isFinite(zone.top) || !Number.isFinite(zone.bottom)) {
+    throw new Error(`bottom zone must be {top, bottom} numbers, got ${JSON.stringify(zone)}`);
+  }
   return rectsOverlap(rect.top, rect.bottom, zone.top, zone.bottom);
-}
-
-/** True if a narrow-layout text rect illegally extends below y 357. */
-export function findNarrowTextOverflow(rect, layout, exempt) {
-  if (layout !== 'narrow' || exempt) return false;
-  return rect.bottom > NARROW_TEXT_LIMIT;
 }
 
 /** A 20 px grid of {x, y} points covering [zoneTop, zoneBottom) x [0, width). */
@@ -73,7 +87,7 @@ export function gridPoints(width, zoneTop, zoneBottom, step = 20) {
 }
 
 // Tags and roles that make an element count as "interactive" for the
-// bottom-200 sweep: a link, button, form control, or anything wired up as
+// bottom-150 sweep: a link, button, form control, or anything wired up as
 // one (role, tabindex, an inline handler).
 const INTERACTIVE_TAGS = new Set(['A', 'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA']);
 const INTERACTIVE_ROLES = new Set(['button', 'link', 'tab', 'checkbox', 'switch', 'menuitem']);

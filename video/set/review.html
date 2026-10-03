@@ -1,5 +1,15 @@
 <!doctype html>
-<html lang="en" data-theme="dark" data-pp-seed="" data-pp-hour="14" style="background:#1e2127">
+<!--
+  v2 code review: the LAYOUT of a dark-mode pull-request "Files changed" view
+  (compact header with an Open pill, title and #number; tabs; file tree; file
+  cards with collapse chevrons, a Viewed checkbox and a split diff), with our
+  invented change. No host logo, mascot or wordmark anywhere.
+  Page rules (video/shots.json): no text box straddles y 166 (wide) / y 376
+  (narrow), the top edge of a 2.0x hold; the bottom 150 px holds nothing but
+  the page background. div#dbl-zone (x 700-900, y 276-336 wide) is the empty
+  double-click target; span#dbl is the alternate target.
+-->
+<html lang="en" data-theme="dark" data-pp-seed="" data-pp-hour="14" style="background:#0f1216">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -8,36 +18,70 @@
 <link rel="stylesheet" href="/css/review.css" />
 </head>
 <body>
-  <div class="appbar">
-    <span class="mark" aria-hidden="true"></span>
-    <span class="app">Review</span>
-    <span class="title">Reset chart zoom on double-click #212</span>
-    <span class="chip">1 of 2 approvals</span>
-    <span class="approve">Approve</span>
-  </div>
+  <header class="prhead" aria-hidden="true">
+    <span class="state"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>Open</span>
+    <span class="title">Reset chart zoom on double-click <span class="num">#212</span></span>
+    <span class="meta"><b>ak</b> wants to merge 2 commits into <code>main</code> from <code>reset-on-dblclick</code></span>
+  </header>
 
-  <div class="desc">Single click now selects a bar, so reset zoom moves to double-click.</div>
-
-  <nav class="tree" aria-hidden="true">
-    <div>src/chart/interactions.ts</div>
-    <div>src/chart/render.ts</div>
-    <div>src/chart/state.ts</div>
-    <div>src/chart/types.ts</div>
-    <div>src/chart/index.ts</div>
+  <nav class="prtabs" aria-hidden="true">
+    <span class="tab">Conversation <i>3</i></span>
+    <span class="tab">Commits <i>2</i></span>
+    <span class="tab">Checks <i>1</i></span>
+    <span class="tab active">Files changed <i>5</i></span>
+    <span class="stat"><span class="add">+3</span> <span class="del">-1</span></span>
+    <span class="viewed-count">1 / 5 files viewed</span>
+    <span class="submit">Submit review<svg viewBox="0 0 16 16"><path d="M4.5 6.5L8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
   </nav>
 
-  <div class="diff">
-    <div class="diff-header">src/chart/interactions.ts +2 -1</div>
-    <div class="diff-body">
-      <div class="line"><span class="num">41</span><span class="code">export function bindChartEvents(chart) {</span></div>
-      <div class="line"><span class="num">42</span><span class="code">  chart.canvas.addEventListener("wheel", zoomAt);</span></div>
-      <div class="line remove"><span class="num">43</span><span class="code">- chart.canvas.addEventListener("click", resetZoom);</span></div>
-      <div class="line add"><span class="num">44</span><span class="code">+ chart.canvas.addEventListener(<span id="dbl" class="target">"dblclick"</span>, resetZoom);</span></div>
-      <div class="line add"><span class="num">45</span><span class="code">+ // single click selects a bar now</span></div>
-      <div class="line"><span class="num">46</span><span class="code">  chart.canvas.addEventListener("mousemove", showTooltip);</span></div>
-      <div class="line"><span class="num">47</span><span class="code">}</span></div>
+  <nav class="tree" aria-hidden="true">
+    <div class="filter"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10.2 10.2L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>Filter changed files</div>
+    <div class="ti dir"><svg class="chev" viewBox="0 0 16 16"><path d="M4.5 6.5L8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><svg viewBox="0 0 16 16"><path d="M1.5 4a1 1 0 0 1 1-1h3.6l1.4 1.5h6a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z" fill="#6f8aa3"/></svg>src/chart</div>
+    <div class="ti f done"><svg viewBox="0 0 16 16"><path d="M4 1.8h5.2L12.5 5v9.2H4z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>index.ts</div>
+    <div class="ti f sel"><svg viewBox="0 0 16 16"><path d="M4 1.8h5.2L12.5 5v9.2H4z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>interactions.ts</div>
+    <div class="ti f"><svg viewBox="0 0 16 16"><path d="M4 1.8h5.2L12.5 5v9.2H4z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>render.ts</div>
+    <div class="ti f"><svg viewBox="0 0 16 16"><path d="M4 1.8h5.2L12.5 5v9.2H4z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>state.ts</div>
+    <div class="ti f"><svg viewBox="0 0 16 16"><path d="M4 1.8h5.2L12.5 5v9.2H4z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>types.ts</div>
+  </nav>
+
+  <section class="file collapsed" aria-hidden="true">
+    <div class="fhead">
+      <svg class="chev" viewBox="0 0 16 16"><path d="M6.5 4.5L10 8l-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span class="path">src/chart/index.ts</span>
+      <span class="dstat"><span class="add">+1</span><span class="sq g"></span><span class="sq"></span><span class="sq"></span><span class="sq"></span><span class="sq"></span></span>
+      <span class="viewed on"><span class="box"></span>Viewed</span>
+      <span class="more"><i></i><i></i><i></i></span>
     </div>
-  </div>
+  </section>
+
+  <section class="file open" aria-hidden="true">
+    <div class="fhead">
+      <svg class="chev" viewBox="0 0 16 16"><path d="M4.5 6.5L8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span class="path">src/chart/interactions.ts</span>
+      <span class="dstat"><span class="add">+2</span><span class="del">-1</span><span class="sq g"></span><span class="sq g"></span><span class="sq r"></span><span class="sq"></span><span class="sq"></span></span>
+      <span class="viewed"><span class="box"></span>Viewed</span>
+      <span class="more"><i></i><i></i><i></i></span>
+    </div>
+    <div class="diff">
+      <div class="row hunk"><span class="hx"></span><span class="hunktext">@@ -41,6 +41,7 @@ export function bindChartEvents(chart) {</span></div>
+      <div class="row">
+        <span class="n">42</span><span class="c">  chart.on(<s>"wheel"</s>, zoomAt);</span>
+        <span class="n">42</span><span class="c">  chart.on(<s>"wheel"</s>, zoomAt);</span>
+      </div>
+      <div class="row">
+        <span class="n del">43</span><span class="c del"><em>-</em> chart.on(<s><span class="mark">"click"</span></s>, resetZoom);</span>
+        <span class="n add">43</span><span class="c add"><em>+</em> chart.on(<s><span id="dbl" class="mark target">"dblclick"</span></s>, resetZoom);</span>
+      </div>
+      <div class="row">
+        <span class="n none"></span><span class="c none"></span>
+        <span class="n add">44</span><span class="c add"><em>+</em> <u>// single click selects a bar now</u></span>
+      </div>
+      <div class="row">
+        <span class="n">44</span><span class="c">  chart.on(<s>"mousemove"</s>, showTooltip);</span>
+        <span class="n">45</span><span class="c">  chart.on(<s>"mousemove"</s>, showTooltip);</span>
+      </div>
+    </div>
+  </section>
 
   <div id="dbl-zone" aria-hidden="true"></div>
 </body>

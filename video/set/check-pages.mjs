@@ -1,33 +1,34 @@
 #!/usr/bin/env node
-// Real-acceptance check for pets-o3p.2: proves every original set page meets
-// the filming rules (video/shots.json page_rules) with the real, built
-// extension running — not a mock. Run with `npm run check:pages`.
+// Real-acceptance check for the set pages: proves every page meets the
+// filming rules (video/shots.json page_rules) with the real, built extension
+// running, not a mock. Run with `npm run check:pages`.
 //
-// For each page in shots.json set_pages, at both the wide (960x540) and
-// narrow (540x730) layouts:
+// For each page in shots.json set_pages, at the wide (shots.json viewport,
+// 960x436) and narrow (variants.vertical_9x16.viewport, 540x856) layouts:
 //   - the page serves with no 404s and no unrouted (aborted) requests
 //   - every font the page declares is actually loaded (not just registered)
 //   - no text node's computed font-family falls outside the page's list
-//   - no text crosses the wide-layout 286-302 band, or sits in the
-//     bottom-200 zone (either layout), or — narrow only — extends below
-//     y 357, except the inbox's #end-note
-//   - nothing interactive sits in the bottom-200 zone
-//   - review's div#dbl-zone is exactly what elementFromPoint returns at its
-//     centre, at both layouts
-//   - the seeded roster (Rex and Bao) renders as exactly 2 pet images
-//     inside #pixel-pets-host's shadow root
+//   - no text box straddles the 2.0x crop line (y 166 wide, y 376 narrow)
+//   - no text and nothing interactive in the bottom 150 px
+//   - review's div#dbl-zone is what elementFromPoint returns at the
+//     dblclick point shots.json names for that layout
+//   - the seeded roster (Rex and Bao) renders as exactly 2 LOADED pet
+//     images inside #pixel-pets-host's shadow root
 //
-// A screenshot is saved per page and layout to video/out/pages/. Exits
+// A screenshot is saved per page and layout to video/out/pages-v2/. Exits
 // non-zero, listing every failure, if any check fails.
+//
+// `--control` adds one text row straddling the crop line on every page (a
+// FAIL control): the run must then fail with one straddle per page/layout.
 
 import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildExtension, launchWithExtension, routeSet, seedStorage } from '../lib/browser.mjs';
 import {
-  findBandViolation,
+  deriveRules,
   findBottomZoneViolation,
-  findNarrowTextOverflow,
+  findStraddleViolation,
   gridPoints,
   isFontAllowed,
   isInteractiveDescriptor,
@@ -35,18 +36,8 @@ import {
 
 const SET_DIR = dirname(fileURLToPath(import.meta.url));
 const VIDEO_DIR = join(SET_DIR, '..');
-const OUT_DIR = join(VIDEO_DIR, 'out', 'pages');
-
-const LAYOUTS = [
-  { name: 'wide', viewport: { width: 960, height: 540 } },
-  { name: 'narrow', viewport: { width: 540, height: 730 } },
-];
-
-// The exceptions to the band/bottom-zone rules named in video/shots.json
-// page_rules: full-height containers whose text may cross y 286-302, plus
-// the inbox's one bottom-zone exception.
-const EXEMPT_IDS = new Set(['end-note']);
-const EXEMPT_CLASSES = new Set(['tree', 'diff', 'empty-rows']);
+const OUT_DIR = join(VIDEO_DIR, 'out', 'pages-v2');
+const CONTROL = process.argv.includes('--control');
 
 async function main() {
   mkdirSync(OUT_DIR, { recursive: true });
@@ -57,11 +48,30 @@ async function main() {
     throw new Error('video/shots.json has no set_pages to check');
   }
 
+  const narrow = shots.variants.vertical_9x16;
+  const { straddleY, bottomZone } = deriveRules(shots);
+  const layouts = [
+    {
+      name: 'wide',
+      viewport: { width: shots.viewport.width, height: shots.viewport.height },
+      dbl: dblclickPoint(shots),
+      line: straddleY.wide,
+      zone: bottomZone.wide,
+    },
+    {
+      name: 'narrow',
+      viewport: { width: narrow.viewport.width, height: narrow.viewport.height },
+      dbl: narrow.shots.s2_review.dblclick_css,
+      line: straddleY.narrow,
+      zone: bottomZone.narrow,
+    },
+  ];
+
   const ext = await buildExtension();
   const failures = [];
 
   for (const pageSpec of pages) {
-    for (const layout of LAYOUTS) {
+    for (const layout of layouts) {
       // eslint-disable-next-line no-await-in-loop -- launchWithExtension holds a machine-wide lock; pages must run one at a time
       await checkPage(ext, pageSpec, layout, failures);
     }
@@ -77,6 +87,14 @@ async function main() {
   console.log(`All ${pages.length} set pages passed at both layouts. Screenshots: ${OUT_DIR}`);
 }
 
+// The wide dblclick point: the s2_review take's dblclick_empty action.
+function dblclickPoint(shots) {
+  const shot = shots.shots.find((s) => s.id === 's2_review');
+  const action = shot?.actions.find((a) => a.kind === 'dblclick_empty');
+  if (!action) throw new Error('video/shots.json has no s2_review dblclick_empty action');
+  return { x: action.x, y: action.y };
+}
+
 async function checkPage(ext, pageSpec, layout, failures) {
   const label = `${pageSpec.id} @ ${layout.name}`;
   const pagePath = new URL(pageSpec.url).pathname.replace(/^\//, '');
@@ -84,6 +102,7 @@ async function checkPage(ext, pageSpec, layout, failures) {
   const { context, serviceWorker } = await launchWithExtension({ ext, viewport: layout.viewport });
   try {
     const routeLog = await routeSet(context, SET_DIR, { seed: '1', hour: 14 });
+    // A deliberately neutral seed (2 visible pets) for page checks, not a shot seed.
     await seedStorage(serviceWorker, {
       roster: [
         { id: 'rex', name: 'Rex', type: 'dog', color: 'brown' },
@@ -114,8 +133,10 @@ async function checkPage(ext, pageSpec, layout, failures) {
       failures.push(`${label}: unrouted requests: ${routeLog.unrouted.join(', ')}`);
     }
 
+    if (CONTROL) await addControlRow(page, layout.line);
+
     checkFonts(await getFontStatus(page, pageSpec.fonts), label, failures);
-    checkText(await getTextRects(page), pageSpec.fonts, layout.name, label, failures);
+    checkText(await getTextRects(page), pageSpec.fonts, layout, label, failures);
 
     await page.evaluate(() => {
       document.getElementById('pixel-pets-host').style.display = 'none';
@@ -136,7 +157,7 @@ async function checkPage(ext, pageSpec, layout, failures) {
       failures.push(`${label}: expected 2 LOADED pet images in #pixel-pets-host, found ${petCount}`);
     }
 
-    await page.screenshot({ path: join(OUT_DIR, `${pageSpec.id}-${layout.name}.png`) });
+    if (!CONTROL) await page.screenshot({ path: join(OUT_DIR, `${pageSpec.id}-${layout.name}.png`) });
   } finally {
     await context.close();
   }
@@ -185,53 +206,53 @@ function checkFonts(fontStatus, label, failures) {
   }
 }
 
-async function getTextRects(page) {
-  return page.evaluate(
-    ({ exemptIds, exemptClasses }) => {
-      const out = [];
-      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-      let node;
-      while ((node = walker.nextNode())) {
-        if (!node.textContent.trim()) continue;
-
-        let exempt = false;
-        for (let el = node.parentElement; el; el = el.parentElement) {
-          if (exemptIds.includes(el.id)) exempt = true;
-          if (el.classList && [...el.classList].some((c) => exemptClasses.includes(c))) exempt = true;
-        }
-
-        const fontFamily = getComputedStyle(node.parentElement).fontFamily;
-        const range = document.createRange();
-        range.selectNodeContents(node);
-        for (const rect of range.getClientRects()) {
-          out.push({ top: rect.top, bottom: rect.bottom, fontFamily, exempt });
-        }
-      }
-      return out;
-    },
-    { exemptIds: [...EXEMPT_IDS], exemptClasses: [...EXEMPT_CLASSES] },
-  );
+// The FAIL control: one plain Inter text row, 18 px tall, centred on the
+// crop line, so its glyph box must straddle it.
+async function addControlRow(page, lineY) {
+  await page.evaluate((y) => {
+    const row = document.createElement('div');
+    row.textContent = 'control row shifted onto the crop line';
+    row.style.cssText = `position:absolute;left:24px;top:${y - 9}px;height:18px;line-height:18px;font:12px Inter;color:#f0f`;
+    document.body.appendChild(row);
+  }, lineY);
 }
 
-function checkText(rects, allowedFonts, layoutName, label, failures) {
+async function getTextRects(page) {
+  return page.evaluate(() => {
+    const out = [];
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      if (!node.textContent.trim()) continue;
+      const fontFamily = getComputedStyle(node.parentElement).fontFamily;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      for (const rect of range.getClientRects()) {
+        out.push({ top: rect.top, bottom: rect.bottom, fontFamily });
+      }
+    }
+    return out;
+  });
+}
+
+function checkText(rects, allowedFonts, layout, label, failures) {
+  const { line, zone } = layout;
   for (const rect of rects) {
+    const at = `(top=${rect.top.toFixed(1)}, bottom=${rect.bottom.toFixed(1)})`;
     if (!isFontAllowed(rect.fontFamily, allowedFonts)) {
       failures.push(`${label}: text uses disallowed font "${rect.fontFamily}" (allowed: ${allowedFonts.join(', ')})`);
     }
-    if (layoutName === 'wide' && findBandViolation(rect, rect.exempt)) {
-      failures.push(`${label}: text crosses the 286-302 band (top=${rect.top.toFixed(1)}, bottom=${rect.bottom.toFixed(1)})`);
+    if (findStraddleViolation(rect, line)) {
+      failures.push(`${label}: text straddles y ${line} ${at}`);
     }
-    if (findBottomZoneViolation(rect, layoutName, rect.exempt)) {
-      failures.push(`${label}: text in the bottom-200 zone (top=${rect.top.toFixed(1)}, bottom=${rect.bottom.toFixed(1)})`);
-    }
-    if (findNarrowTextOverflow(rect, layoutName, rect.exempt)) {
-      failures.push(`${label}: narrow text extends below y357 (bottom=${rect.bottom.toFixed(1)})`);
+    if (findBottomZoneViolation(rect, zone)) {
+      failures.push(`${label}: text in the bottom-150 zone y ${zone.top}-${zone.bottom} ${at}`);
     }
   }
 }
 
 async function sweepInteractive(page, layout) {
-  const zone = layout.name === 'narrow' ? { top: 530, bottom: 730 } : { top: 340, bottom: 540 };
+  const { zone } = layout;
   const points = gridPoints(layout.viewport.width, zone.top, zone.bottom, 20);
   return page.evaluate((pts) => {
     const found = [];
@@ -259,18 +280,18 @@ function checkInteractive(found, label, failures) {
     const key = `${descriptor.tagName}@${x},${y}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    failures.push(`${label}: interactive <${descriptor.tagName.toLowerCase()}> in the bottom-200 zone at (${x}, ${y})`);
+    failures.push(`${label}: interactive <${descriptor.tagName.toLowerCase()}> in the bottom-150 zone at (${x}, ${y})`);
   }
 }
 
 async function checkDblZone(page, layout, label, failures) {
-  const centre = layout.name === 'narrow' ? { x: 300, y: 500 } : { x: 800, y: 410 };
-  const tag = await page.evaluate(({ x, y }) => {
-    const el = document.elementFromPoint(x, y);
+  const { x, y } = layout.dbl;
+  const tag = await page.evaluate(([px, py]) => {
+    const el = document.elementFromPoint(px, py);
     return el ? `${el.tagName}#${el.id}` : null;
-  }, centre);
+  }, [x, y]);
   if (tag !== 'DIV#dbl-zone') {
-    failures.push(`${label}: elementFromPoint(${centre.x}, ${centre.y}) is "${tag}", expected DIV#dbl-zone`);
+    failures.push(`${label}: elementFromPoint(${x}, ${y}) is "${tag}", expected DIV#dbl-zone`);
   }
 }
 
