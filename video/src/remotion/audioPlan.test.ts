@@ -21,6 +21,7 @@ describe('musicGainAt', () => {
 
 describe('buildSfx', () => {
   const shots: ShotsDoc = {
+    fps: 25,
     edit_order: ['s'],
     shots: [
       {

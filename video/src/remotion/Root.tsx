@@ -6,12 +6,14 @@
 
 import React from 'react';
 import { Composition, continueRender, delayRender, staticFile } from 'remotion';
+import shots from '../../shots.json';
 import { STAGE_16X9, STAGE_9X16 } from './camera';
 import { ColourProofStill } from './ColourProofStill';
 import { Promo, type PromoProps } from './Promo';
 import { PromoGif, type PromoGifProps } from './PromoGif';
 
-const FPS = 25;
+/** The master's frame rate: shots.json `fps`, the same value timeline.ts plans with. */
+const FPS = shots.fps;
 
 // Local OFL pixel fonts, loaded once at module scope (video/README.md:
 // "Fonts load from video/assets/fonts via @font-face (no network at

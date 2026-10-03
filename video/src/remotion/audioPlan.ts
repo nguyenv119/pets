@@ -13,7 +13,7 @@
 // the event.
 
 import type { Events } from '../schema';
-import { resolveAnyAnchor, type EditTimeline, type ShotsDoc } from './timeline';
+import { anchorMasterFrame, demoMasterFrame, findAnchorMasterFrame, type EditTimeline, type ShotsDoc } from './timeline';
 
 export interface SfxCue {
   /** public-dir path, e.g. "sfx/kenney_interface/Audio/click_001.ogg". */
@@ -50,28 +50,26 @@ type SfxSpec = { file: string; at: string; peak_dbfs?: number; rate?: number; ru
 
 /** Every SFX cue of the edit. A cue whose anchor this take never logs is skipped (e.g. no ball_floor before the catch). */
 export function buildSfx(edit: EditTimeline, shots: ShotsDoc, eventsByShotId: Record<string, Events>): SfxCue[] {
-  const frameMs = 1000 / edit.fps;
   const cues: SfxCue[] = [];
   for (const eb of edit.beats) {
     const spec = shots.shots.find((s) => s.id === eb.shotId)?.beats.find((b) => b.name === eb.name) as { sfx?: SfxSpec[] } | undefined;
     const ev = eventsByShotId[eb.shotId];
     for (const cue of spec?.sfx ?? []) {
       const gain = cue.peak_dbfs !== undefined ? cue.peak_dbfs - KENNEY_PEAK_DBFS : SFX_DEFAULT_DB;
-      const demoTimes: number[] = [];
+      // the master frame of each sound: ball_floor plays once per floor contact before the catch, every other cue once
+      const frames: number[] = [];
       if (cue.at === 'ball_floor') {
         // "each floor contact before the catch, 3 dB quieter each time"
         const caught = ev.observed.find((o) => o.kind === 'catch')?.t ?? Infinity;
-        ev.observed.filter((o) => o.kind === 'ball_floor' && o.t < caught).forEach((o) => demoTimes.push(o.t + ev.trimBeforeMs));
+        ev.observed.filter((o) => o.kind === 'ball_floor' && o.t < caught).forEach((o) => frames.push(demoMasterFrame(o.t + ev.trimBeforeMs, eb, ev, edit.fps)));
       } else {
         try {
-          demoTimes.push(resolveAnyAnchor(cue.at, { events: ev, beatInMs: eb.source_in }));
+          frames.push(anchorMasterFrame(cue.at, eb, ev, edit.fps));
         } catch {
           continue;
         }
       }
-      demoTimes.forEach((d, i) => {
-        const lag = cue.at === 'in' ? 0 : ev.videoLagMs;
-        const frame = Math.round((d + lag + eb.shiftMs) / frameMs);
+      frames.forEach((frame, i) => {
         if (frame < 0 || frame >= edit.totalFrames) return;
         cues.push({ src: cue.file, frame, gainDb: gain - 3 * i, rate: cue.rate ?? 1, at: cue.at });
       });
@@ -83,21 +81,8 @@ export function buildSfx(edit: EditTimeline, shots: ShotsDoc, eventsByShotId: Re
 /** The bed's level plan: up on the first wave in s1_inbox, out on the lights-out switch in s4_article_night. */
 export function buildMusicPlan(edit: EditTimeline, eventsByShotId: Record<string, Events>, src: string): MusicPlan {
   const frameMs = 1000 / edit.fps;
-  const frameOfAnchor = (spec: string): number | undefined => {
-    for (const eb of edit.beats) {
-      const ev = eventsByShotId[eb.shotId];
-      let d: number;
-      try {
-        d = resolveAnyAnchor(spec, { events: ev, beatInMs: eb.source_in });
-      } catch {
-        continue;
-      }
-      if (d >= eb.source_in && d < eb.source_out) return Math.round((d + ev.videoLagMs + eb.shiftMs) / frameMs);
-    }
-    return undefined;
-  };
-  const up = frameOfAnchor('src:rex:swipe') ?? 0;
-  const stop = frameOfAnchor('sleep') ?? edit.totalFrames;
+  const up = findAnchorMasterFrame(edit, eventsByShotId, 'src:rex:swipe') ?? 0;
+  const stop = findAnchorMasterFrame(edit, eventsByShotId, 'sleep') ?? edit.totalFrames;
   return { src, quietDb: BED_QUIET_DB, upDb: BED_UP_DB, upFrom: up, upFrames: Math.round(1200 / frameMs), stopAt: stop, stopFrames: Math.round(250 / frameMs) };
 }
 

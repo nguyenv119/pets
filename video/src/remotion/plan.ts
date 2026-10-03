@@ -49,17 +49,18 @@ const GLIDE_MS = 300;
 /**
  * The popup take's cursor. A take that logs its own cursorTrack uses it;
  * otherwise (the synthetic stand-in) the path is rebuilt from the logged
- * click points only: it starts on the Bao row at x 250
- * (s2b_shelter.cursor_start) and eases into each logged click point over
- * the 300 ms before it, so the tip is on the card at every click.
+ * click points only: it starts at s2b_shelter.cursor_start (x from the
+ * spec; y "the middle of the Bao row", the second of the list's two rows)
+ * and eases into each logged click point over the 300 ms before it, so
+ * the tip is on the card at every click.
  */
-export function popupCursor(events: Events): CursorData {
+export function popupCursor(events: Events, startX: number): CursorData {
   const base = { trimBeforeMs: events.trimBeforeMs, videoLagMs: events.videoLagMs };
   if (events.cursorTrack.length) return { ...base, track: events.cursorTrack, clicks: events.clicks };
   const clicksObs = events.observed.filter((o) => POPUP_CLICKS.includes(o.kind) && Number.isFinite(o.x) && Number.isFinite(o.y));
   const ready = events.observed.find((o) => o.kind === 'popup_ready')?.t ?? 0;
   const list = events.tracks?.find((f) => f.els?.pets_list)?.els?.pets_list;
-  let pos = { x: 250, y: list ? list.y + list.h * 0.75 : 300 };
+  let pos = { x: startX, y: list ? list.y + list.h * 0.75 : 300 };
   const track: CursorSample[] = [{ t: ready, ...pos }];
   const ease = (u: number) => 1 - Math.pow(1 - u, 3);
   for (const o of clicksObs) {
@@ -97,7 +98,12 @@ export function buildPromoPlan(input: PlanInput): PromoPlan {
     .filter((b) => b.k1 > b.k0)
     .map((b) => {
       const ev = eventsByShotId[b.shotId];
-      const cursor: CursorData = b.card ? popupCursor(ev) : { track: ev.cursorTrack, clicks: ev.clicks, trimBeforeMs: ev.trimBeforeMs, videoLagMs: ev.videoLagMs };
+      let cursor: CursorData = { track: ev.cursorTrack, clicks: ev.clicks, trimBeforeMs: ev.trimBeforeMs, videoLagMs: ev.videoLagMs };
+      if (b.card) {
+        const start = shots.shots.find((s) => s.id === b.shotId)?.cursor_start;
+        if (!start) throw new Error(`plan: card shot ${b.shotId} declares no cursor_start`);
+        cursor = popupCursor(ev, start.x);
+      }
       return {
         name: b.name,
         k0: b.k0,

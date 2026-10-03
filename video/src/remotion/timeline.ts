@@ -5,11 +5,14 @@
 //
 // Source of truth: video/shots.json's `conventions.anchors`/`camera`
 // sections and .claude/marketing-video/design/storyboard-final.md's "Stage
-// and camera" section (see camera.ts's header). Card-beat (popup) timeline
-// resolution is NOT part of this file — see cardCrop.ts.
+// and camera" section (see camera.ts's header). Page beats take their
+// per-frame crops from cameraPath.ts and card beats their per-frame card
+// from cardTimeline.ts; this file chains the beats onto the master and
+// derives every declared field from those frames.
 //
-// Browser-safe: no Node imports (Remotion compositions may need to derive
-// per-frame poses using the same crop function this module exposes).
+// Pure, no Node imports: render.mjs runs it in Node, and the anchor helpers
+// below are the one place an anchor becomes a master frame (overlays,
+// audio, render.mjs --at).
 //
 // Units: everything here is MILLISECONDS (master ms, and demo.mp4 ms for
 // source_*); timelineJson() converts to the seconds timeline.json and
@@ -17,10 +20,10 @@
 // number of frames, so every master frame shows one whole source frame and
 // the eval's "source_t + (t - master_t)" mapping is exact.
 
-import { resolveAnchor, type EditOnlyAnchor } from '../anchors';
+import { parseAnchor, resolveAnchor } from '../anchors';
 import type { CardCropName, Events, ObservedEvent, Rect, Timeline, TimelineBeat } from '../schema';
 import { smoothedFocusX, type StageConfig } from './camera';
-import { shotFrameCrops, type CameraBeatSpan } from './cameraPath';
+import { petBoxStage, shotFrameCrops, type CameraBeatSpan } from './cameraPath';
 import { buildCardTimeline, cardSteadyOf, type CardSteadySize } from './cardTimeline';
 
 // --- Minimal shots.json shape this module actually reads --------------
@@ -64,6 +67,8 @@ export interface Shot {
   viewport?: { width: number };
   /** Card shots: the cells no crop may meet (s2b_shelter.layout_expect.forbidden_types). */
   layout_expect?: { forbidden_types?: string[] };
+  /** Card shots: where the popup take's cursor starts (s2b_shelter.cursor_start; y is prose: "the middle of the Bao row"). */
+  cursor_start?: { x: number; y: unknown };
 }
 
 export interface PopupCardPlacement {
@@ -72,6 +77,8 @@ export interface PopupCardPlacement {
 }
 
 export interface ShotsDoc {
+  /** The master's frame rate (shots.json `fps`). */
+  fps: number;
   edit_order: string[];
   shots: Shot[];
   overlays?: {
@@ -87,8 +94,6 @@ export interface ShotsDoc {
     };
   };
 }
-
-const DEFAULT_FPS = 25;
 
 // --- Move-text classification -------------------------------------------
 //
@@ -180,9 +185,11 @@ export interface AnchorContext {
  * here is a caller error.
  */
 export function resolveEditAnchor(spec: string, ctx: AnchorContext): number {
-  const name = spec.replace(/[+-]\d+$/, '') as EditOnlyAnchor;
-  const offsetMatch = /([+-]\d+)$/.exec(spec);
-  const offset = offsetMatch ? parseInt(offsetMatch[1], 10) : 0;
+  const parsed = parseAnchor(spec);
+  if (parsed.kind !== 'edit') {
+    throw new Error(`anchor "${spec}" is not an edit-only anchor`);
+  }
+  const { name, offsetMs: offset } = parsed;
 
   if (name === 'in') {
     if (ctx.beatInMs === undefined) {
@@ -213,30 +220,75 @@ export function resolveEditAnchor(spec: string, ctx: AnchorContext): number {
   throw new Error(`anchor "${spec}": "${name}" is not a resolvable edit-only time anchor (catch_point is a position, not a time)`);
 }
 
-const SOURCE_CLOCK_SHIFT_NAMES = new Set(['cursor_depart', 'ball_in_frame']);
+/** Whether an anchor is already on the edit's own clock ('in', 'end'), so neither trimBeforeMs nor videoLagMs applies to it. */
+function isEditClockAnchor(spec: string): boolean {
+  const parsed = parseAnchor(spec);
+  return parsed.kind === 'edit' && (parsed.name === 'in' || parsed.name === 'end');
+}
 
 /**
  * Resolves any anchor spec to a position in the shot's demo.mp4: recorder
  * anchors via anchors.ts, edit-only anchors via resolveEditAnchor. Per
  * this bead's step 2 spec ("source_in/source_out ... equal trimBeforeMs +
  * the LOGGED anchor time"), every anchor whose value comes from the
- * recorder's own logged clock (`observed[]`, `clicks[]`) sits
- * `events.trimBeforeMs` ms earlier in the assembled demo.mp4 than its
- * logged timestamp, because the file was NOT re-zeroed to the recorder's
- * own clock start when its leading clapper was trimmed. `in` and `end`
- * are exempt: they are already defined relative to a beat's own
- * (already-shifted) master_in, or to the whole edit's master length, and
- * adding the shift again would double-count it.
+ * recorder's own logged clock (`observed[]`, `clicks[]`, so
+ * `cursor_depart` and `ball_in_frame` too) sits `events.trimBeforeMs` ms
+ * earlier in the assembled demo.mp4 than its logged timestamp, because the
+ * file was NOT re-zeroed to the recorder's own clock start when its
+ * leading clapper was trimmed. `in` and `end` are exempt: they are already
+ * defined relative to a beat's own (already-shifted) master_in, or to the
+ * whole edit's master length, and adding the shift again would
+ * double-count it.
  */
 export function resolveAnyAnchor(spec: string, ctx: AnchorContext): number {
-  const name = spec.replace(/[+-]\d+$/, '');
-  if (name === 'in' || name === 'end') {
-    return resolveEditAnchor(spec, ctx);
-  }
-  if (SOURCE_CLOCK_SHIFT_NAMES.has(name)) {
-    return resolveEditAnchor(spec, ctx) + ctx.events.trimBeforeMs;
+  const parsed = parseAnchor(spec);
+  if (parsed.kind === 'edit') {
+    return resolveEditAnchor(spec, ctx) + (isEditClockAnchor(spec) ? 0 : ctx.events.trimBeforeMs);
   }
   return resolveAnchor(spec, ctx.events) + ctx.events.trimBeforeMs;
+}
+
+/** The fields of a beat an anchor needs to land on the master. */
+export type AnchorBeat = Pick<EditBeat, 'shiftMs' | 'source_in'>;
+
+/**
+ * The master frame that first SHOWS an anchor on this beat's shot: its
+ * demo.mp4 time plus the shot's videoLagMs (the recording shows an event
+ * about that long after the log, so captions, SFX and camera moves are
+ * shifted by it), plus the beat's shiftMs, rounded to a whole frame. The
+ * edit's own anchors (`in`, `end`) carry no lag. `end` needs `totalFrames`.
+ * The ONE anchor-to-master-frame mapping: overlays.ts, audioPlan.ts and
+ * render.mjs --at all go through it.
+ */
+export function anchorMasterFrame(spec: string, beat: AnchorBeat, events: Events, fps: number, totalFrames?: number): number {
+  const totalMs = totalFrames === undefined ? undefined : (totalFrames * 1000) / fps - beat.shiftMs;
+  const demo = resolveAnyAnchor(spec, { events, beatInMs: beat.source_in, totalMs });
+  return demoMasterFrame(demo, beat, events, fps, !isEditClockAnchor(spec));
+}
+
+/** The master frame that shows a logged event at demo.mp4 time `demoMs` (plus videoLagMs when `lagged`). */
+export function demoMasterFrame(demoMs: number, beat: AnchorBeat, events: Events, fps: number, lagged = true): number {
+  return Math.round((demoMs + (lagged ? events.videoLagMs : 0) + beat.shiftMs) / (1000 / fps));
+}
+
+/**
+ * The master frame of the first beat whose shot logs `spec` inside the
+ * beat's own span, or undefined when no beat shows it. A malformed anchor
+ * throws; an anchor a shot never logs only skips that beat.
+ */
+export function findAnchorMasterFrame(edit: EditTimeline, eventsByShotId: Record<string, Events>, spec: string): number | undefined {
+  parseAnchor(spec);
+  for (const b of edit.beats) {
+    const events = eventsByShotId[b.shotId];
+    let demo: number;
+    try {
+      demo = resolveAnyAnchor(spec, { events, beatInMs: b.source_in });
+    } catch {
+      continue; // this shot never logs the anchor
+    }
+    if (demo >= b.source_in && demo < b.source_out) return anchorMasterFrame(spec, b, events, edit.fps);
+  }
+  return undefined;
 }
 
 // --- Focus resolution -----------------------------------------------------
@@ -251,8 +303,9 @@ function findCatchEvent(events: Events): ObservedEvent | undefined {
 /**
  * Resolves one pet's focus x (stage px) at `atMs`: from `events.tracks`
  * when present (400ms-smoothed, per camera.ts), else from the pet's own
- * hover/click rect (storyboard: "fall back to the click rect when tracks
- * is absent, as in the fixture"). Track/click coordinates are CSS px in
+ * click rect nearest `atMs` (storyboard: "fall back to the click rect when
+ * tracks is absent, as in the fixture"), the box petBoxStage gives the
+ * render checks. Track/click coordinates are CSS px in
  * the 960x540 recording viewport (video/shots.json conventions.units);
  * multiplying by 2 (the recording's fixed device_scale_factor) converts
  * to native/stage px, which is 1:1 with stage x for both aspect ratios
@@ -268,9 +321,10 @@ function resolvePetFocusX(events: Events, petId: string, atMs: number): number {
       return smoothedFocusX(samples, atMs) * CSS_TO_STAGE;
     }
   }
-  const click = events.clicks.find((c) => c.pet === petId);
-  if (click) {
-    return (click.rect.x + click.rect.w / 2) * CSS_TO_STAGE;
+  // No tracks (the fixture): the pet's click rect nearest in time, the same box the crop-margin check frames.
+  const box = petBoxStage(events, petId, atMs, { width: 0, height: 0, floorLine: 0, pageTopNative: 0 });
+  if (box) {
+    return box.x + box.w / 2;
   }
   throw new Error(`resolvePetFocusX: no tracks or click rect for pet "${petId}"`);
 }
@@ -407,6 +461,13 @@ export interface EditBeat extends TimelineBeat {
   frameCrops?: Rect[];
   /** Card beats: the card's visible frame on each master frame, [k - k0]. */
   cardEnvelopes?: Rect[];
+  /** Card beats: how the card arrives (the first card pops in, the next ones morph) and over how long. */
+  cardTransition?: CardTransition;
+}
+
+export interface CardTransition {
+  kind: 'pop_in' | 'morph';
+  ms: number;
 }
 
 export interface EditTimeline {
@@ -427,6 +488,7 @@ export interface BuildTimelineOptions {
   /** absolute path of each shot's demo.mp4 under build/<run>/, keyed by shot id. */
   sourceByShotId: Record<string, string>;
   music: string;
+  /** Overrides shots.fps (tests only). */
   fps?: number;
   /** --no-zoom: every page frame is the full stage (a control render; its timeline declares the full stage). */
   noZoom?: boolean;
@@ -446,8 +508,9 @@ export interface BuildTimelineOptions {
   minLengthMs?: number;
 }
 
-const CARD_POP_IN_MS = 200;
-const CARD_MORPH_MS = 160;
+/** overlays.popup_card: the first card pops in over 200 ms, each next crop morphs in over 160 ms. */
+export const CARD_POP_IN: CardTransition = { kind: 'pop_in', ms: 200 };
+export const CARD_MORPH: CardTransition = { kind: 'morph', ms: 160 };
 
 /**
  * The longest run of identical crops among `crops` whose zoom is `sampleZoom`
@@ -474,7 +537,8 @@ export function steadyRun(crops: readonly Rect[], stageWidth: number, sampleZoom
  * card (cardTimeline.ts). All values in ms; see timelineJson().
  */
 export function buildTimeline(opts: BuildTimelineOptions): EditTimeline {
-  const fps = opts.fps ?? DEFAULT_FPS;
+  const fps = opts.fps ?? opts.shots.fps;
+  if (!(fps > 0)) throw new Error('buildTimeline: shots.json has no fps');
   const frameMs = 1000 / fps;
   const ceilFrame = (ms: number) => Math.ceil(ms / frameMs - 1e-6);
 
@@ -551,6 +615,7 @@ export function buildTimeline(opts: BuildTimelineOptions): EditTimeline {
         if (!shot.viewport) throw new Error(`buildTimeline: shot "${shotId}" has card beats but declares no viewport (needed for the crop rule's CSS width)`);
         const steadyAt = opts.shots.overlays?.popup_card?.placement?.steady_at?.[opts.aspect]?.[beat.card.crop];
         if (!steadyAt) throw new Error(`buildTimeline: no overlays.popup_card.placement.steady_at.${opts.aspect}.${beat.card.crop} in shots.json`);
+        const transition = prevCardSteady ? CARD_MORPH : CARD_POP_IN;
         const built = buildCardTimeline({
           cropName: beat.card.crop,
           scale: beat.card.scale_native,
@@ -561,11 +626,12 @@ export function buildTimeline(opts: BuildTimelineOptions): EditTimeline {
           k0: sp.k0,
           k1: sp.k1,
           shiftMs,
-          transitionMs: prevCardSteady ? CARD_MORPH_MS : CARD_POP_IN_MS,
+          transitionMs: transition.ms,
           prevSteady: prevCardSteady,
         });
         tb.card = built.card;
         tb.cardEnvelopes = built.envelopes;
+        tb.cardTransition = transition;
         tb.master_t = built.sampleK * frameMs;
         prevCardSteady = cardSteadyOf(built.card);
       }

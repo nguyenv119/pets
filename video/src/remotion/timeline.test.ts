@@ -4,14 +4,18 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { Events } from '../schema';
 import { STAGE_16X9 } from './camera';
+import { makeEvents } from './testEvents';
 import {
+  anchorMasterFrame,
   buildTimeline,
   classifyMove,
+  findAnchorMasterFrame,
   resolveAnyAnchor,
   resolveEditAnchor,
   resolveFocusX,
   steadyRun,
   timelineJson,
+  type EditTimeline,
   type Shot,
   type ShotBeat,
   type ShotsDoc,
@@ -200,7 +204,7 @@ describe('buildTimeline (integration, real fixture data)', () => {
   const shotsDoc = loadFixtureShots();
   const events = loadFixtureEvents();
   const shot = shotsDoc.shots.find((s) => s.id === 'sample_hover_treat_catch')!;
-  const singleShotDoc: ShotsDoc = { edit_order: [shot.id], shots: [shot] };
+  const singleShotDoc: ShotsDoc = { fps: 25, edit_order: [shot.id], shots: [shot] };
 
   it('produces one Timeline beat per shots.json beat, in order', () => {
     const timeline = buildTimeline({
@@ -291,7 +295,7 @@ describe('buildTimeline (integration, real fixture data)', () => {
   });
 
   it('throws when edit_order names a shot missing from shots[]', () => {
-    const badDoc: ShotsDoc = { edit_order: ['nope'], shots: [] };
+    const badDoc: ShotsDoc = { fps: 25, edit_order: ['nope'], shots: [] };
     expect(() =>
       buildTimeline({ shots: badDoc, stage: STAGE_16X9, eventsByShotId: {}, sourceByShotId: {}, music: 'x' }),
     ).toThrow(/nope/);
@@ -303,7 +307,7 @@ describe('buildTimeline: frame grid and declared samples', () => {
   const events = loadFixtureEvents();
   const shot = shotsDoc.shots.find((s) => s.id === 'sample_hover_treat_catch')!;
   const edit = buildTimeline({
-    shots: { edit_order: [shot.id], shots: [shot] },
+    shots: { fps: 25, edit_order: [shot.id], shots: [shot] },
     stage: STAGE_16X9,
     eventsByShotId: { [shot.id]: events },
     sourceByShotId: { [shot.id]: '/abs/demo.mp4' },
@@ -334,13 +338,13 @@ describe('buildTimeline: frame grid and declared samples', () => {
   it('throws on a beat that spans no frame unless the caller allows it (fixture only)', () => {
     /** On a real take an empty beat means the anchors resolved out of order; rendering past it would drop a beat silently. */
     expect(() =>
-      buildTimeline({ shots: { edit_order: [shot.id], shots: [shot] }, stage: STAGE_16X9, eventsByShotId: { [shot.id]: events }, sourceByShotId: { [shot.id]: '/abs/demo.mp4' }, music: 'm' }),
+      buildTimeline({ shots: { fps: 25, edit_order: [shot.id], shots: [shot] }, stage: STAGE_16X9, eventsByShotId: { [shot.id]: events }, sourceByShotId: { [shot.id]: '/abs/demo.mp4' }, music: 'm' }),
     ).toThrow(/spans no master frame/);
   });
 
   it('extends the final hold toward the length rule by at most 1.0 s', () => {
     /** master.length_rule: "Under 28.3 s: extend the final hold by up to 1.0 s." */
-    const longer = buildTimeline({ shots: { edit_order: [shot.id], shots: [shot] }, stage: STAGE_16X9, eventsByShotId: { [shot.id]: events }, sourceByShotId: { [shot.id]: '/abs/demo.mp4' }, music: 'm', allowEmptyBeats: true, minLengthMs: 28300 });
+    const longer = buildTimeline({ shots: { fps: 25, edit_order: [shot.id], shots: [shot] }, stage: STAGE_16X9, eventsByShotId: { [shot.id]: events }, sourceByShotId: { [shot.id]: '/abs/demo.mp4' }, music: 'm', allowEmptyBeats: true, minLengthMs: 28300 });
     expect(longer.totalFrames - edit.totalFrames).toBe(25);
   });
 
@@ -361,5 +365,63 @@ describe('steadyRun', () => {
     const z = { x: 400, y: 492, w: 960, h: 540 };
     expect(steadyRun([full, full, full, z, z, z, z, z], 1920, 1)).toEqual({ first: 0, last: 2 });
     expect(steadyRun([full, full, full, z, z, z, z, z], 1920, 2)).toEqual({ first: 3, last: 7 });
+  });
+});
+
+describe('anchorMasterFrame / findAnchorMasterFrame', () => {
+  // a beat whose master frame = demo ms / 40 + 25 (shiftMs 1000), on a take with a 56 ms videoLagMs and trimBeforeMs 1000
+  const events = makeEvents({ trimBeforeMs: 1000, videoLagMs: 56, observed: [{ t: 2000, kind: 'pets_ready' }, { t: 4000, kind: 'sleep' }] });
+  const beat = { shiftMs: 1000, source_in: 2000 };
+
+  it('shifts a recorder anchor by videoLagMs, and an "in" anchor (with or without an offset) by nothing', () => {
+    /**
+     * What: "sleep" lands on the frame that SHOWS it (log + trimBeforeMs + videoLagMs + shiftMs);
+     * "in+80" is on the edit's own clock and gets no lag, matched by its PARSED name.
+     * Why: the old string compare (spec === 'in') gave "in+80" the 56 ms lag, a frame off.
+     * What breaks: SFX, captions and the --at still land a frame early or late.
+     */
+    // GIVEN / WHEN
+    const sleep = anchorMasterFrame('sleep', beat, events, 25);
+    const inPlus = anchorMasterFrame('in+80', beat, events, 25);
+    // THEN
+    expect(sleep).toBe(Math.round((4000 + 1000 + 56 + 1000) / 40));
+    expect(inPlus).toBe(Math.round((2000 + 80 + 1000) / 40));
+  });
+
+  it('puts "end" on the last frame boundary of the master', () => {
+    /**
+     * What: "end" resolves to totalFrames whatever the beat's shift.
+     * Why: the brand line runs to the end of the film.
+     * What breaks: the brand line drops off before the last frame.
+     */
+    // GIVEN / WHEN
+    const end = anchorMasterFrame('end', beat, events, 25, 300);
+    // THEN
+    expect(end).toBe(300);
+  });
+
+  it('finds the first beat that shows an anchor, skips shots that never log it, and rejects a malformed one', () => {
+    /**
+     * What: findAnchorMasterFrame searches beats in order, skipping beats whose shot does not log the
+     * anchor, and throws on a spec that is not an anchor at all.
+     * Why: audioPlan and render.mjs --at use it; a typo must fail loudly, not resolve to nothing.
+     * What breaks: the bed never comes up, or --at renders frame 0 for a typo.
+     */
+    // GIVEN — beat a on a shot without "sleep", beat b on one with it
+    const other = makeEvents({ observed: [{ t: 0, kind: 'pets_ready' }] });
+    const edit = {
+      music: 'm',
+      fps: 25,
+      totalFrames: 400,
+      beats: [
+        { name: 'a', shotId: 'x', shiftMs: 0, k0: 0, k1: 100, source_in: 0, source_out: 4000 },
+        { name: 'b', shotId: 'y', shiftMs: 1000, k0: 100, k1: 400, source_in: 2000, source_out: 14000 },
+      ],
+    } as unknown as EditTimeline;
+    // WHEN
+    const k = findAnchorMasterFrame(edit, { x: other, y: events }, 'sleep');
+    // THEN
+    expect(k).toBe(anchorMasterFrame('sleep', beat, events, 25));
+    expect(() => findAnchorMasterFrame(edit, { x: other, y: events }, 'not an anchor!')).toThrow(/anchor grammar/);
   });
 });

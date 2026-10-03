@@ -13,11 +13,11 @@
 // are anchors shifted by the shot's videoLagMs, as the camera and SFX are.
 
 import type { Events, Rect } from '../schema';
-import { rectDistance, rectsIntersect } from './checks';
+import { CHECK_THRESHOLDS, rectDistance, rectsIntersect } from './checks';
 import { focusPets } from './cameraPath';
 import type { StageConfig } from './camera';
 import { framePets, type FrameView } from './framePets';
-import { resolveAnyAnchor, type EditTimeline, type ShotBeat, type ShotsDoc } from './timeline';
+import { anchorMasterFrame, type EditTimeline, type ShotBeat, type ShotsDoc } from './timeline';
 
 export type Aspect = '16x9' | '9x16';
 export type TextKind = 'caption' | 'name_tag' | 'clock' | 'brand_line' | 'cta' | 'card_caption';
@@ -72,7 +72,8 @@ const pillSize = (lines: string[], px: number) => ({
 });
 export const NAME_TAG = { iconPx: 64, gap: 16, padX: 22, padY: 10 } as const;
 export const CTA_GAP_PX = 12;
-const GAP_PX = 80;
+/** Text keeps this far from every pet box: the render check's own threshold, so the layout and the check cannot disagree. */
+const GAP_PX = CHECK_THRESHOLDS.CAPTION_TO_PET_OUTPUT_PX;
 
 /** Wraps lowercase caption text to at most `max` characters a line (9:16: 18). */
 export function wrapCaption(text: string, max: number): string[] {
@@ -136,8 +137,6 @@ export function placeBesidePets(w: number, h: number, views: readonly FrameView[
 /** Builds every text layer of the master. `noCaptions` keeps only the CTA (the control and thumbnail renders). */
 export function buildOverlays(input: OverlayInput): TextItem[] {
   const { edit, shots, eventsByShotId, stage, aspect, outputWidth, noCaptions } = input;
-  const fps = edit.fps;
-  const frameMs = 1000 / fps;
   const port = aspect === '9x16';
   const area = bounds(aspect, stage);
   const items: TextItem[] = [];
@@ -148,14 +147,9 @@ export function buildOverlays(input: OverlayInput): TextItem[] {
     }
     throw new Error(`overlays: no beat ${name}`);
   };
-  /** A text anchor -> the master frame that first shows it (shifted by videoLagMs, as SFX and the camera are). */
-  const frameOf = (spec: string, eb: (typeof edit.beats)[number]): number => {
-    const ev = eventsByShotId[eb.shotId];
-    if (spec === 'end') return edit.totalFrames;
-    const demo = resolveAnyAnchor(spec, { events: ev, beatInMs: eb.source_in });
-    const lag = spec === 'in' ? 0 : ev.videoLagMs;
-    return Math.min(edit.totalFrames, Math.max(0, Math.round((demo + lag + eb.shiftMs) / frameMs)));
-  };
+  /** A text anchor -> the master frame that first shows it (shifted by videoLagMs, as SFX and the camera are), inside the master. */
+  const frameOf = (spec: string, eb: (typeof edit.beats)[number]): number =>
+    Math.min(edit.totalFrames, Math.max(0, anchorMasterFrame(spec, eb, eventsByShotId[eb.shotId], edit.fps, edit.totalFrames)));
   const views = (from: number, to: number): FrameView[] => {
     const out: FrameView[] = [];
     for (let k = from; k < to; k++) {
@@ -164,7 +158,7 @@ export function buildOverlays(input: OverlayInput): TextItem[] {
     }
     return out;
   };
-  const placement = (shots.overlays as { popup_card?: { placement?: Record<string, { caption_rect: Rect }> } } | undefined)?.popup_card?.placement?.[aspect];
+  const placement = shots.overlays?.popup_card?.placement?.[aspect];
 
   let brandItem: TextItem | null = null;
   let ctaItem: TextItem | null = null;
@@ -183,8 +177,13 @@ export function buildOverlays(input: OverlayInput): TextItem[] {
         const lines = beat.caption.split(/(?<=\.) /);
         const px = port ? 80 : 72;
         const { w, h } = pillSize(lines, px);
-        // 16:9: left-aligned in caption_rect, centred on y 540; 9:16: centred in caption_rect.
-        const rect = port ? { x: Math.round(cr.x + (cr.w - w) / 2), y: Math.round(cr.y + (cr.h - h) / 2), w, h } : { x: cr.x, y: Math.round(540 - h / 2), w, h };
+        // 16:9: left-aligned in caption_rect, centred on the card's own centre line (placement.anchor.cy); 9:16: centred in caption_rect.
+        let rect: Rect;
+        if (port) rect = { x: Math.round(cr.x + (cr.w - w) / 2), y: Math.round(cr.y + (cr.h - h) / 2), w, h };
+        else {
+          if (placement.anchor.cy === undefined) throw new Error('overlays: overlays.popup_card.placement.16x9.anchor has no cy');
+          rect = { x: cr.x, y: Math.round(placement.anchor.cy - h / 2), w, h };
+        }
         items.push({ kind: 'card_caption', beat: beat.name, lines, fontPx: px, fromFrame: from, toFrame: to, rect, align: port ? 'center' : 'left' });
       } else {
         const px = port ? 80 : 72;

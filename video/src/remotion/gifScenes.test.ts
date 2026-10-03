@@ -4,6 +4,7 @@ import { makeEvents } from './testEvents';
 
 describe('buildGifScenes', () => {
   const shots = {
+    fps: 25,
     edit_order: ['s1'],
     shots: [{ id: 's1', beats: [{ name: 'b2a', caption: 'hover: he waves.', caption_at: 'heart_on-1000', caption_out: 'heart_on-100', camera: { zoom: 2, focus: 'pet:rex', move: 'hold', sample: 2 } }] }],
     variants: { readme_gif: { fps: 12.5, scenes: [{ shot: 's1', crop_css: { x: 0, y: 180, w: 960, h: 360 }, in: 'pets_ready', out: 'heart_on+1500', captions: ['hover: he waves.'] }] } },

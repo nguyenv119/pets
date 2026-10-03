@@ -14,7 +14,7 @@ describe('popupCursor', () => {
       { t: 4300, kind: 'add_mousedown', x: 250, y: 830 },
     ],
   });
-  const cursor = popupCursor(events);
+  const cursor = popupCursor(events, 250);
 
   it('puts the cursor tip exactly on every logged click point at its click time', () => {
     /**
@@ -32,6 +32,6 @@ describe('popupCursor', () => {
 
   it('uses a take\'s own logged cursor path when it has one', () => {
     const own = makeEvents({ cursorTrack: [{ t: 0, x: 1, y: 2 }] });
-    expect(popupCursor(own).track).toEqual([{ t: 0, x: 1, y: 2 }]);
+    expect(popupCursor(own, 250).track).toEqual([{ t: 0, x: 1, y: 2 }]);
   });
 });
