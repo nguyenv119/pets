@@ -91,6 +91,60 @@ export function measureVideoLagFromHeart({ heartMaskSignalStatsText, sinceMs }) 
   return heartFrameMs - sinceMs;
 }
 
+// A visible-change detector for takes with no heart (the popup take): a
+// pixel counts as changed when its grey level moves by more than
+// CHANGE_PIXEL_DELTA, and a frame shows the event when at least
+// CHANGE_MIN_PX pixels changed. Measured live on the popup's #pet-name crop:
+// the first keystroke ("P" replacing the grey "Rex" placeholder) changed 333
+// device pixels, the text caret about 60.
+const CHANGE_PIXEL_DELTA = 40;
+const CHANGE_MIN_PX = 150;
+
+/**
+ * Splits ffmpeg `-f rawvideo -pix_fmt gray` output into one `{ t, gray }`
+ * per frame, frame n at n * 1000 / fps ms: the same axis signalstats'
+ * pts_time puts demo.mp4's frames on, so a lag read here and a heart lag
+ * read from signalstats are comparable.
+ */
+export function splitGrayFrames(buffer, { width, height, fps }) {
+  const size = width * height;
+  if (buffer.length % size !== 0) {
+    throw new Error(`grey buffer of ${buffer.length} bytes is not a whole number of frames of ${width}x${height}`);
+  }
+  const frames = [];
+  for (let n = 0; n * size < buffer.length; n++) {
+    frames.push({ t: (n * 1000) / fps, gray: buffer.subarray(n * size, (n + 1) * size) });
+  }
+  return frames;
+}
+
+function changedPixels(a, b) {
+  let count = 0;
+  for (let i = 0; i < a.length; i++) if (Math.abs(a[i] - b[i]) > CHANGE_PIXEL_DELTA) count++;
+  return count;
+}
+
+/**
+ * Measures videoLagMs from a visible change instead of a heart (bead step
+ * 9's rule, applied to the popup take's own typed text): the first frame at
+ * or after `sinceMs` (the logged event, Events timeline ms) whose crop
+ * differs from the comparison frame in at least CHANGE_MIN_PX pixels, minus
+ * `sinceMs`. The comparison frame is the last one a full frame period before
+ * `sinceMs`, because the 25 fps resample can already show the change in the
+ * grid frame just before the log; a state comparison against an earlier
+ * frame still finds it at the first frame at or after the log, as the heart
+ * search does. Returns null when there is no comparison frame or the crop
+ * never changes.
+ */
+export function measureVideoLagFromChange({ frames, sinceMs }) {
+  if (frames.length < 2) return null;
+  const framePeriodMs = frames[1].t - frames[0].t;
+  const reference = frames.findLast((f) => f.t <= sinceMs - framePeriodMs);
+  if (!reference) return null;
+  const shown = frames.find((f) => f.t >= sinceMs && changedPixels(f.gray, reference.gray) >= CHANGE_MIN_PX);
+  return shown ? shown.t - sinceMs : null;
+}
+
 /**
  * Computes trimBeforeMs (how much of the assembled mp4's front to trim so
  * playback starts at the start clapper's release edge) and the clapper

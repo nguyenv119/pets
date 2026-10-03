@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { computeSync, findFirstHeartFrame, findMagentaRuns, measureVideoLagFromHeart, parseSignalStats } from './sync.mjs';
+import {
+  computeSync,
+  findFirstHeartFrame,
+  findMagentaRuns,
+  measureVideoLagFromChange,
+  measureVideoLagFromHeart,
+  parseSignalStats,
+  splitGrayFrames,
+} from './sync.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const sigSample = readFileSync(join(HERE, '..', 'fixtures', 'sig.sample.txt'), 'utf-8');
@@ -153,6 +161,149 @@ describe('findFirstHeartFrame / measureVideoLagFromHeart', () => {
     const lag = measureVideoLagFromHeart({ heartMaskSignalStatsText: text, sinceMs: 350 });
 
     // THEN — null, so the caller falls back per the bead's documented rule (median of kept shots, else 56ms) rather than a fabricated value
+    expect(lag).toBeNull();
+  });
+});
+
+describe('splitGrayFrames / measureVideoLagFromChange', () => {
+  // Real-shaped: the popup take's #pet-name crop (inset inside its border),
+  // read back from the 25 fps demo.mp4 as 8-bit grey. On a live take the
+  // first keystroke ("P" replacing the grey "Rex" placeholder) changed 333
+  // device pixels by more than 40 grey levels, the text caret about 60, and
+  // nothing else in the field moved between keystrokes.
+  const W = 40;
+  const H = 20;
+  const BG = 247; // #FFF8E8 field background in grey
+
+  function field({ glyphPx = 0, caretPx = 0 } = {}) {
+    const px = new Uint8Array(W * H).fill(BG);
+    for (let i = 0; i < glyphPx; i++) px[i] = 72; // #484848 text
+    for (let i = 0; i < caretPx; i++) px[W * H - 1 - i] = 72;
+    return px;
+  }
+
+  function framesOf(grays, fps = 25) {
+    return splitGrayFrames(Buffer.concat(grays.map((g) => Buffer.from(g))), { width: W, height: H, fps });
+  }
+
+  it('splits ffmpeg rawvideo grey output into one frame per width*height bytes, timed on the 25 fps grid', () => {
+    /**
+     * The lag is read from demo.mp4's own frames, timed exactly as
+     * signalstats' pts_time times them (frame n at n/fps), so the popup lag
+     * and the heart lag sit on the same axis. If this breaks, every popup lag
+     * is off by whole frames.
+     */
+    // GIVEN — three frames of grey bytes
+    const buf = Buffer.concat([Buffer.from(field()), Buffer.from(field()), Buffer.from(field({ glyphPx: 300 }))]);
+
+    // WHEN — they are split
+    const frames = splitGrayFrames(buf, { width: W, height: H, fps: 25 });
+
+    // THEN — three frames at 0, 40 and 80 ms, each width*height bytes
+    expect(frames.map((f) => f.t)).toEqual([0, 40, 80]);
+    expect(frames[2].gray.length).toBe(W * H);
+  });
+
+  it('rejects a buffer that is not a whole number of frames', () => {
+    /**
+     * A truncated ffmpeg read must fail loudly, not shift every later frame.
+     */
+    // GIVEN — one and a half frames of bytes
+    const buf = Buffer.alloc(W * H * 1.5);
+
+    // WHEN / THEN — splitting throws
+    expect(() => splitGrayFrames(buf, { width: W, height: H, fps: 25 })).toThrow(/not a whole number of frames/);
+  });
+
+  it('returns the gap from the logged keystroke to the first frame that shows the typed text', () => {
+    /**
+     * videoLagMs for the popup take is measured, like the heart lag on page
+     * shots, as the first video frame at or after the logged event that shows
+     * its visual result, minus the logged time. If this breaks, the popup
+     * borrows or invents its lag again and the clapper check tests nothing.
+     */
+    // GIVEN — the "P" keystroke logged at 1947.3 ms, first shown in the frame at 2000 ms
+    const grays = [];
+    for (let n = 0; n < 60; n++) grays.push(n * 40 >= 2000 ? field({ glyphPx: 333, caretPx: 60 }) : field({ caretPx: 60 }));
+    const frames = framesOf(grays);
+
+    // WHEN — the lag is measured
+    const lag = measureVideoLagFromChange({ frames, sinceMs: 1947.3 });
+
+    // THEN — 52.7 ms
+    expect(lag).toBeCloseTo(52.7, 1);
+  });
+
+  it('measures from the first frame at or after the log even when the frame just before it already shows the text', () => {
+    /**
+     * The 25 fps resample can show a change in the grid frame just before the
+     * logged time (that frame takes the nearest screencast frame, up to 20 ms
+     * after it). The comparison frame is therefore taken one full frame
+     * earlier, so the state "text visible" is still found at the first frame
+     * at or after the log, as for the heart, and the lag is never negative.
+     * If this breaks, that take finds no change until the next keystroke and
+     * reports a lag about 100 ms too long.
+     */
+    // GIVEN — the keystroke logged at 1965 ms, and the text already visible in the 1960 ms frame
+    const grays = [];
+    for (let n = 0; n < 60; n++) grays.push(n * 40 >= 1960 ? field({ glyphPx: 333 }) : field());
+    const frames = framesOf(grays);
+
+    // WHEN — the lag is measured
+    const lag = measureVideoLagFromChange({ frames, sinceMs: 1965 });
+
+    // THEN — the 2000 ms frame is the first at or after the log: 35 ms
+    expect(lag).toBeCloseTo(35, 6);
+  });
+
+  it('ignores a caret-sized change and keeps looking for the typed text', () => {
+    /**
+     * The caret appears when the field takes focus, right around the first
+     * keystroke; it is about 60 device pixels, far below a glyph. If it
+     * counted, the lag would be read off the caret instead of the text.
+     */
+    // GIVEN — the caret appears at 1960 ms and the text at 2040 ms, the keystroke logged at 1950 ms
+    const grays = [];
+    for (let n = 0; n < 60; n++) {
+      const t = n * 40;
+      grays.push(field({ caretPx: t >= 1960 ? 60 : 0, glyphPx: t >= 2040 ? 333 : 0 }));
+    }
+    const frames = framesOf(grays);
+
+    // WHEN — the lag is measured
+    const lag = measureVideoLagFromChange({ frames, sinceMs: 1950 });
+
+    // THEN — 90 ms, from the text frame, not 10 ms from the caret frame
+    expect(lag).toBeCloseTo(90, 6);
+  });
+
+  it('returns null when the field never changes after the logged keystroke', () => {
+    /**
+     * A take whose typed text never reached the video has no honest lag. If
+     * this returned a number, the take would ship with a made-up lag.
+     */
+    // GIVEN — a field that never changes
+    const frames = framesOf(Array.from({ length: 60 }, () => field()));
+
+    // WHEN — the lag is measured
+    const lag = measureVideoLagFromChange({ frames, sinceMs: 1950 });
+
+    // THEN — null
+    expect(lag).toBeNull();
+  });
+
+  it('returns null when no frame lies a full frame before the logged keystroke to compare against', () => {
+    /**
+     * Without a comparison frame from before the event, any frame would look
+     * "changed" or "unchanged" arbitrarily.
+     */
+    // GIVEN — a keystroke logged at 20 ms, before the second frame
+    const frames = framesOf([field(), field({ glyphPx: 333 }), field({ glyphPx: 333 })]);
+
+    // WHEN — the lag is measured
+    const lag = measureVideoLagFromChange({ frames, sinceMs: 20 });
+
+    // THEN — null
     expect(lag).toBeNull();
   });
 });
