@@ -2,7 +2,9 @@
 // checker, the recorder, the render) imports from here instead of writing
 // its own launch/build/route plumbing.
 //
-// Frozen from this bead's commit on (video/README.md).
+// Frozen from this bead's commit on (video/README.md). Exception: v2
+// (pets-3it.4) changed seedStorage to take the viewport innerHeight, so the
+// stored y matches the take's viewport (seedPositions below).
 
 import { chromium } from 'playwright';
 import { execFileSync } from 'node:child_process';
@@ -123,18 +125,33 @@ export async function routeSet(context, root, { seed, hour } = {}) {
   return log;
 }
 
+/** A pet's sprite box edge in CSS px: DRAW_W in src/renderer.ts (asserted by browser.test.mjs). */
+export const PET_BOX_PX = 64;
+
+/**
+ * The stored positions for a seed: each pet's x with y = innerHeight -
+ * PET_BOX_PX (372 at 960x436, 792 at 540x856). The content script ignores
+ * the stored y: makePet (src/content.ts:134) overwrites it with groundY(),
+ * which is innerHeight - DRAW_W (src/content.ts:126). Writing that same value
+ * keeps storage equal to what is drawn, so nothing depends on a y from some
+ * other viewport. Throws when there are positions but no viewport height.
+ */
+export function seedPositions(positions = {}, innerHeight) {
+  const entries = Object.entries(positions);
+  if (entries.length && !Number.isFinite(innerHeight)) throw new Error('seedPositions: positions need the viewport innerHeight');
+  return Object.fromEntries(entries.map(([id, pos]) => [id, { x: pos.x, y: innerHeight - PET_BOX_PX }]));
+}
+
 /**
  * Writes the seeded roster/positions/settings/visibility into
  * chrome.storage.local from the service worker, before the page navigates
  * there (so the content script reads it at boot with no reload). Keys match
  * src/store.ts and src/settings.ts (asserted by browser.test.mjs).
  */
-export async function seedStorage(serviceWorker, seed) {
+export async function seedStorage(serviceWorker, seed, innerHeight) {
   const now = Date.now();
   const roster = { roster: seed.roster };
-  const positions = Object.fromEntries(
-    Object.entries(seed.positions ?? {}).map(([id, pos]) => [id, { x: pos.x, y: 476 }]),
-  );
+  const positions = seedPositions(seed.positions, innerHeight);
   const settings = {
     theme: seed.theme ?? 'light',
     treats: seed.treats ?? 10,

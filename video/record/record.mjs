@@ -134,7 +134,7 @@ async function captureOneTake({ shot, aspect, viewport, seedValue, ext, setDir, 
       ...(stripSeedAttr ? {} : { seed: seedValue }),
       hour: seedDoc.hour,
     });
-    await seedStorage(serviceWorker, seedDoc);
+    await seedStorage(serviceWorker, seedDoc, viewport.height);
 
     const page = await context.newPage();
     // Observers go in before the page exists, so pets_ready is the first

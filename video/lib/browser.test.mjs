@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { acquireLock, lockPath } from './lock.mjs';
+import { seedPositions, PET_BOX_PX } from './browser.mjs';
 
 const VIDEO_DIR = fileURLToPath(new URL('..', import.meta.url));
 const REPO_ROOT = join(VIDEO_DIR, '..');
@@ -40,6 +41,81 @@ describe('storage key equality', () => {
     expect(rosterKey).toBe('pixel-pets-v1');
     expect(positionsKey).toBe('pixel-pets-positions-v1');
     expect(settingsKey).toBe('pixel-pets-settings-v1');
+  });
+
+  it('PET_BOX_PX equals DRAW_W in src/renderer.ts', () => {
+    /**
+     * Verifies the pet box size seedPositions uses (PET_BOX_PX) equals the
+     * extension's own DRAW_W constant.
+     *
+     * This matters because browser.mjs never imports the extension's source;
+     * the seeded y (innerHeight - PET_BOX_PX) is meant to equal groundY()
+     * (innerHeight - DRAW_W, src/content.ts:126). A resized sprite would
+     * otherwise leave storage disagreeing with what is drawn, unnoticed.
+     *
+     * If this contract breaks, seeded positions stop matching the pets on screen.
+     */
+    // GIVEN — the extension's renderer source, read directly
+    const rendererSource = readFileSync(join(REPO_ROOT, 'src', 'renderer.ts'), 'utf-8');
+
+    // WHEN — DRAW_W's literal value is extracted
+    const drawW = Number(rendererSource.match(/export const DRAW_W = (\d+);/)?.[1]);
+
+    // THEN — it equals the harness constant
+    expect(drawW).toBe(PET_BOX_PX);
+  });
+});
+
+describe('seedPositions', () => {
+  it('stands every seeded pet on the viewport bottom: y = innerHeight - 64 (372 wide, 792 narrow)', () => {
+    /**
+     * Verifies the stored y is derived from the take's own viewport, not a
+     * constant from an older one (v1 wrote 476 for a 540 px viewport).
+     *
+     * This matters because storage should hold what is drawn. The content
+     * script ignores the stored y (makePet, src/content.ts:134, sets it to
+     * groundY() = innerHeight - DRAW_W, src/content.ts:126), so a stale y is
+     * not drawn, but it would sit in storage disagreeing with the screen.
+     *
+     * If this breaks, the seeded positions no longer match the take's viewport.
+     */
+    // GIVEN — Rex and Bao's seeded x
+    const positions = { rex: { x: 700 }, bao: { x: 16 } };
+
+    // WHEN — positions are built for the wide and narrow viewports
+    const wide = seedPositions(positions, 436);
+    const narrow = seedPositions(positions, 856);
+
+    // THEN — x is kept and y sits 64 px above the bottom
+    expect(wide).toEqual({ rex: { x: 700, y: 372 }, bao: { x: 16, y: 372 } });
+    expect(narrow.rex).toEqual({ x: 700, y: 792 });
+  });
+
+  it('throws without innerHeight', () => {
+    /**
+     * A caller that forgets the height must fail loudly instead of storing
+     * y NaN in chrome.storage.
+     */
+    // GIVEN — one position and no innerHeight
+    const positions = { rex: { x: 1 } };
+
+    // WHEN — positions are built
+    const build = () => seedPositions(positions);
+
+    // THEN — it throws naming the missing height
+    expect(build).toThrow(/innerHeight/);
+  });
+
+  it('empty positions need no height', () => {
+    /** The popup takes seed no positions, so they must not have to pass a height. */
+    // GIVEN — no positions
+    const positions = {};
+
+    // WHEN — positions are built with no innerHeight
+    const result = seedPositions(positions);
+
+    // THEN — an empty map, no throw
+    expect(result).toEqual({});
   });
 });
 

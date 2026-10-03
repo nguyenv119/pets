@@ -113,7 +113,7 @@ async function checkPage(ext, pageSpec, layout, failures) {
       theme: 'light',
       visible: true,
       homeAnchorDaysAgo: 3,
-    });
+    }, layout.viewport.height);
 
     const page = await context.newPage();
     await page.goto(`https://pixelpets.demo/${pagePath}`);

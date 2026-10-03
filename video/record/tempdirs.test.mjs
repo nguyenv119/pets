@@ -17,7 +17,7 @@ afterEach(() => {
 describe('ownProfileDir', () => {
   it("picks the profile dir the launch created, leaving older ones alone", () => {
     /**
-     * lib/browser.mjs (frozen) never returns or removes its profile dir
+     * lib/browser.mjs (frozen; v2 pets-3it.4 changed only seedStorage) never returns or removes its profile dir
      * (1.7 GB leaked in one shakedown session). The recorder removes the
      * dir its own launch made, and must never pick another process's.
      */

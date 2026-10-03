@@ -664,7 +664,7 @@ describe('accept details carry the measured value (no rubber stamps)', () => {
     expect(c.pass, c.detail).toBe(true);
     expect(c.detail).toMatch(/^A_list \d+ frames, B_pick \d+ frames, C_add \d+ frames; nearest forbidden cell [\d.]+ native px away$/);
     expect(k.pass, k.detail).toBe(true);
-    expect(k.detail).toMatch(/name_click [\d.]+px inside B_pick/);
+    expect(k.detail).toMatch(/name_click #1 [\d.]+px inside B_pick/);
   });
 
   it('fails the feed-heart rule when a second, non-catch heart appears in the take', () => {
@@ -729,5 +729,66 @@ describe('"before out" rules are judged up to the shot\'s out anchor', () => {
     const result = evaluateRule(greet, ev);
     expect(result.pass, result.detail).toBe(true);
     expect(result.detail).toMatch(/swipe 30\.0ms after pets_ready/);
+  });
+});
+
+describe('the popup click rule judges every logged click, not the first of each kind', () => {
+  const rule = 'every popup click and the Add Pet press log the CSS point they were sent at (x, y), and each point lies inside the crop on screen at that moment (A for shelter_click, B for name_click and type_selected, C for color_selected and add_mousedown), at least 4 CSS px inside its edges';
+
+  it('fails when a second shelter click lands outside crop A', () => {
+    /**
+     * The eval's popup click rule covers EVERY logged popup click. A take
+     * where the first shelter click is fine but a second one (a re-click)
+     * lands outside the on-screen crop shows a click the card never shows,
+     * so it must be discarded. Judging only the first of each kind (v1)
+     * passed that take.
+     */
+    // GIVEN — the real kept popup log plus a second shelter click 50 ms later at x 1, outside A_list's 4 px margin
+    const events = realPopup();
+    const first = events.observed.find((e) => e.kind === 'shelter_click');
+    events.observed.push({ ...first, t: first.t + 50, x: 1 });
+    events.observed.sort((a, b) => a.t - b.t);
+
+    // WHEN — the click rule is evaluated
+    const result = evaluateRule(rule, events, POPUP_CTX);
+
+    // THEN — it fails on that second click
+    expect(result.pass).toBe(false);
+    expect(result.detail).toMatch(/^shelter_click #2 at CSS \(1\.0, /);
+  });
+
+  it.each([
+    ['name_click', 'B_pick'],
+    ['add_mousedown', 'C_add'],
+  ])('fails when a second %s lands outside crop %s', (kind) => {
+    /** FAIL controls for the B and C crops: a re-click outside its crop must fail, as shelter_click does for A. */
+    // GIVEN — the real kept popup log plus a second click of this kind 50 ms later at x 1, outside its crop
+    const events = realPopup();
+    const first = events.observed.find((e) => e.kind === kind);
+    events.observed.push({ ...first, t: first.t + 50, x: 1 });
+    events.observed.sort((a, b) => a.t - b.t);
+
+    // WHEN — the click rule is evaluated
+    const result = evaluateRule(rule, events, POPUP_CTX);
+
+    // THEN — it fails on that second click
+    expect(result.pass).toBe(false);
+    expect(result.detail).toMatch(new RegExp(`^${kind} #2 at CSS`));
+  });
+
+  it('passes the same log when the second shelter click is inside crop A, judging both', () => {
+    /** Pass control for the case above: two good shelter clicks both pass and both appear in the detail. */
+    // GIVEN — a second shelter click at the same point as the first
+    const events = realPopup();
+    const first = events.observed.find((e) => e.kind === 'shelter_click');
+    events.observed.push({ ...first, t: first.t + 50 });
+    events.observed.sort((a, b) => a.t - b.t);
+
+    // WHEN — evaluated
+    const result = evaluateRule(rule, events, POPUP_CTX);
+
+    // THEN — passes, and both shelter clicks are judged
+    expect(result.pass, result.detail).toBe(true);
+    expect(result.detail.match(/shelter_click #\d/g)).toEqual(['shelter_click #1', 'shelter_click #2']);
   });
 });
