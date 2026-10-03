@@ -2,9 +2,9 @@
 // tagged BT.709 mp4 the bead's step 3 specifies. ffmpeg's concat demuxer
 // consumes the frames at their own (variable, ~59fps) cadence, one entry
 // per frame with that frame's own on-screen duration, and re-times the
-// result to a constant 25fps. See the bead's plan-review round 4 fix for
-// why the encode must be colour-tagged (an untagged yuv444p clip shifted a
-// pet colour 13 RGB units through Remotion's OffthreadVideo decode).
+// result to a constant 25fps. The encode must be colour-tagged: an untagged
+// yuv444p clip shifted a pet colour 13 RGB units through Remotion's
+// OffthreadVideo decode.
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -17,8 +17,8 @@ const MIN_FRAME_S = 1 / 120;
  * OffthreadVideo later decodes (the recorder here, scripts/synthetic's 9:16
  * stand-in, scripts/colour-proof.mjs and the GIF gate control): convert
  * through the BT.709 matrix into limited-range yuv444p, then tag all four
- * colour fields. Drop the tags and Remotion shifts a sprite colour about 13
- * RGB units (plan review round 4).
+ * colour fields. Without the tags, Remotion's decode shifted a sprite colour
+ * about 13 RGB units when measured.
  */
 export const BT709_VF = 'scale=out_color_matrix=bt709:out_range=tv,format=yuv444p';
 export const BT709_TAGS = ['-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv'];

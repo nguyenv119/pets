@@ -10,8 +10,9 @@ npm project, so Playwright and Remotion never enter the extension's
 
 - Node 24 or newer (`node -v`). The pipeline stops at once on an older Node.
 - `ffmpeg` and `ffprobe` on `PATH`, built with libfreetype (for `drawtext`).
-- About 5 GB of free disk during a run. Lossless takes are large, and
-  rejected takes collect in `.cache/takes/` until the last stage clears them.
+- About 5 GB of free disk during a run. Lossless takes are large; each one
+  is filmed in the system temp directory and deleted as soon as it is
+  rejected or assembled.
 - No other Chromium recording or Remotion render running on the machine.
   Every browser launch and render takes the lock in `lib/lock.mjs` and waits
   for the holder, because a busy CPU shifts the pets' timing outside the
@@ -34,7 +35,7 @@ fails and names it. Every line of output also goes to `out/pipeline.log`.
 | 3 loudness | Two-pass EBU R128 normalisation of both cuts to -16 LUFS, -1 dBTP, LRA 11. The video stream is copied untouched. |
 | 4 gif | Halves the GIF frames to 960x360 and encodes them with a 256-colour palette and no dither, then runs the colour gate (below). |
 | 5 thumbnail | Cuts an unscaled 1280x720 crop around Rex from the still and draws the icon and "Pixel Pets" at least 80 px from him. The X poster is the uncropped still. |
-| 6 describe | Fills `description.template.txt` with a credit for every species on screen (from `assets/CREDITS.json`) and the music track the timeline used. |
+| 6 describe | Fills `description.template.txt` with a credit (from `assets/CREDITS.json`) for every species in the recorded rosters and for the four species cells the popup card shows (chicken, crab, panda, snail), and with the music track the timeline used. |
 | 7 contact-sheet | One tile per second of the master, for a person to skim. Not a gate. |
 | 8 qa | The pipeline's own checks: sizes, lengths, codecs, loudness, the render manifest, the recorder's events and the GIF's provenance. |
 | 9 prune | Keeps the two newest `build/` runs (never the one just rendered) and empties `.cache/takes/`. |
@@ -42,6 +43,11 @@ fails and names it. Every line of output also goes to `out/pipeline.log`.
 `npm run video -- --run build/<run>` skips stage 1 and re-renders an existing
 recording. Every stage also runs on its own, for example
 `npx tsx scripts/gif.mjs --run build/<run>`.
+
+Only stage 9 deletes old recordings. If you record on your own
+(`npm run record`, which runs `record/record.mjs`), each run adds a new
+`build/<timestamp>/` and nothing removes the old ones, so run
+`npx tsx scripts/prune.mjs` afterwards to keep only the two newest.
 
 ### How long it takes
 
@@ -100,16 +106,12 @@ taste, and nobody has listened to the audio yet.
 2. Pick the music by ear. The edit uses "Cat caffe"; "forgotten path" is the
    other bed in `assets/music/`. The description credits whichever one
    `out/timeline.json` names.
-3. Decide on the sprite licences. The dog sprites are NVPH Studio's, CC
-   BY-ND 4.0, with the wave and lying poses made in vscode-pets: accept that
-   reading or ask NVPH Studio. The panda (Jessie Ferris) and the chicken
-   (Gulnur Baimukhambetova) are MIT via vscode-pets, and so are the crab
-   (Marc Duiker) and the snail (Kennet Shin), whose cells the shelter card
-   shows at about 128 px: accept the MIT reading or ask the artists.
-4. Credit each sprite artist in the repo README (pets-ctn).
-5. Bundle Nunito in the popup (pets-gvd). Until then, opening the popup
-   requests Google Fonts, and "collects no data" in the call to action is
-   harder to defend.
+3. Confirm the sprite licences before publishing: the dog, panda and
+   chicken on camera, and the crab and snail whose cells the popup card
+   shows. `assets/CREDITS.json` lists each artist, licence and source.
+4. Credit the sprite artists in the repo README.
+5. Bundle Nunito in the popup, so opening it makes no font request and
+   "collects no data" in the call to action holds.
 6. Upload the master to YouTube with `out/thumbnail.png` and
    `out/description.txt`, and paste the link into the Chrome Web Store
    dashboard's promo-video field.

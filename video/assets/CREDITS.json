@@ -8,7 +8,7 @@
       "licence": "CC BY-ND 4.0",
       "licence_url": "https://creativecommons.org/licenses/by-nd/4.0/",
       "note": "the wave (swipe) and lie poses were added or changed in vscode-pets (commits 88518fd, a7e5aef)",
-      "public_note": "The GIFs were made for vscode-pets by Anthony Shaw (https://github.com/tonybaloney/vscode-pets); the wave and lying poses were made there and are not in the pack as NVPH lists it."
+      "public_note": "Via vscode-pets (https://github.com/tonybaloney/vscode-pets). The wave pose was added in vscode-pets and the lying pose was changed there; they are not in the pack as NVPH lists it."
     },
     {
       "species": "panda",
