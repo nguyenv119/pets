@@ -200,11 +200,17 @@ export async function runPopupActions(page, actions, cursor) {
         await page.mouse.down();
         const downT = await pageNow(page);
         observed.push({ t: downT, kind: action.event, x, y });
-        await sleep(action.release_after_ms ?? 240);
+        // Hold until the PAGE clock says release_after_ms has passed: a Node
+        // sleep of 240 ms measured 239.8 ms on the page clock once.
+        const releaseMs = action.release_after_ms ?? 240;
+        let upT = await pageNow(page);
+        while (upT - downT < releaseMs) {
+          await sleep(Math.max(1, Math.ceil(releaseMs - (upT - downT))));
+          upT = await pageNow(page);
+        }
         // Logged as the mouseup is SENT: the mouseup runs addPet(), whose
         // storage write can land before page.mouse.up() resolves, so a clock
         // read after it put add_mouseup after roster_saved.
-        const upT = await pageNow(page);
         await page.mouse.up();
         observed.push({ t: upT, kind: 'add_mouseup', x, y });
         break;
