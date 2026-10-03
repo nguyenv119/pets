@@ -8,9 +8,12 @@ import {
   checkOverlayPetDistance,
   checkParticleColumnOverlap,
   checkUniformContentScale,
+  checkCardFrameContent,
+  checkInsideRect,
   particleColumn,
   rectsIntersect,
 } from './checks';
+import { CTA_GAP_PX, PILL, textWidth } from './overlays';
 
 describe('rectsIntersect', () => {
   it('reports overlap for two rectangles that share interior area', () => {
@@ -57,6 +60,21 @@ describe('checkCropPetMargin', () => {
     const crop = { x: 100, y: 0, w: 500, h: 500 };
     const pet = { x: 300, y: 200, w: 40, h: 40 };
     expect(checkCropPetMargin(crop, [pet], pageBounds)).toEqual([]);
+  });
+
+  it('fails a crop whose edge cuts through Rex\'s box (a clipped pet)', () => {
+    /**
+     * A crop edge THROUGH a pet is the worst case of the margin rule: half a dog on screen. The box
+     * reaches into the crop, so it is visible, and its distance to the edge is negative.
+     */
+    const crop = { x: 480, y: 492, w: 960, h: 540 };
+    const rex = { x: 440, y: 856, w: 128, h: 128 }; // straddles the crop's left edge at x 480
+    expect(checkCropPetMargin(crop, [rex], pageBounds).some((v) => v.detail.startsWith('left'))).toBe(true);
+  });
+
+  it('ignores a pet wholly outside the crop (not on screen)', () => {
+    const crop = { x: 480, y: 492, w: 960, h: 540 };
+    expect(checkCropPetMargin(crop, [{ x: 100, y: 856, w: 128, h: 128 }], pageBounds)).toEqual([]);
   });
 
   it('exempts a crop edge that coincides with the page edge', () => {
@@ -202,5 +220,87 @@ describe('checkCardEndsAfterMousedown', () => {
 
   it('passes a b3e frame at or before add_mousedown+160', () => {
     expect(checkCardEndsAfterMousedown(1000 + 160, 1000)).toEqual([]);
+  });
+});
+
+describe('acceptance 4: the s4 end card', () => {
+  it('passes with all three pets asleep at 2.0x and the brand line plus the CTA (two credit lines) above them', () => {
+    /**
+     * The approved end card must be renderable: sleeping pets emit no particles, so only the 80 px box
+     * rule applies, and the brand line + CTA block (laid out exactly as overlays.ts does: brand 84 px,
+     * 24 px gap, CTA lines with 12 px gaps) fits above the pets. If this failed, the film could not end.
+     */
+    // GIVEN — Rex, Pip, Bao at CSS x 340/400/460 at 2.0x, crop x 640: 128x128 output boxes standing on y 984
+    const pets = [340, 400, 460].map((x) => ({ x: (x * 2 - 640) * 2, y: 984 - 256, w: 256, h: 256 }));
+    const cta = [128, 64, 52, 28, 28];
+    const ctaH = cta.reduce((a, b) => a + b, 0) + CTA_GAP_PX * (cta.length - 1);
+    const blockH = 84 + 24 + ctaH;
+    const top = Math.min(...pets.map((p) => p.y)) - 80 - blockH;
+    const brand = { x: 160, y: top, w: textWidth("They're not much, but they're yours.", 'VT323', 84), h: 84 };
+    const ctaRect = { x: 160, y: top + 84 + 24, w: 940, h: ctaH };
+    // WHEN / THEN
+    expect(top).toBeGreaterThanOrEqual(48);
+    expect(checkOverlayPetDistance(brand, pets)).toEqual([]);
+    expect(checkOverlayPetDistance(ctaRect, pets)).toEqual([]);
+  });
+});
+
+describe('acceptance 4: popup card frames', () => {
+  const B = { x: 40, y: 793, w: 315, h: 467 }; // the measured B_pick, native px
+  const steady16 = { x: 324, y: 72, w: 630, h: 934 };
+  const steady916 = { x: 224, y: 250, w: 630, h: 934 };
+  const pill = { w: textWidth('adopt: pick one.', 'VT323', 72) + 2 * (PILL.padX + PILL.border), h: 2 * 72 + 2 * (PILL.padY + PILL.border) };
+
+  it('fails a card frame whose crop touches the fox cell\'s DOMRect', () => {
+    /** A crop that meets a forbidden cell shows an uncast species; the render must fail on that frame. */
+    const fox = { type: 'fox', rect: { x: 506, y: 975, w: 133, h: 127 } };
+    const wide = { x: 40, y: 793, w: 470, h: 467 };
+    expect(checkCardFrameContent(wide, wide, [fox], { x: 0, y: 0, w: 10, h: 10 }, { x: 0, y: 0, w: 10, h: 10 }).some((v) => v.check === 'card-forbidden-cell')).toBe(true);
+  });
+
+  it('passes the measured B at 2x on its 16:9 and 9:16 steady spots with the caption in its fixed rect', () => {
+    /** overlays.popup_card.placement: B 630x934 fits both frames and the caption keeps 40 px from it in each. */
+    const cap16 = { x: 1320, y: Math.round(540 - pill.h / 2), ...pill };
+    const cap916 = { x: Math.round(60 + (840 - pill.w) / 2), y: Math.round(1224 + (236 - pill.h) / 2), ...pill };
+    expect(steady16.x + steady16.w <= 1920 && steady16.y + steady16.h <= 1080).toBe(true);
+    expect(steady916.x + steady916.w <= 1080 && steady916.y + steady916.h <= 1920).toBe(true);
+    expect(checkCardCaptionGap(steady16, cap16)).toEqual([]);
+    expect(checkInsideRect(cap16, { x: 1320, y: 380, w: 560, h: 320 }, 'caption')).toEqual([]);
+    expect(checkCardCaptionGap(steady916, cap916)).toEqual([]);
+    expect(checkInsideRect(cap916, { x: 60, y: 1224, w: 840, h: 236 }, 'caption')).toEqual([]);
+  });
+
+  it('fails a caption placed below B in 16:9 (it cannot clear the card inside the frame)', () => {
+    const below = { x: 324, y: steady16.y + steady16.h + 10, ...pill };
+    expect(checkCardCaptionGap(steady16, below).length + checkInsideRect(below, { x: 0, y: 0, w: 1920, h: 1080 }, 'caption').length).toBeGreaterThan(0);
+  });
+
+  it('fails a morph frame whose drawn region is wider than the incoming crop scaled to the frame', () => {
+    /** A mask over a wider popup region shows cells outside the crop; the content box must sit inside the card frame. */
+    const envelope = { x: 324, y: 72, w: 630, h: 934 };
+    const content = { x: 300, y: 72, w: 700, h: 934 }; // spills past the frame
+    expect(checkCardFrameContent(B, B, [], content, envelope).some((v) => v.check === 'card-content-in-frame')).toBe(true);
+  });
+
+  it('passes a pop-in frame whose integer box rounds one uniform scale', () => {
+    /** 0.94 x 1000x397 = 940x373.18: an integer box can only round, and must not be called stretched. */
+    expect(checkUniformContentScale({ x: 0, y: 372, w: 1000, h: 397 }, { w: 940, h: 373 })).toEqual([]);
+  });
+});
+
+describe('CHECK_THRESHOLDS', () => {
+  it('is the one source of every render-check number', () => {
+    /** The epic freezes these for pets-o3p.5; this pins the specified values so a silent loosening fails here. */
+    expect(CHECK_THRESHOLDS).toEqual({
+      CROP_EDGE_MARGIN_STAGE_PX: 16,
+      CAPTION_TO_PET_OUTPUT_PX: 80,
+      PARTICLE_COLUMN_WIDEN_CSS_PX: 24,
+      PARTICLE_COLUMN_UP_CSS_PX: 80,
+      CARD_CAPTION_GAP_PX: 40,
+      CARD_ANCHOR_TOLERANCE_PX: 2,
+      CARD_END_MOUSEDOWN_OFFSET_MS: 160,
+      CARD_CONTENT_ROUNDING_PX: 0.5,
+      PARTICLE_LIFETIME_MS: 1500,
+    });
   });
 });

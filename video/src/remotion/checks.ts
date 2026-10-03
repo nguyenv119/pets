@@ -5,9 +5,8 @@
 // never by relaxing a threshold here.
 //
 // Pure — no Remotion/React/Node imports — so it is unit-testable without a
-// render. render.mjs (pets-o3p.4 implementation step 4) is responsible for
-// calling these per-frame during a render and aborting, naming the frame
-// and the element, on any failure; that wiring is NOT part of this file.
+// render. renderChecks.ts applies them to every master frame before a
+// render, and render.mjs aborts naming the frame and the element.
 
 import type { Rect } from '../schema';
 
@@ -26,6 +25,15 @@ export const CHECK_THRESHOLDS = {
   CARD_ANCHOR_TOLERANCE_PX: 2,
   /** b3e's last frame must be no later than this many ms after the logged add_mousedown. */
   CARD_END_MOUSEDOWN_OFFSET_MS: 160,
+  /**
+   * A card content box is ONE uniform scale of its crop up to integer
+   * rounding: some factor s gives |w - rect.w*s| and |h - rect.h*s| both
+   * within this many output px (an integer box can rarely be exact; a
+   * stretched morph misses by far more).
+   */
+  CARD_CONTENT_ROUNDING_PX: 0.5,
+  /** A pet's particles last this long after the hover, feed or catch that spawned them (src/renderer.ts: alpha -= dt / 1.5 s). */
+  PARTICLE_LIFETIME_MS: 1500,
 } as const;
 
 export type CheckThresholds = typeof CHECK_THRESHOLDS;
@@ -73,6 +81,8 @@ export function checkCropPetMargin(
   pageBounds: Rect,
   thresholds: CheckThresholds = CHECK_THRESHOLDS,
 ): CheckViolation[] {
+  // A pet box that reaches into the crop must clear every non-page crop edge by the margin. A box the edge
+  // cuts through (a clipped pet) is at a negative distance, so it fails too; a box wholly outside is not visible.
   const margin = thresholds.CROP_EDGE_MARGIN_STAGE_PX;
   const violations: CheckViolation[] = [];
   const atLeftEdge = crop.x <= pageBounds.x;
@@ -81,21 +91,22 @@ export function checkCropPetMargin(
   const atBottomEdge = rectBottom(crop) >= rectBottom(pageBounds);
 
   for (const pet of petBoxes) {
+    if (!rectsIntersect(crop, pet)) continue;
     const distLeft = pet.x - crop.x;
     const distRight = rectRight(crop) - rectRight(pet);
     const distTop = pet.y - crop.y;
     const distBottom = rectBottom(crop) - rectBottom(pet);
 
-    if (!atLeftEdge && distLeft >= 0 && distLeft < margin) {
+    if (!atLeftEdge && distLeft < margin) {
       violations.push({ check: 'crop-pet-margin', detail: `left crop edge ${distLeft}px from pet box (margin ${margin})` });
     }
-    if (!atRightEdge && distRight >= 0 && distRight < margin) {
+    if (!atRightEdge && distRight < margin) {
       violations.push({ check: 'crop-pet-margin', detail: `right crop edge ${distRight}px from pet box (margin ${margin})` });
     }
-    if (!atTopEdge && distTop >= 0 && distTop < margin) {
+    if (!atTopEdge && distTop < margin) {
       violations.push({ check: 'crop-pet-margin', detail: `top crop edge ${distTop}px from pet box (margin ${margin})` });
     }
-    if (!atBottomEdge && distBottom >= 0 && distBottom < margin) {
+    if (!atBottomEdge && distBottom < margin) {
       violations.push({ check: 'crop-pet-margin', detail: `bottom crop edge ${distBottom}px from pet box (margin ${margin})` });
     }
   }
@@ -103,7 +114,7 @@ export function checkCropPetMargin(
 }
 
 /** Distance between two rectangles' nearest edges, 0 when they overlap. */
-function rectDistance(a: Rect, b: Rect): number {
+export function rectDistance(a: Rect, b: Rect): number {
   const dx = Math.max(a.x - rectRight(b), b.x - rectRight(a), 0);
   const dy = Math.max(a.y - rectBottom(b), b.y - rectBottom(a), 0);
   return Math.hypot(dx, dy);
@@ -150,21 +161,23 @@ export function checkParticleColumnOverlap(
 }
 
 /**
- * A caption below the popup card in 16:9 must clear it by
- * `CARD_CAPTION_GAP_PX` (storyboard: "B is 934 px tall, so a caption below
- * it cannot fit the 1080 px frame" — the gap check applies wherever the
- * caption sits below rather than beside the card).
+ * The one popup caption keeps CARD_CAPTION_GAP_PX from the card at every
+ * size it takes (storyboard: "at least 40 px from every card size"): beside
+ * it in 16:9, below it in 9:16. B is 934 px tall, so a caption below it
+ * cannot fit the 1080 px frame.
  */
 export function checkCardCaptionGap(cardRect: Rect, captionRect: Rect, thresholds: CheckThresholds = CHECK_THRESHOLDS): CheckViolation[] {
-  if (captionRect.y < rectBottom(cardRect)) {
-    // Caption is beside (or overlapping) the card, not below it — the gap rule doesn't apply.
-    return [];
-  }
-  const gap = captionRect.y - rectBottom(cardRect);
+  const gap = rectDistance(cardRect, captionRect);
   if (gap < thresholds.CARD_CAPTION_GAP_PX) {
-    return [{ check: 'card-caption-gap', detail: `caption ${gap}px below card (min ${thresholds.CARD_CAPTION_GAP_PX})` }];
+    return [{ check: 'card-caption-gap', detail: `caption ${gap.toFixed(0)}px from the card (min ${thresholds.CARD_CAPTION_GAP_PX})` }];
   }
   return [];
+}
+
+/** The popup caption sits wholly inside its fixed overlays.popup_card.placement.<aspect>.caption_rect. */
+export function checkInsideRect(inner: Rect, outer: Rect, element: string): CheckViolation[] {
+  const ok = inner.x >= outer.x && inner.y >= outer.y && rectRight(inner) <= rectRight(outer) && rectBottom(inner) <= rectBottom(outer);
+  return ok ? [] : [{ check: 'inside-rect', detail: `${element} ${JSON.stringify(inner)} is not inside ${JSON.stringify(outer)}` }];
 }
 
 /**
@@ -199,18 +212,47 @@ export function checkCardSteadyAnchor(
  * factor for both axes). A stretched morph fails (storyboard: "never
  * stretched... the eval fails a stretched morph").
  */
-export function checkUniformContentScale(cropRect: Rect, contentBox: { w: number; h: number }): CheckViolation[] {
+export function checkUniformContentScale(
+  cropRect: Rect,
+  contentBox: { w: number; h: number },
+  thresholds: CheckThresholds = CHECK_THRESHOLDS,
+): CheckViolation[] {
   if (cropRect.w <= 0 || cropRect.h <= 0) {
     return [{ check: 'uniform-content-scale', detail: 'crop rect has non-positive dimension' }];
   }
-  const scaleX = contentBox.w / cropRect.w;
-  const scaleY = contentBox.h / cropRect.h;
-  // Compare within floating-point tolerance; content boxes are computed from
-  // integer scales in practice, so a real mismatch is far larger than this.
-  if (Math.abs(scaleX - scaleY) > 1e-6) {
-    return [{ check: 'uniform-content-scale', detail: `non-uniform scale: x=${scaleX}, y=${scaleY}` }];
+  // Some single factor s must round to both sides: s in [(w - r)/rect.w, (w + r)/rect.w] and in the same interval for h.
+  const r = thresholds.CARD_CONTENT_ROUNDING_PX;
+  const lo = Math.max((contentBox.w - r) / cropRect.w, (contentBox.h - r) / cropRect.h);
+  const hi = Math.min((contentBox.w + r) / cropRect.w, (contentBox.h + r) / cropRect.h);
+  if (lo > hi + 1e-9) {
+    return [{ check: 'uniform-content-scale', detail: `non-uniform scale: x=${(contentBox.w / cropRect.w).toFixed(4)}, y=${(contentBox.h / cropRect.h).toFixed(4)}` }];
   }
   return [];
+}
+
+/**
+ * A card frame draws exactly its declared crop: the declared rect is the
+ * crop rule's rect on that frame, it misses every forbidden cell's logged
+ * DOMRect, and its content box lies inside the card's visible frame (a
+ * morph never shows a wider region of the popup than the crop).
+ */
+export function checkCardFrameContent(
+  declaredRect: Rect,
+  ruleRect: Rect | null,
+  forbiddenCellsNative: readonly { type: string; rect: Rect }[],
+  content: Rect,
+  envelope: Rect,
+): CheckViolation[] {
+  const v: CheckViolation[] = [];
+  if (!ruleRect || ['x', 'y', 'w', 'h'].some((k) => declaredRect[k as keyof Rect] !== ruleRect[k as keyof Rect])) {
+    v.push({ check: 'card-crop-rule', detail: `drawn rect ${JSON.stringify(declaredRect)} is not the crop rule's ${JSON.stringify(ruleRect)}` });
+  }
+  const hit = forbiddenCellsNative.filter((c) => rectsIntersect(declaredRect, c.rect)).map((c) => c.type);
+  if (hit.length) v.push({ check: 'card-forbidden-cell', detail: `crop ${JSON.stringify(declaredRect)} meets ${[...new Set(hit)].join(', ')}` });
+  if (content.x < envelope.x || content.y < envelope.y || rectRight(content) > rectRight(envelope) || rectBottom(content) > rectBottom(envelope)) {
+    v.push({ check: 'card-content-in-frame', detail: `content ${JSON.stringify(content)} spills past the card frame ${JSON.stringify(envelope)}` });
+  }
+  return v;
 }
 
 /**
