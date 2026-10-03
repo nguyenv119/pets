@@ -121,6 +121,17 @@ export function checkCropPetMargin(
   return violations;
 }
 
+/**
+ * Every page crop ends on the frame bottom (shots.json master.stage: no
+ * floor band, "pets stand on the frame bottom at every zoom"). A crop that
+ * ends above it lifts the pets' feet off the frame edge; one that ends
+ * below it shows past the capture.
+ */
+export function checkCropOnFrameBottom(crop: Rect, stageHeight: number): CheckViolation[] {
+  const bottom = rectBottom(crop);
+  return bottom === stageHeight ? [] : [{ check: 'crop-frame-bottom', detail: `crop bottom at stage y ${bottom}, not the frame bottom ${stageHeight}` }];
+}
+
 /** Distance between two rectangles' nearest edges, 0 when they overlap. */
 export function rectDistance(a: Rect, b: Rect): number {
   const dx = Math.max(a.x - rectRight(b), b.x - rectRight(a), 0);

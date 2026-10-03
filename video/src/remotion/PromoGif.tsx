@@ -1,9 +1,9 @@
 // PromoGif.tsx: the README GIF frames (epic pets-o3p, bead pets-o3p.4).
-// video/shots.json variants.readme_gif: two no-zoom scenes from the 16:9
-// captures, the crop band CSS y 180-540 (native 1920x720, halved later by
-// pets-o3p.5's gif.mjs), VT323 32 px captions on the pill, top left of the
-// band, at their own beats' caption windows, and the cursor with the same
-// ring rules. render.mjs resolves every anchor (gifScenes.ts); this only draws.
+// video/shots.json variants.readme_gif: two no-zoom scenes from the raw
+// 16:9 captures (no browser chrome), each scene's crop_css (CSS y 76-436,
+// native 1920x720, halved later by pets-o3p.5's gif.mjs), VT323 32 px
+// captions on the pill, top left of the frame, at their own beats' caption
+// windows, and the cursor with the same ring rules. render.mjs resolves every anchor (gifScenes.ts); this only draws.
 
 import React from 'react';
 import { AbsoluteFill, OffthreadVideo, Sequence, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';

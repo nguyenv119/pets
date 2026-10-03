@@ -34,7 +34,7 @@ describe('shotFrameCrops: Hold 1.0x until <anchor>, then a 450 ms push', () => {
     expect(mid.w).toBeLessThan(1920);
     expect(mid.w).toBeGreaterThan(960);
     const after = crops.slice(Math.ceil(1906 / 40) + 1);
-    expect(after.every((c) => c.w === 960 && c.h === 540 && c.y === 492)).toBe(true);
+    expect(after.every((c) => c.w === 960 && c.h === 540 && c.y === 540)).toBe(true);
     expect(new Set(after.map((c) => c.x)).size).toBe(1);
   });
 
@@ -82,11 +82,11 @@ describe('shotFrameCrops: holds', () => {
     expect(crops.every((c) => JSON.stringify(c) === JSON.stringify(FULL))).toBe(true);
   });
 
-  it('holds the 9:16 2.0x crop at 540x960, canvas y 730', () => {
-    /** variants.vertical_9x16.camera.crop: the floor line stays at 1460 at every zoom; verify.mjs expects exactly this rectangle. */
+  it('holds the 9:16 2.0x crop at 540x960, canvas y 960', () => {
+    /** variants.vertical_9x16.camera.crop: the crop bottom stays on the canvas bottom (y 1920) at every zoom; the eval expects exactly this rectangle. */
     const events = makeEvents({ tracks: stillPets({ rex: 200 }) });
     const [crops] = shotFrameCrops({ spans: [span(beat('a', 2, 'pet:rex', 'hold', 2), 0, 400)], events, stage: STAGE_9X16, shiftMs: 0, fps: 25 });
-    expect(crops[0]).toMatchObject({ w: 540, h: 960, y: 730 });
+    expect(crops[0]).toMatchObject({ w: 540, h: 960, y: 960 });
   });
 });
 
@@ -94,7 +94,7 @@ describe('shotFrameCrops: follow', () => {
   it('re-centres on a walking pet frame by frame', () => {
     /** "follow the box track with 400 ms smoothing": the crop moves with the pet, the direction of the walk. */
     const tracks = [];
-    for (let t = 0; t <= 4000; t += 40) tracks.push({ t, pets: [{ id: 'rex', x: 200 + t / 10, y: 476, w: 64, h: 64, src: 'walk' }] });
+    for (let t = 0; t <= 4000; t += 40) tracks.push({ t, pets: [{ id: 'rex', x: 200 + t / 10, y: 372, w: 64, h: 64, src: 'walk' }] });
     const events = makeEvents({ tracks });
     const [crops] = shotFrameCrops({ spans: [span(beat('f', 2, 'pet:rex', 'follow', 2), 0, 4000)], events, stage: STAGE_16X9, shiftMs: 0, fps: 25 });
     expect(crops[crops.length - 1].x).toBeGreaterThan(crops[10].x);
@@ -114,7 +114,7 @@ describe('shotFrameCrops: a hold frames its focus pet on every frame', () => {
      */
     // GIVEN
     const tracks = [];
-    for (let t = 0; t <= 2000; t += 40) tracks.push({ t, pets: [{ id: 'rex', x: t < 1800 ? 200 : 560, y: 476, w: 64, h: 64, src: 'idle' }] });
+    for (let t = 0; t <= 2000; t += 40) tracks.push({ t, pets: [{ id: 'rex', x: t < 1800 ? 200 : 560, y: 372, w: 64, h: 64, src: 'idle' }] });
     const events = makeEvents({ tracks });
     // WHEN
     const [crops] = shotFrameCrops({ spans: [span(beat('h', 2, 'pet:rex', 'hold', 2), 0, 2000)], events, stage: STAGE_16X9, shiftMs: 0, fps: 25 });
@@ -148,7 +148,7 @@ describe('shotFrameCrops: a push lands on the next hold\'s crop', () => {
   /** Rex still at CSS 400; Bao at CSS 480 until 3200 ms (inside b4b, past the 400 ms focus smoothing of b4a's rest), then at `baoLater`. */
   const eventsWith = (baoLater: number) => {
     const tracks = [];
-    for (let t = 0; t <= 4000; t += 40) tracks.push({ t, pets: [{ id: 'rex', x: 400, y: 476, w: 64, h: 64, src: 'idle' }, { id: 'bao', x: t < 3200 ? 480 : baoLater, y: 476, w: 64, h: 64, src: 'idle' }] });
+    for (let t = 0; t <= 4000; t += 40) tracks.push({ t, pets: [{ id: 'rex', x: 400, y: 372, w: 64, h: 64, src: 'idle' }, { id: 'bao', x: t < 3200 ? 480 : baoLater, y: 372, w: 64, h: 64, src: 'idle' }] });
     return makeEvents({ observed: [{ t: 1000, kind: 'pets_ready' }], tracks });
   };
   const plan = (baoLater: number) => shotFrameCrops({ spans: [span(b4a, 0, 2800), span(b4b, 2800, 4000)], events: eventsWith(baoLater), stage: STAGE_16X9, shiftMs: 0, fps: 25 });

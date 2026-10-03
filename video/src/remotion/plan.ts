@@ -27,6 +27,8 @@ export interface PlanBeat {
   shiftFrames: number;
   /** public-dir path of the shot's staged demo.mp4 */
   stagedSrc: string;
+  /** Page beats: public-dir path of the shot's chrome PNG (chromePngPath). Card beats have none. */
+  chromeSrc?: string;
   frameCrops?: Rect[];
   /** master frames drawn without motion blur: every frame verify.mjs samples (motionBlur.sampledFrames), plus a still's frame */
   sharpFrames: number[];
@@ -44,6 +46,9 @@ export interface PromoPlan {
   iconPath: string;
   aspect: Aspect;
 }
+
+/** The chrome PNG a page shot stacks above its capture, relative to video/ (shots.json master.stage.chrome.png) and to the public dir render.mjs stages it in. */
+export const chromePngPath = (page: string, aspect: Aspect): string => `set/chrome/${page}${aspect === '9x16' ? '-narrow' : ''}.png`;
 
 /** Popup-take clicks the card shows a ring for (the Add Pet press rings on the mousedown). */
 const POPUP_CLICKS = ['shelter_click', 'name_click', 'type_selected', 'color_selected', 'add_mousedown'];
@@ -106,6 +111,8 @@ export function buildPromoPlan(input: PlanInput): PromoPlan {
     .filter((b) => b.k1 > b.k0)
     .map((b) => {
       const ev = eventsByShotId[b.shotId];
+      const page = shots.shots.find((s) => s.id === b.shotId)?.page;
+      if (b.frameCrops && !page) throw new Error(`plan: page shot ${b.shotId} declares no page (its chrome PNG)`);
       let cursor: CursorData = { track: ev.cursorTrack, clicks: ev.clicks, trimBeforeMs: ev.trimBeforeMs, videoLagMs: ev.videoLagMs };
       if (b.card) {
         const start = shots.shots.find((s) => s.id === b.shotId)?.cursor_start;
@@ -118,6 +125,7 @@ export function buildPromoPlan(input: PlanInput): PromoPlan {
         k1: b.k1,
         shiftFrames: Math.round(b.shiftMs / frameMs),
         stagedSrc: stagedByShotId[b.shotId],
+        chromeSrc: b.frameCrops && page ? chromePngPath(page, aspect) : undefined,
         frameCrops: b.frameCrops,
         sharpFrames: b.frameCrops ? sampledFrames(b, frameMs) : [],
         card: b.card && b.cardEnvelopes ? { frames: b.card.frames, envelopes: b.cardEnvelopes } : undefined,

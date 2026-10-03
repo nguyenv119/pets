@@ -1,28 +1,55 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { STAGE_16X9, STAGE_9X16, floorAnchoredCrop, floorMarginAtZoom, smoothedFocusX } from './camera';
+import { STAGE_16X9, STAGE_9X16, floorAnchoredCrop, smoothedFocusX } from './camera';
+import { GIF_SOURCE_STAGE } from './renderChecks';
+import { loadFixtureEventsV2, V1_FIXTURE_TOP_CUT_CSS, VIDEO_ROOT } from './testEvents';
+
+/** The slice of shots.json the stage constants copy. */
+interface StageSpec {
+  viewport: { width: number; height: number };
+  master: { width: number; height: number; stage: { page_stage_y: [number, number]; chrome: { css_h: number; out_h: number } } };
+  variants: { vertical_9x16: { canvas: { width: number; height: number } } };
+}
 
 describe('floorAnchoredCrop', () => {
-  it('keeps the floor line 96 output px above the frame bottom at 1.0x', () => {
+  it('shows the whole stage, chrome included, at 1.0x', () => {
     /**
-     * Verifies the storyboard's core invariant: "the floor line stays 96
-     * output px above the frame bottom at every zoom." This is the whole
-     * reason the floor band exists (proof/compare-catch-fullbleed-vs-window.png
-     * showed a full-bleed punch-in pinning the pets' feet to the frame edge).
-     * If this breaks, every push-in render mis-frames the pets' feet.
+     * What: the 1.0x crop is the full 1920x1080 stage.
+     * Why: shots.json master.stage puts the chrome at stage y 0-208 and the page under it with no band, so a
+     * 1.0x frame is the whole drawn window.
+     * Breaks: a 1.0x crop that started below y 0 would cut the chrome off every wide shot.
      */
+    // GIVEN / WHEN
     const crop = floorAnchoredCrop(STAGE_16X9, 1, 960);
-    expect(floorMarginAtZoom(crop, STAGE_16X9)).toBe(96);
+    // THEN
+    expect(crop).toEqual({ x: 0, y: 0, w: 1920, h: 1080 });
   });
 
-  it('keeps the floor line 96 output px above the frame bottom at 2.0x', () => {
+  it('puts the 2.0x crop bottom on the frame bottom (960x540 at stage y 540)', () => {
     /**
-     * Same invariant at 2.0x, where the margin in STAGE px is 96/2 = 48, but
-     * the OUTPUT margin (after the 2x camera scale) must still read as 96.
-     * A camera that forgot to divide the margin by z would pin the pets'
-     * feet to the frame edge at every zoomed-in hold.
+     * What: the 16:9 2.0x crop is 960x540 with its bottom edge at stage y 1080.
+     * Why: v2 has no floor band; the pets' feet are on the frame bottom at every zoom (shots.json
+     * master.stage.note), and the eval's STAGE.land 2.0x crop is {w 960, h 540, y 540}.
+     * Breaks: the v1 rule (bottom at 984 + 96/z) would crop the pets' feet off at 2.0x.
      */
+    // GIVEN / WHEN
     const crop = floorAnchoredCrop(STAGE_16X9, 2, 960);
-    expect(floorMarginAtZoom(crop, STAGE_16X9)).toBe(48); // 96/2 stage px == 96 output px once scaled 2x
+    // THEN
+    expect(crop.y).toBe(540);
+    expect(crop.y + crop.h).toBe(1080);
+  });
+
+  it('keeps the crop bottom on the frame bottom mid-push, at a fractional zoom', () => {
+    /**
+     * What: a push frame at zoom 1.37 still ends exactly on the stage bottom.
+     * Why: an eased push interpolates the zoom; the feet must not lift or drop during it.
+     * Breaks: a rounding drift would bob the pets up and down by a pixel during every push.
+     */
+    // GIVEN / WHEN
+    const crop = floorAnchoredCrop(STAGE_16X9, 1.37, 700);
+    // THEN
+    expect(crop.y + crop.h).toBe(STAGE_16X9.height);
   });
 
   it('sizes the crop as stage-width/z by stage-height/z', () => {
@@ -93,20 +120,20 @@ describe('floorAnchoredCrop', () => {
     expect(() => floorAnchoredCrop(STAGE_16X9, -1, 960)).toThrow();
   });
 
-  it('keeps the 9:16 floor line at stage y 1460', () => {
+  it('puts the 9:16 2.0x crop at canvas y 960-1920', () => {
     /**
-     * Verifies the same floor-anchoring invariant generalises to the 9:16
-     * stage config, whose floor line (1460) and width (1080) differ from
-     * 16:9. If this breaks, the 9:16 cut would mis-frame the pets' feet
-     * even though the 16:9 cut is correct — the bug the generic StageConfig
-     * parameter exists to prevent.
+     * What: the 9:16 crop is the full canvas at 1.0x and 540x960 at canvas y 960 at 2.0x.
+     * Why: variants.vertical_9x16.camera.crop: "a 2.0x crop is canvas y 960-1920, page CSS y 376-856"; the
+     * eval's STAGE.port crop is {w 540, h 960, y 960}.
+     * Breaks: the 9:16 would frame the pets' feet differently from the 16:9 and fail the eval's crop check.
      */
+    // GIVEN / WHEN
     const full = floorAnchoredCrop(STAGE_9X16, 1, 540);
-    expect(full).toEqual({ x: 0, y: 0, w: 1080, h: 1920 });
-    // shots.json variants.vertical_9x16.camera.crop: "1460 + 460/z" -> the 2.0x crop is 540x960 at canvas y 730.
     const zoomed = floorAnchoredCrop(STAGE_9X16, 2, 540);
-    expect(zoomed).toEqual({ x: 270, y: 730, w: 540, h: 960 });
-    expect(floorMarginAtZoom(zoomed, STAGE_9X16) * 2).toBe(460);
+    // THEN
+    expect(full).toEqual({ x: 0, y: 0, w: 1080, h: 1920 });
+    expect(zoomed).toEqual({ x: 270, y: 960, w: 540, h: 960 });
+    expect((zoomed.y - STAGE_9X16.pageY) / 2).toBe(376);
   });
 });
 
@@ -146,5 +173,30 @@ describe('smoothedFocusX', () => {
      * case — this function is not responsible for that fallback.
      */
     expect(smoothedFocusX([], 100)).toBe(0);
+  });
+});
+
+describe('the stage constants against shots.json', () => {
+  it('pins STAGE_16X9, STAGE_9X16, the GIF source stage and the v1 fixture cut to the approved spec', () => {
+    /**
+     * What: both stages are the master / 9:16 canvas size with the page at master.stage.page_stage_y[0]
+     * (== chrome.out_h); the GIF source stage is the 16:9 capture (viewport height x 2); the v1 fixture cut is
+     * chrome.css_h and its v2 viewport is shots.json's.
+     * Why: these constants are hand-copied numbers; shots.json is the approved contract the eval reads.
+     * What breaks: an edit to shots.json (a taller chrome, a new viewport) leaves the camera, overlays and
+     * checks framing the old geometry with every other test still green.
+     */
+    // GIVEN
+    const shots: StageSpec = JSON.parse(readFileSync(join(VIDEO_ROOT, 'shots.json'), 'utf8'));
+    const { master } = shots;
+    // WHEN
+    const v2 = loadFixtureEventsV2();
+    // THEN
+    expect(master.stage.page_stage_y[0]).toBe(master.stage.chrome.out_h);
+    expect(STAGE_16X9).toEqual({ width: master.width, height: master.height, pageY: master.stage.page_stage_y[0] });
+    expect(STAGE_9X16).toEqual({ ...shots.variants.vertical_9x16.canvas, pageY: master.stage.page_stage_y[0] });
+    expect(GIF_SOURCE_STAGE).toEqual({ width: shots.viewport.width * 2, height: shots.viewport.height * 2, pageY: 0 });
+    expect(V1_FIXTURE_TOP_CUT_CSS).toBe(master.stage.chrome.css_h);
+    expect(v2.viewport).toEqual({ width: shots.viewport.width, height: shots.viewport.height });
   });
 });

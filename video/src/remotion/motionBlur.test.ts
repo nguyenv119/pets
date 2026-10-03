@@ -111,7 +111,7 @@ describe('sampledFrames / blurAllowed: a frame the eval samples is never blurred
      */
     // GIVEN — Rex walks 1 CSS px per 10 ms, clear of the stage edges (no clamped, steady crop); push then follow at 2.0x, with a caption window
     const tracks = [];
-    for (let t = 0; t <= 3000; t += 40) tracks.push({ t, pets: [{ id: 'rex', x: 400 + t / 10, y: 476, w: 64, h: 64, src: 'walk' }] });
+    for (let t = 0; t <= 3000; t += 40) tracks.push({ t, pets: [{ id: 'rex', x: 400 + t / 10, y: 372, w: 64, h: 64, src: 'walk' }] });
     const events = makeEvents({ tracks, observed: [{ t: 0, kind: 'pets_ready' }, { t: 2000, kind: 'sleep' }] });
     const beat = { name: 'f', in: 'pets_ready', out: 'sleep', caption: 'x', caption_at: 'pets_ready+400', caption_out: 'pets_ready+1000', camera: { zoom: 2, focus: 'pet:rex', move: 'At pets_ready+200, push from 1.0x to 2.0x over 450 ms (ease-out-expo, master.motion.pushes), floor-anchored, then follow the box track with 400 ms smoothing.', sample: 2 } };
     const edit = buildTimeline({ shots: { fps: 25, edit_order: ['s'], shots: [{ id: 's', beats: [beat] }] }, stage: STAGE_16X9, eventsByShotId: { s: events }, sourceByShotId: { s: '/abs/demo.mp4' }, music: 'm' });

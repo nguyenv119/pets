@@ -141,12 +141,12 @@ export function buildS4ArticleNightObserved(templateObserved, petsReadyT) {
 
 /**
  * Shifts every x/y-bearing field of an Events document by (dx, dy) CSS px,
- * for the 9:16 (v916) stand-in: the fixture is cropped to device x
- * 840-1920 and padded 380 px on top (dx=-420, dy=+190 in CSS px), so
- * every logged coordinate has to move with it or the camera and captions
- * would aim at the old, unpadded frame.
+ * for a page-shot stand-in cut from the v1 fixture (make-synthetic-run.mjs
+ * LAND and V916: each crops and pads the fixture video, and its `shift` is
+ * that crop/pad offset in CSS px), so every logged coordinate moves with the
+ * pixels or the camera and captions would aim at the uncut frame.
  */
-export function shiftPortraitEvents(events, { dx, dy }) {
+export function shiftStandinEvents(events, { dx, dy }) {
   const shiftXY = (obj) => (obj && typeof obj.x === 'number' && typeof obj.y === 'number' ? { ...obj, x: obj.x + dx, y: obj.y + dy } : obj);
   const shiftRect = (rect) => (rect ? { ...rect, x: rect.x + dx, y: rect.y + dy } : rect);
 

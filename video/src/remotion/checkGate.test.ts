@@ -37,11 +37,11 @@ describe('enforceRenderChecks', () => {
 });
 
 describe('planMaster (integration: the planner and checks render.mjs runs, no Remotion)', () => {
-  // One shot, one 2.0x hold on Rex (CSS x 400: crop stage x 384-1344) with Bao standing across its right edge (CSS x 650: stage 1300-1428).
+  // One inbox shot, one 2.0x hold on Rex (CSS x 400: crop stage x 384-1344) with Bao standing across its right edge (CSS x 650: stage 1300-1428).
   const shots: ShotsDoc = {
     fps: 25,
     edit_order: ['s1'],
-    shots: [{ id: 's1', beats: [{ name: 'b_hold', in: 'pets_ready', out: 'pets_ready+2000', camera: { zoom: 2, focus: 'pet:rex', move: 'hold', sample: 2 } }] }],
+    shots: [{ id: 's1', page: 'inbox', beats: [{ name: 'b_hold', in: 'pets_ready', out: 'pets_ready+2000', camera: { zoom: 2, focus: 'pet:rex', move: 'hold', sample: 2 } }] }],
   };
   const roster = [
     { id: 'rex', name: 'Rex', type: 'dog', color: 'brown' },
