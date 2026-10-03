@@ -1,179 +1,98 @@
-body {
-  background: #fafaf7;
-  color: #2b2a27;
+/* Inbox. CSS px in the 960x436 viewport (the browser chrome is drawn above it).
+   Bands: header 0-42, tabs 42-82, rows 82-222 (28 px each; a row edge at y 166),
+   folders 82-222 on the same 28 px grid. Nothing but background below y 236. */
+:root {
+  --app: #131417;
+  --card: #1e1f22;
+  --row-read: #232427;
+  --line: #2c2d31;
+  --text: #e8eaed;
+  --text-2: #c4c7cb;
+  --muted: #9a9ea4;
+  --accent: #a9c7de;      /* neutral blue-grey for the active tab and folder */
+  --active-bg: #2c3742;
 }
 
-.topbar {
-  position: absolute;
-  top: 48px;
-  left: 0;
-  right: 0;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 0 20px;
-  border-bottom: 1px solid #e7e4dc;
-}
+body { background: var(--app); color: var(--text); font-size: 12.5px; }
+svg { display: block; }
 
-.topbar .glyph {
-  width: 18px;
-  height: 14px;
-  border: 2px solid #5a5850;
-  border-radius: 2px;
-}
+/* ---- header 0-42 ---- */
+.top { position: absolute; left: 0; top: 0; width: 960px; height: 42px; display: flex; align-items: center; padding: 0 14px 0 14px; }
+.top .ico { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; color: #c7cbd1; }
+.top .ico svg { width: 20px; height: 20px; }
+.top .brand { display: flex; align-items: center; gap: 8px; margin-left: 8px; width: 166px; font-size: 17px; color: #e3e5e8; letter-spacing: 0.2px; }
+.top .brand svg { width: 24px; height: 24px; }
+.top .search { width: 420px; height: 32px; border-radius: 16px; background: #2a2b2f; display: flex; align-items: center; gap: 12px; padding: 0 12px; color: #c7cbd1; }
+.top .search svg { width: 18px; height: 18px; flex-shrink: 0; }
+.top .search .ph { flex: 1; font-size: 13px; color: #a6aab0; }
+.top .help { margin-left: auto; }
+.top .badge { width: 26px; height: 26px; margin-left: 10px; border-radius: 50%; background: #c9d6a8; color: #3b4a2a; display: flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 700; }
 
-.topbar .title {
-  font-size: 15px;
-  font-weight: 600;
-}
+/* ---- icon rail x 0-64 ---- */
+.rail { position: absolute; left: 0; top: 0; width: 64px; height: 436px; }
+.ri { position: absolute; left: 0; width: 64px; display: flex; flex-direction: column; align-items: center; gap: 2px; color: #c7cbd1; }
+.ri.r1 { top: 46px; }
+.ri.r2 { top: 100px; }
+.ri.r3 { top: 180px; }
+.ri .pill { position: relative; width: 44px; height: 26px; border-radius: 13px; display: flex; align-items: center; justify-content: center; }
+.ri .pill svg { width: 19px; height: 19px; }
+.ri.active .pill { background: var(--active-bg); color: var(--accent); }
+.ri .pill b { position: absolute; left: 25px; top: 1px; min-width: 15px; height: 12px; padding: 0 3px; border-radius: 6px; background: #d06a5a; color: #fff; font-size: 8.5px; font-weight: 700; line-height: 12px; text-align: center; }
+.ri .lbl { font-size: 10px; font-weight: 500; color: var(--text-2); }
 
-.topbar .search {
-  flex: 1;
-  max-width: 320px;
-  height: 26px;
-  border: 1px solid #d8d5cb;
-  border-radius: 0;
-  background: #fff;
-}
+/* ---- folders x 64-224 ---- */
+.folders { position: absolute; left: 64px; top: 0; width: 164px; }
+.compose { position: absolute; left: 8px; top: 44px; width: 124px; height: 34px; border-radius: 12px; background: #cfdde8; color: #1b2733;
+  display: flex; align-items: center; gap: 10px; padding: 0 14px; font-size: 13px; font-weight: 600; }
+.compose svg { width: 18px; height: 18px; }
+.folders ul { position: absolute; left: 0; top: 82px; width: 160px; list-style: none; }
+.folders li { height: 28px; display: flex; align-items: center; gap: 14px; padding: 0 12px 0 16px; border-radius: 0 14px 14px 0; color: var(--text-2); font-size: 12.5px; }
+.folders li svg { width: 17px; height: 17px; flex-shrink: 0; }
+.folders li.active { background: var(--active-bg); color: var(--text); font-weight: 600; }
+.folders li .n { margin-left: auto; font-size: 11.5px; font-weight: 600; }
+.folders li .n.dim { font-weight: 400; color: var(--muted); }
 
-.topbar .badge {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: #c9d6a8;
-  color: #3b4a2a;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
-}
+/* ---- list card x 232-952, from y 42 to the viewport bottom ---- */
+.list { position: absolute; left: 232px; top: 42px; width: 720px; height: 394px; background: var(--card); border-radius: 16px 16px 0 0; overflow: hidden; }
 
-.rail {
-  position: absolute;
-  top: 92px;
-  left: 0;
-  width: 176px;
-  padding: 16px;
-}
+.cats { position: absolute; left: 0; top: 0; width: 720px; height: 40px; display: flex; border-bottom: 1px solid var(--line); }
+.cat { position: relative; width: 180px; display: flex; align-items: center; gap: 14px; padding-left: 16px; font-size: 12.5px; font-weight: 500; color: var(--text-2); }
+.cat svg { width: 18px; height: 18px; }
+.cat.active { color: var(--accent); }
+.cat.active::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: 0; height: 3px; border-radius: 3px 3px 0 0; background: var(--accent); }
 
-.rail .compose {
-  width: 100%;
-  height: 34px;
-  border: 1px solid #2b2a27;
-  background: #fff;
-  font-size: 12px;
-  font-weight: 600;
-}
+.mail-list { position: absolute; left: 0; top: 40px; width: 720px; }
+.mail-row { height: 28px; display: flex; align-items: center; padding: 0 16px 0 14px; background: var(--row-read); border-bottom: 1px solid var(--line); color: var(--text-2); }
+.mail-row.unread { background: var(--card); color: var(--text); }
+.mail-row .cb { width: 13px; height: 13px; flex-shrink: 0; border: 1.5px solid #80848a; border-radius: 2px; }
+.mail-row .st { position: relative; width: 16px; height: 16px; margin-left: 12px; flex-shrink: 0; }
+.mail-row .st::before { content: ""; position: absolute; inset: 0; background: #80848a;
+  clip-path: polygon(50% 4%, 62% 37%, 97% 38%, 69% 59%, 79% 93%, 50% 73%, 21% 93%, 31% 59%, 3% 38%, 38% 37%); }
+.mail-row .st::after { content: ""; position: absolute; inset: 2px; background: var(--row-read);
+  clip-path: polygon(50% 4%, 62% 37%, 97% 38%, 69% 59%, 79% 93%, 50% 73%, 21% 93%, 31% 59%, 3% 38%, 38% 37%); }
+.mail-row.unread .st::after { background: var(--card); }
+.mail-row .st.on::before { background: #e8c25a; }
+.mail-row .st.on::after { background: #e8c25a; }
+.mail-row .from { width: 150px; margin-left: 14px; flex-shrink: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.mail-row .line { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.mail-row .preview { color: var(--muted); }
+.mail-row .time { width: 64px; flex-shrink: 0; text-align: right; font-size: 11.5px; }
+.mail-row.unread .from, .mail-row.unread .subject, .mail-row.unread .time { font-weight: 700; }
 
-.rail ul {
-  list-style: none;
-  margin-top: 8px;
-}
-
-.rail li {
-  display: flex;
-  justify-content: space-between;
-  padding: 4px;
-  font-size: 12px;
-  color: #5a5850;
-}
-
-.rail li.active {
-  color: #2b2a27;
-  font-weight: 600;
-}
-
-.mail-list {
-  position: absolute;
-  top: 96px;
-  left: 192px;
-  width: 752px;
-  height: 185px;
-}
-
-.mail-row {
-  height: 37px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 0 12px;
-  border-bottom: 1px solid #efece3;
-  font-size: 12px;
-}
-
-.mail-row .from {
-  width: 100px;
-  font-weight: 600;
-  flex-shrink: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.mail-row .subject {
-  width: 190px;
-  flex-shrink: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.mail-row .preview {
-  color: #8a8678;
-  flex: 1;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.mail-row .time {
-  width: 44px;
-  text-align: right;
-  color: #8a8678;
-  flex-shrink: 0;
-}
-
-#end-note {
-  position: absolute;
-  top: 318px;
-  left: 192px;
-  width: 752px;
-  text-align: center;
-  font-size: 13px;
-  color: #a8a498;
-}
-
+/* ---- narrow (540x856, the 9:16): no rail or folders, the list card fills the width ---- */
 @media (max-width: 599px) {
-  .topbar {
-    top: 28px;
-    height: 38px;
-    padding: 0 16px;
-  }
-
-  .rail {
-    display: none;
-  }
-
-  .mail-list {
-    top: 140px;
-    left: 16px;
-    width: 508px;
-    height: 165px;
-  }
-
-  .mail-row {
-    height: 33px;
-  }
-
-  .mail-row .subject {
-    width: 150px;
-  }
-
-  #end-note {
-    top: 620px;
-    left: 16px;
-    width: 508px;
-  }
+  .rail, .folders, .top .search, .top .help, .top .gear { display: none; }
+  .top { width: 540px; }
+  .top .brand { width: auto; }
+  .top .badge { margin-left: auto; }
+  .list { left: 8px; width: 524px; height: 814px; }
+  .cats { width: 524px; }
+  .cat { width: 131px; gap: 8px; padding-left: 10px; font-size: 12px; }
+  .cat svg { width: 16px; height: 16px; }
+  .cat.active::after { left: 6px; right: 6px; }
+  .mail-list { width: 524px; }
+  .mail-row { padding: 0 10px; }
+  .mail-row .st { margin-left: 10px; }
+  .mail-row .from { width: 84px; margin-left: 10px; }
+  .mail-row .time { width: 58px; }
 }

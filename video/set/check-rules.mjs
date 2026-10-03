@@ -3,20 +3,17 @@
 // here takes plain data (numbers, strings) and returns plain data — no DOM,
 // no Playwright.
 
-// The wide-layout crop line: every 2.0x hold shows CSS y 294-540, so page
-// text must end above y 286 (video/shots.json page_rules).
-export const BAND = { top: 286, bottom: 302 };
+// The top edge of a 2.0x hold, in page CSS y: 166 in the wide 960x436
+// layout, 376 in the narrow 540x856 layout (video/shots.json page_rules).
+// No text box may straddle it.
+export const STRADDLE_Y = { wide: 166, narrow: 376 };
 
-// Nothing interactive and no text for the pets to stand on in the bottom
-// 200 CSS px, in either layout (the inbox end note is the one exception).
+// The bottom 150 CSS px of each viewport, where the pets stand: no text and
+// nothing interactive (review's empty div#dbl-zone is the one exception).
 export const BOTTOM_ZONE = {
-  wide: { top: 340, bottom: 540 },
-  narrow: { top: 530, bottom: 730 },
+  wide: { top: 286, bottom: 436 },
+  narrow: { top: 706, bottom: 856 },
 };
-
-// Narrow layout (used at 540x730): text ends above CSS y 357, where the
-// 9:16's 2.0x crop begins.
-export const NARROW_TEXT_LIMIT = 357;
 
 /**
  * True if the closed interval [rectTop, rectBottom) overlaps
@@ -42,23 +39,18 @@ export function isFontAllowed(computedFontFamily, allowedFamilies) {
   return allowedFamilies.includes(firstFontFamily(computedFontFamily));
 }
 
-/** True if a wide-layout text rect illegally crosses the 286-302 band. */
-export function findBandViolation(rect, exempt) {
-  if (exempt) return false;
-  return rectsOverlap(rect.top, rect.bottom, BAND.top, BAND.bottom);
+/** True if a text rect is cut by `layout`'s 2.0x crop line (touching it is fine). */
+export function findStraddleViolation(rect, layout) {
+  const y = STRADDLE_Y[layout];
+  if (y === undefined) throw new Error(`unknown layout "${layout}"`);
+  return rect.top < y && rect.bottom > y;
 }
 
-/** True if a text rect illegally sits in the bottom-200 zone for `layout`. */
-export function findBottomZoneViolation(rect, layout, exempt) {
-  if (exempt) return false;
-  const zone = layout === 'narrow' ? BOTTOM_ZONE.narrow : BOTTOM_ZONE.wide;
+/** True if a text rect sits in the bottom-150 zone for `layout`. */
+export function findBottomZoneViolation(rect, layout) {
+  const zone = BOTTOM_ZONE[layout];
+  if (!zone) throw new Error(`unknown layout "${layout}"`);
   return rectsOverlap(rect.top, rect.bottom, zone.top, zone.bottom);
-}
-
-/** True if a narrow-layout text rect illegally extends below y 357. */
-export function findNarrowTextOverflow(rect, layout, exempt) {
-  if (layout !== 'narrow' || exempt) return false;
-  return rect.bottom > NARROW_TEXT_LIMIT;
 }
 
 /** A 20 px grid of {x, y} points covering [zoneTop, zoneBottom) x [0, width). */
@@ -73,7 +65,7 @@ export function gridPoints(width, zoneTop, zoneBottom, step = 20) {
 }
 
 // Tags and roles that make an element count as "interactive" for the
-// bottom-200 sweep: a link, button, form control, or anything wired up as
+// bottom-150 sweep: a link, button, form control, or anything wired up as
 // one (role, tabindex, an inline handler).
 const INTERACTIVE_TAGS = new Set(['A', 'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA']);
 const INTERACTIVE_ROLES = new Set(['button', 'link', 'tab', 'checkbox', 'switch', 'menuitem']);

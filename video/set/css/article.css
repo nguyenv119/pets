@@ -1,3 +1,6 @@
+/* Reading site, dark reading theme. CSS px in the 960x436 viewport (the browser chrome is drawn above it).
+   Top bar 0-28, title 36-70, byline 76-94, paragraphs 104-128 and 138-162. x 800-944, y 0-96 stays
+   empty for the clock; everything below y 166 is plain background. */
 body {
   background: #1b1d23;
   color: #d8d4c8;
@@ -5,24 +8,28 @@ body {
 
 .topbar {
   position: absolute;
-  top: 48px;
-  left: 0;
-  right: 0;
-  height: 36px;
+  top: 0;
+  left: 100px;
+  width: 680px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
   font-size: 12px;
+  letter-spacing: 0.4px;
   color: #9a978c;
   border-bottom: 1px solid #2a2d35;
 }
 
-.article h1 {
+.article h1,
+.article p {
   position: absolute;
-  top: 100px;
-  left: 204px;
-  width: 576px;
+  left: 100px;
+  width: 800px;
+}
+
+.article h1 {
+  top: 36px;
   font-family: "Source Serif 4", serif;
   font-size: 28px;
   font-weight: 600;
@@ -31,59 +38,55 @@ body {
 }
 
 .article .byline {
-  position: absolute;
-  top: 142px;
-  left: 204px;
-  width: 576px;
+  top: 76px;
   font-size: 13px;
   line-height: 18px;
   color: #9a978c;
 }
 
 .article p {
-  position: absolute;
-  left: 204px;
-  width: 576px;
   font-size: 17px;
   line-height: 24px;
   color: #d8d4c8;
+  white-space: nowrap;
 }
 
 .article p.lede-1 {
-  top: 172px;
+  top: 104px;
 }
 
 .article p.lede-2 {
-  top: 230px;
+  top: 138px;
 }
 
 @media (max-width: 599px) {
-  .article h1 {
-    top: 30px;
+  .topbar {
     left: 20px;
-    width: 500px;
-    font-size: 22px;
-    line-height: 27px;
+    width: 360px;
   }
 
-  .article .byline {
-    top: 95px;
-    left: 20px;
-    width: 500px;
-  }
-
+  .article h1,
   .article p {
     left: 20px;
     width: 500px;
-    font-size: 14px;
-    line-height: 19px;
+    white-space: normal;
+  }
+
+  .article h1 {
+    font-size: 24px;
+    line-height: 30px;
+  }
+
+  .article p {
+    font-size: 15px;
+    line-height: 22px;
   }
 
   .article p.lede-1 {
-    top: 130px;
+    top: 104px;
   }
 
   .article p.lede-2 {
-    top: 182px;
+    top: 160px;
   }
 }
