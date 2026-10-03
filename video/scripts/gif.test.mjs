@@ -370,3 +370,26 @@ describe('makeGif (real ffmpeg, a tiny spec)', () => {
     expect(() => makeGif({ runDir: tmp, framesDir: dir, outPath: join(tmp, 'out.gif'), manifest: null, plan: plan(4), spec })).toThrow(/holds 3 frames; the scene plan has 4/);
   });
 });
+
+describe('rexAt', () => {
+  it('returns no box when the nearest track is further than the gap limit', async () => {
+    /**
+     * Verifies a tracking gap never stands in a stale box: when the nearest
+     * track sample is more than 80 ms from the moment asked for, rexAt
+     * returns null, so the colour gate and qa's provenance check fail the
+     * frame instead of judging a box Rex may have left.
+     */
+    // GIVEN — one track sample at t=0 with Rex in it
+    const { rexAt } = await import('./gif.mjs');
+    const events = { tracks: [{ t: 0, pets: [{ id: 'rex', x: 10, y: 10, w: 64, h: 64, src: 'idle' }] }] };
+    const crop = { x: 0, y: 0 };
+
+    // WHEN — asked 50 ms and 200 ms later
+    const near = rexAt(events, 50, crop);
+    const far = rexAt(events, 200, crop);
+
+    // THEN — the near one finds Rex, the far one finds nothing
+    expect(near?.box).toEqual({ x: 10, y: 10, w: 64, h: 64 });
+    expect(far).toBeNull();
+  });
+});

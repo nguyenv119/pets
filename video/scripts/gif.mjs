@@ -96,12 +96,15 @@ export function spritePath(src, pet) {
 
 /**
  * Rex at logged ms `tMs`, in GIF px of a scene cropped at `cropCss`: his box
- * (from the nearest track) and every sprite src logged within `srcWindowMs`
- * (the src can change between a track sample and the frame).
+ * (from the nearest track, or null when that track is more than `maxGapMs`
+ * away, so a tracking gap never stands in a stale box) and every sprite src
+ * logged within `srcWindowMs` (the src can change between a track sample and
+ * the frame).
  */
-export function rexAt(events, tMs, cropCss, srcWindowMs = 60) {
+export function rexAt(events, tMs, cropCss, srcWindowMs = 60, maxGapMs = 80) {
   const f = nearestTrack(events.tracks, tMs);
-  const box = f?.pets?.find((p) => p.id === PET_ID);
+  if (!f || Math.abs(f.t - tMs) > maxGapMs) return null;
+  const box = f.pets?.find((p) => p.id === PET_ID);
   if (!box) return null;
   const srcs = new Set();
   for (const t of events.tracks) if (Math.abs(t.t - tMs) <= srcWindowMs) for (const p of t.pets ?? []) if (p.id === PET_ID && p.src) srcs.add(p.src);
