@@ -9,6 +9,7 @@ import { Composition, continueRender, delayRender, staticFile } from 'remotion';
 import { STAGE_16X9, STAGE_9X16 } from './camera';
 import { ColourProofStill } from './ColourProofStill';
 import { Promo, type PromoProps } from './Promo';
+import { PromoGif, type PromoGifProps } from './PromoGif';
 
 const FPS = 25;
 
@@ -30,33 +31,16 @@ Promise.all([
     continueRender(fontHandle);
   });
 
-const EMPTY_LAYOUT: PromoProps['layout'] = {
-  caption: { left: 1320, top: 400 },
-  nameTag: { left: 1320, top: 400 },
-  clock: { left: 1600, top: 24 },
-  brandLine: { left: 0, right: 0, top: 480, textAlign: 'center' },
-  cta: { left: 0, right: 0, top: 560, alignItems: 'center' },
-};
-
-const DEFAULT_PROPS_16X9: PromoProps = {
+const EMPTY_PLAN = (stage: PromoProps['stage'], aspect: PromoProps['aspect']): PromoProps => ({
   beats: [],
-  stage: STAGE_16X9,
-  pageTopOffsetNative: 96,
-  musicSrc: 'music/cat_caffe.ogg',
-  layout: EMPTY_LAYOUT,
-  nameTagIconPath: 'icons/icon-128.png',
-};
-
-const DEFAULT_PROPS_9X16: PromoProps = {
-  ...DEFAULT_PROPS_16X9,
-  stage: STAGE_9X16,
-  pageTopOffsetNative: 0,
-};
-
-function lastMasterOutMs(props: PromoProps): number {
-  if (props.beats.length === 0) return 1000;
-  return props.beats[props.beats.length - 1].timeline.master_out;
-}
+  items: [],
+  stage,
+  totalFrames: FPS,
+  music: { src: 'music/cat_caffe.ogg', quietDb: -10, upDb: -2, upFrom: 0, upFrames: 30, stopAt: FPS, stopFrames: 6 },
+  sfx: [],
+  iconPath: 'icons/icon-128.png',
+  aspect,
+});
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -68,9 +52,9 @@ export const RemotionRoot: React.FC = () => {
         width={1920}
         height={1080}
         durationInFrames={FPS}
-        defaultProps={DEFAULT_PROPS_16X9}
+        defaultProps={EMPTY_PLAN(STAGE_16X9, '16x9')}
         calculateMetadata={async ({ props }) => ({
-          durationInFrames: Math.max(1, Math.round((lastMasterOutMs(props as unknown as PromoProps) / 1000) * FPS)),
+          durationInFrames: Math.max(1, (props as unknown as PromoProps).totalFrames),
         })}
       />
       <Composition
@@ -80,10 +64,24 @@ export const RemotionRoot: React.FC = () => {
         width={1080}
         height={1920}
         durationInFrames={FPS}
-        defaultProps={DEFAULT_PROPS_9X16}
+        defaultProps={EMPTY_PLAN(STAGE_9X16, '9x16')}
         calculateMetadata={async ({ props }) => ({
-          durationInFrames: Math.max(1, Math.round((lastMasterOutMs(props as unknown as PromoProps) / 1000) * FPS)),
+          durationInFrames: Math.max(1, (props as unknown as PromoProps).totalFrames),
         })}
+      />
+
+      <Composition
+        id="PromoGif"
+        component={PromoGif as unknown as React.FC<Record<string, unknown>>}
+        fps={12.5}
+        width={1920}
+        height={720}
+        durationInFrames={1}
+        defaultProps={{ scenes: [] } satisfies PromoGifProps}
+        calculateMetadata={async ({ props }) => {
+          const p = props as unknown as PromoGifProps;
+          return { durationInFrames: Math.max(1, p.scenes.reduce((sum, s) => sum + s.frames, 0)) };
+        }}
       />
       {/*
         fps=60, NOT the shared FPS constant: OffthreadVideo's trimBefore is

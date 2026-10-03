@@ -12,13 +12,10 @@ export const FLOOR_COLOUR = '#FFE3B0';
 
 export interface StageProps {
   stage: StageConfig;
-  /** Native px the top of the video source maps to stage y=0 (96 for 16:9, 0 for 9:16 — see this bead's "Stage" spec). */
-  pageTopOffsetNative: number;
   /** The current camera crop, in stage px. */
   crop: Rect;
   /** Output frame size (1920x1080 or 1080x1920). */
   outputWidth: number;
-  outputHeight: number;
   videoSrc: string;
   /** Frames into the video to start playback from (Remotion OffthreadVideo trimBefore). */
   trimBeforeFrames: number;
@@ -32,11 +29,11 @@ export interface StageProps {
  * exactly. Nearest-neighbour scaling keeps native/2x holds pixel-clean
  * (storyboard: "Holds only at 1.0x and 2.0x... nearest-neighbour").
  */
-export const Stage: React.FC<StageProps> = ({ stage, pageTopOffsetNative, crop, outputWidth, outputHeight, videoSrc, trimBeforeFrames, children }) => {
+export const Stage: React.FC<StageProps> = ({ stage, crop, outputWidth, videoSrc, trimBeforeFrames, children }) => {
   const cameraScale = outputWidth / crop.w;
 
   return (
-    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', background: '#000' }}>
+    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', background: FLOOR_COLOUR }}>
       <div
         style={{
           position: 'absolute',
@@ -58,7 +55,7 @@ export const Stage: React.FC<StageProps> = ({ stage, pageTopOffsetNative, crop, 
             style={{
               position: 'absolute',
               left: 0,
-              top: -pageTopOffsetNative,
+              top: -stage.pageTopNative,
               width: stage.width,
               imageRendering: 'pixelated',
             }}

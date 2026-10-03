@@ -1,35 +1,19 @@
-// AudioMap.tsx: the music bed (epic pets-o3p, bead pets-o3p.4).
-//
-// KNOWN GAP: only the music bed is wired here. The storyboard's per-event
-// SFX map (video/shots.json beats[].sfx[]) is NOT implemented — see this
-// bead's Concerns in the coordinator's summary. Wiring it needs each
-// beat's sfx anchors resolved to master time the same way renderBeats.ts
-// resolves captions, which ran out of budget in this pass.
+// AudioMap.tsx: places the music bed and every SFX cue audioPlan.ts
+// computed (epic pets-o3p, bead pets-o3p.4). No timing logic of its own.
 
 import React from 'react';
-import { Audio, interpolate, staticFile, useVideoConfig } from 'remotion';
+import { Audio, Sequence, staticFile } from 'remotion';
+import { musicGainAt, type MusicPlan, type SfxCue } from './audioPlan';
 
-export interface AudioMapProps {
-  musicSrc: string;
-  /** -2dB relative gain, per this bead's "Proven facts" (never re-derive from a raw dB cut). */
-  gainDb?: number;
-}
+const dbToGain = (db: number) => Math.pow(10, db / 20);
 
-export const AudioMap: React.FC<AudioMapProps> = ({ musicSrc, gainDb = -2 }) => {
-  const { durationInFrames, fps } = useVideoConfig();
-  const volume = Math.pow(10, gainDb / 20);
-  const fadeFrames = Math.round(0.6 * fps);
-
-  return (
-    <Audio
-      src={staticFile(musicSrc)}
-      volume={(frame) =>
-        volume *
-        interpolate(frame, [0, fadeFrames, durationInFrames - fadeFrames, durationInFrames - 1], [0, 1, 1, 0], {
-          extrapolateLeft: 'clamp',
-          extrapolateRight: 'clamp',
-        })
-      }
-    />
-  );
-};
+export const AudioMap: React.FC<{ music: MusicPlan; sfx: readonly SfxCue[] }> = ({ music, sfx }) => (
+  <>
+    <Audio src={staticFile(music.src)} volume={(frame) => musicGainAt(music, frame)} />
+    {sfx.map((cue, i) => (
+      <Sequence key={i} from={cue.frame} layout="none">
+        <Audio src={staticFile(cue.src)} volume={dbToGain(cue.gainDb)} playbackRate={cue.rate} />
+      </Sequence>
+    ))}
+  </>
+);
