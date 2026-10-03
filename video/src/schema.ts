@@ -241,6 +241,10 @@ export interface TimelineBeat {
   caption_t?: number;
   caption_source_t?: number;
   caption_crop?: Rect;
+  /** Output px of every caption pill on screen at caption_t. */
+  caption_rects?: Rect[];
+  /** Page beats: the chrome PNG drawn above the capture, relative to video/. */
+  chrome?: string;
   card?: TimelineCard;
 }
 
@@ -248,6 +252,8 @@ export interface TimelineBeat {
 export interface Timeline {
   music: string;
   beats: TimelineBeat[];
+  /** The card's backdrop: the page recording and the source time (s) of its last shown frame (overlays.popup_card.backdrop). */
+  backdrop?: { source: string; source_t: number };
 }
 
 export interface AcceptResult {

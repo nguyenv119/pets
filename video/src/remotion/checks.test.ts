@@ -308,13 +308,14 @@ describe('checkSteadyAtOnAnchor', () => {
   const placement = shots.overlays!.popup_card!.placement!;
   const sizes = { A_list: { w: 1000, h: 397 }, B_pick: { w: 630, h: 934 }, C_add: { w: 1000, h: 298 } } as const;
 
-  // v2: updated by pets-3it.5 (the 16:9 card now hangs from the toolbar icon, anchor {icon_cx, top, margin_x}; v1 code reads anchor.cx/cy until .5 rewrites it)
-  it.skip("passes every approved steady_at in shots.json against its aspect's anchor rule", () => {
+  const FRAME = { '16x9': { w: 1920, h: 1080 }, '9x16': { w: 1080, h: 1920 } } as const;
+
+  it("passes every approved steady_at in shots.json against its aspect's anchor rule", () => {
     /**
-     * What: each steady_at spot is the anchor rule (16:9 centred on (640, 540); 9:16 centred on x 540,
-     * top at 250) rounded to even, within 2 output px, for the measured card sizes.
+     * What: each steady_at spot is the anchor rule (x = min(icon_cx, frame w - margin_x - card w),
+     * y = min(top, frame h - card h)) within 2 output px, for the measured card sizes in both aspects.
      * Why: the 2 px tolerance lives here, between steady_at and the rule, not between frame and steady_at.
-     * What breaks: an approved spot would be rejected, or a wrong spot accepted.
+     * What breaks: an approved spot would be rejected (every render aborts), or a wrong spot accepted.
      */
     for (const aspect of ['16x9', '9x16'] as const) {
       for (const crop of ['A_list', 'B_pick', 'C_add'] as const) {
@@ -322,7 +323,7 @@ describe('checkSteadyAtOnAnchor', () => {
         const at = placement.steady_at![aspect]![crop];
         const anchor = (placement[aspect] as PopupCardPlacement).anchor;
         // WHEN
-        const violations = checkSteadyAtOnAnchor(at, sizes[crop], anchor);
+        const violations = checkSteadyAtOnAnchor(at, sizes[crop], anchor, FRAME[aspect]);
         // THEN
         expect(violations, `${aspect} ${crop}`).toEqual([]);
       }
@@ -331,14 +332,29 @@ describe('checkSteadyAtOnAnchor', () => {
 
   it('fails a steady_at 4 px off the 16:9 anchor', () => {
     /**
-     * What: a B spot at (328, 72) centres the card 4 px right of x 640 and fails.
+     * What: a 16:9 B spot at (1254, 146), 4 px right of the rule's (1250, 146), fails.
      * Why: the spec allows only the rounding to even, not a moved card.
-     * What breaks: a mistyped steady_at moves the card off the approved placement.
+     * What breaks: a mistyped steady_at moves the card off the pinned icon.
      */
     // GIVEN
     const anchor = (placement['16x9'] as PopupCardPlacement).anchor;
     // WHEN
-    const violations = checkSteadyAtOnAnchor({ x: 328, y: 72 }, sizes.B_pick, anchor);
+    const violations = checkSteadyAtOnAnchor({ x: 1254, y: 146 }, sizes.B_pick, anchor, FRAME['16x9']);
+    // THEN
+    expect(violations.map((v) => v.check)).toEqual(['card-anchor-rule']);
+  });
+
+  it('fails a card that hangs below the toolbar but past the frame bottom', () => {
+    /**
+     * What: 16:9 B at y 164 (the unclamped top) ends at y 1098, past the 1080 frame, and fails; the rule
+     * clamps it to y 146.
+     * Why: the clamp is half the rule; without it the tallest card is cut off at the frame bottom.
+     * What breaks: the pick grid loses its bottom 18 px on screen.
+     */
+    // GIVEN
+    const anchor = (placement['16x9'] as PopupCardPlacement).anchor;
+    // WHEN
+    const violations = checkSteadyAtOnAnchor({ x: 1250, y: 164 }, sizes.B_pick, anchor, FRAME['16x9']);
     // THEN
     expect(violations.map((v) => v.check)).toEqual(['card-anchor-rule']);
   });
@@ -493,8 +509,7 @@ describe('acceptance 4: B on its placement (shots.json placement, buildOverlays 
   const shots = loadShots();
 
   for (const aspect of ['16x9', '9x16'] as const) {
-    // v2: updated by pets-3it.5 (the 16:9 card now hangs from the toolbar icon, anchor {icon_cx, top, margin_x}; v1 code reads anchor.cx/cy until .5 rewrites it)
-    (aspect === '16x9' ? it.skip : it)(`passes the gap and in-frame rules for the measured B at 2x in ${aspect}`, () => {
+    it(`passes the gap and in-frame rules for the measured B at 2x in ${aspect}`, () => {
       /**
        * What: B (315x467 native at 2x = 630x934) on its shots.json steady_at keeps the 40 px gap from the
        * popup caption buildOverlays places, the caption sits in placement.caption_rect, and the card fits
@@ -519,8 +534,7 @@ describe('acceptance 4: B on its placement (shots.json placement, buildOverlays 
     });
   }
 
-  // v2: updated by pets-3it.5 (the 16:9 card now hangs from the toolbar icon, anchor {icon_cx, top, margin_x}; v1 code reads anchor.cx/cy until .5 rewrites it)
-  it.skip('fails a caption placed below B in 16:9 (it cannot clear the card inside the frame)', () => {
+  it('fails a caption placed below B in 16:9 (it cannot clear the card inside the frame)', () => {
     /**
      * What: buildOverlays' pill moved under B either touches the card or leaves the 1080 px frame.
      * Why: "B is 934 px tall, so a caption below it cannot fit the 1080 px frame".

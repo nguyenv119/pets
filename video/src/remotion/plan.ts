@@ -29,6 +29,8 @@ export interface PlanBeat {
   stagedSrc: string;
   /** Page beats: public-dir path of the shot's chrome PNG (chromePngPath). Card beats have none. */
   chromeSrc?: string;
+  /** Card beats: the still behind the card (timeline CardBackdrop): the page shot's chrome over its staged recording's source frame `frame`. */
+  backdrop?: { chromeSrc: string; stagedSrc: string; frame: number };
   frameCrops?: Rect[];
   /** master frames drawn without motion blur: every frame verify.mjs samples (motionBlur.sampledFrames), plus a still's frame */
   sharpFrames: number[];
@@ -46,9 +48,6 @@ export interface PromoPlan {
   iconPath: string;
   aspect: Aspect;
 }
-
-/** The chrome PNG a page shot stacks above its capture, relative to video/ (shots.json master.stage.chrome.png) and to the public dir render.mjs stages it in. */
-export const chromePngPath = (page: string, aspect: Aspect): string => `set/chrome/${page}${aspect === '9x16' ? '-narrow' : ''}.png`;
 
 /** Popup-take clicks the card shows a ring for (the Add Pet press rings on the mousedown). */
 const POPUP_CLICKS = ['shelter_click', 'name_click', 'type_selected', 'color_selected', 'add_mousedown'];
@@ -107,12 +106,12 @@ export interface PlanInput {
 export function buildPromoPlan(input: PlanInput): PromoPlan {
   const { edit, shots, eventsByShotId, stagedByShotId, stage, aspect } = input;
   const frameMs = 1000 / edit.fps;
+  const bd = edit.backdrop;
   const beats: PlanBeat[] = edit.beats
     .filter((b) => b.k1 > b.k0)
     .map((b) => {
       const ev = eventsByShotId[b.shotId];
-      const page = shots.shots.find((s) => s.id === b.shotId)?.page;
-      if (b.frameCrops && !page) throw new Error(`plan: page shot ${b.shotId} declares no page (its chrome PNG)`);
+      if (b.frameCrops && !b.chrome) throw new Error(`plan: page shot ${b.shotId} declares no page (its chrome PNG)`);
       let cursor: CursorData = { track: ev.cursorTrack, clicks: ev.clicks, trimBeforeMs: ev.trimBeforeMs, videoLagMs: ev.videoLagMs };
       if (b.card) {
         const start = shots.shots.find((s) => s.id === b.shotId)?.cursor_start;
@@ -125,7 +124,8 @@ export function buildPromoPlan(input: PlanInput): PromoPlan {
         k1: b.k1,
         shiftFrames: Math.round(b.shiftMs / frameMs),
         stagedSrc: stagedByShotId[b.shotId],
-        chromeSrc: b.frameCrops && page ? chromePngPath(page, aspect) : undefined,
+        chromeSrc: b.chrome,
+        backdrop: b.card && bd ? { chromeSrc: bd.chrome, stagedSrc: stagedByShotId[bd.shotId], frame: Math.round(bd.source_t / frameMs) } : undefined,
         frameCrops: b.frameCrops,
         sharpFrames: b.frameCrops ? sampledFrames(b, frameMs) : [],
         card: b.card && b.cardEnvelopes ? { frames: b.card.frames, envelopes: b.cardEnvelopes } : undefined,

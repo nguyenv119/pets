@@ -85,8 +85,7 @@ describe('musicCredits', () => {
     // GIVEN — the committed LICENSES.md, read at import
     // WHEN / THEN
     expect(MUSIC_CREDITS).toEqual({
-      cat_caffe: 'Music: "Cat caffe" by TAD (opengameart.org/content/lofi-compilation), CC0.',
-      forgotten_path: 'Music: "forgotten path" by johndekale (opengameart.org/content/forgotten-path), CC0.',
+      funny_and_cute_town_theme: 'Music: "Funny and Cute Town Theme" by ISAo, SOUND AIRYLUVS (https://airyluvs.com/), OGA-BY 3.0 (opengameart.org/content/funny-and-cute-town-theme).',
     });
   });
 
@@ -98,13 +97,15 @@ describe('musicCredits', () => {
 });
 
 describe('musicCredit', () => {
-  it('credits only the track timeline.json names', () => {
-    /** The eval fails a description that credits the other bed too. */
+  it('gives the OGA-BY 3.0 track its required credit, word for word', () => {
+    /**
+     * OGA-BY 3.0 requires the credit; the eval greps the description for ISAo, airyluvs.com and OGA-BY 3.0,
+     * and a reworded line could drop the artist's site.
+     */
     // GIVEN / WHEN
-    const line = musicCredit('music/cat_caffe.ogg');
+    const line = musicCredit('/abs/video/assets/music/funny_and_cute_town_theme.ogg');
     // THEN
-    expect(line).toMatch(/Cat caffe/);
-    expect(line).not.toMatch(/forgotten path/i);
+    expect(line).toContain('"Funny and Cute Town Theme" by ISAo, SOUND AIRYLUVS (https://airyluvs.com/), OGA-BY 3.0');
   });
 
   it('throws for an unknown track', () => {
@@ -118,13 +119,13 @@ describe('fillDescription', () => {
   it('fills both placeholders and keeps the store URL', () => {
     /** The finished description has no {{ left and links the store listing. */
     // GIVEN
-    const filled = { credits: creditsBlock(credits, creditedSpecies(FILM_ROSTERS)), music: musicCredit('music/forgotten_path.ogg') };
+    const filled = { credits: creditsBlock(credits, creditedSpecies(FILM_ROSTERS)), music: musicCredit('music/funny_and_cute_town_theme.ogg') };
     // WHEN
     const text = fillDescription(template, filled);
     // THEN
     expect(text).not.toContain('{{');
     expect(text).toContain(STORE_URL);
-    expect(text).toMatch(/forgotten path/);
+    expect(text).toMatch(/ISAo.*airyluvs\.com.*OGA-BY 3\.0/);
   });
 
   it('throws when a placeholder is left', () => {

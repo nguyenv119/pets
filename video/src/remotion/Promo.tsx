@@ -61,7 +61,8 @@ const BeatLayer: React.FC<{ beat: PlanBeat; plan: PromoPlan }> = ({ beat, plan }
 
   if (beat.card) {
     const i = Math.min(local, beat.card.frames.length - 1);
-    return <PopupCard frame={beat.card.frames[i]} envelope={beat.card.envelopes[i]} stagedSrc={beat.stagedSrc} trimBeforeFrames={trimBeforeFrames} cursor={beat.cursor} loggedMs={loggedMs} />;
+    if (!beat.backdrop) throw new Error(`Promo: card beat ${beat.name} has no backdrop (no page shot before the card shot)`);
+    return <PopupCard frame={beat.card.frames[i]} envelope={beat.card.envelopes[i]} stagedSrc={beat.stagedSrc} trimBeforeFrames={trimBeforeFrames} cursor={beat.cursor} loggedMs={loggedMs} backdrop={beat.backdrop} stage={plan.stage} />;
   }
   if (!beat.chromeSrc) throw new Error(`Promo: page beat ${beat.name} has no chrome PNG`);
   const chromeSrc = staticFile(beat.chromeSrc);
@@ -92,7 +93,7 @@ const BeatLayer: React.FC<{ beat: PlanBeat; plan: PromoPlan }> = ({ beat, plan }
 
 export const Promo: React.FC<PromoProps> = (plan) => {
   return (
-    <AbsoluteFill style={{ background: '#FFE3B0' }}>
+    <AbsoluteFill style={{ background: '#000' }}>
       {plan.beats.map((beat) => (
         <Sequence key={beat.name} from={beat.k0} durationInFrames={beat.k1 - beat.k0} layout="none">
           <BeatLayer beat={beat} plan={plan} />

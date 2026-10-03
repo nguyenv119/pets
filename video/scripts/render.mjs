@@ -40,7 +40,7 @@ const videoRoot = join(__dirname, '..');
 const publicDir = join(videoRoot, '.cache', 'public');
 const outDir = join(videoRoot, 'out');
 const syntheticRunDir = join(videoRoot, '.cache', 'synthetic-run');
-const MUSIC = 'music/cat_caffe.ogg';
+const MUSIC = 'music/funny_and_cute_town_theme.ogg';
 const ICON = 'icons/icon-128.png';
 /** PromoGif's frame width (Root.tsx): the native 16:9 capture, 1920x720 band. */
 const GIF_WIDTH = 1920;
@@ -90,7 +90,7 @@ function stageCommonAssets() {
   stageFile(join(videoRoot, 'assets', 'fonts', 'PressStart2P-Regular.ttf'), 'fonts/PressStart2P-Regular.ttf');
   stageFile(join(videoRoot, '..', 'assets', 'icons', 'icon-128.png'), ICON);
   stageFile(join(videoRoot, 'assets', MUSIC), MUSIC);
-  // the browser chrome strips Stage.tsx draws above each page capture (plan.ts chromePngPath)
+  // the browser chrome strips Stage.tsx draws above each page capture (timeline.ts chromePngPath)
   for (const f of readdirSync(join(videoRoot, 'set', 'chrome'))) if (f.endsWith('.png')) stageFile(join(videoRoot, 'set', 'chrome', f), `set/chrome/${f}`);
   const walk = (dir, rel) => {
     for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -255,7 +255,7 @@ async function main() {
     throw err;
   }
   renameSync(partial, out);
-  writeFileAtomic(join(outDir, tlName), JSON.stringify(timelineJson(edit), null, 1));
+  writeFileAtomic(join(outDir, tlName), JSON.stringify(timelineJson(edit, plan.items), null, 1));
   console.log(`rendered ${basename(out)} + out/${tlName} in ${((Date.now() - t0) / 1000).toFixed(1)} s (--gl=angle, concurrency ${CONCURRENCY})`);
   updateManifest(args.variant, run, sources);
 }

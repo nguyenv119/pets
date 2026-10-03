@@ -1,10 +1,8 @@
-Music and sound credits for the Pixel Pets promo video (all CC0 / public-domain
-dedication; credit is optional but given with thanks). Only files actually
+Music and sound credits for the Pixel Pets promo video. Only files actually
 shipped in this repo are listed — see LICENSES.md for the full per-file table.
 
 Music:
-"Cat caffe" by TAD - opengameart.org/content/lofi-compilation - CC0
-"forgotten path" by johndekale - opengameart.org/content/forgotten-path - CC0
+"Funny and Cute Town Theme" by ISAo, SOUND AIRYLUVS (https://airyluvs.com/), OGA-BY 3.0 - opengameart.org/content/funny-and-cute-town-theme
 
 Sound effects:
 Kenney "Interface Sounds" - kenney.nl - CC0

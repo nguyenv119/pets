@@ -104,7 +104,7 @@ export function runRenderChecks(input: RenderCheckInput): FrameViolation[] {
     const events = eventsByShotId[b.shotId];
     const forbidden = shot.layout_expect?.forbidden_types ?? [];
     const dn = events.observed.find((o) => o.kind === 'add_mousedown');
-    if (placement) add(b.k0, `${b.name} card steady_at`, checkSteadyAtOnAnchor(card.at, { w: card.rect.w * card.scale, h: card.rect.h * card.scale }, placement.anchor));
+    if (placement) add(b.k0, `${b.name} card steady_at`, checkSteadyAtOnAnchor(card.at, { w: card.rect.w * card.scale, h: card.rect.h * card.scale }, placement.anchor, { w: stage.width, h: stage.height }));
     card.frames.forEach((f, i) => {
       const k = b.k0 + i;
       const el = `${b.name} card`;

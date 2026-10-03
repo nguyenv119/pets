@@ -147,8 +147,7 @@ describe('runRenderChecks: the committed fixture take (no tracks: click-rect box
   });
 });
 
-// v2: updated by pets-3it.5 (the 16:9 card now hangs from the toolbar icon, anchor {icon_cx, top, margin_x}; v1 code reads anchor.cx/cy until .5 rewrites it)
-describe.skip('runRenderChecks: the real card beats on the synthetic popup take', () => {
+describe('runRenderChecks: the real card beats on the synthetic popup take', () => {
   const check = (f: ReturnType<typeof syntheticCardEdit>) =>
     runRenderChecks({ edit: f.edit, shots: f.shots, eventsByShotId: { s2b_shelter: f.events }, stage: STAGE_16X9, aspect: '16x9', outputWidth: 1920, items: f.items });
 
@@ -209,7 +208,7 @@ describe.skip('runRenderChecks: the real card beats on the synthetic popup take'
 
   it('fails a steady card frame 2 px off steady_at', () => {
     /**
-     * What: one steady b3d frame drawn at (326, 72) instead of steady_at (324, 72) fails card-steady-anchor.
+     * What: one steady b3d frame drawn 2 px right of steady_at (1252, 146 for 1250, 146) fails card-steady-anchor.
      * Why: verify.mjs v10 requires every steady frame on steady_at exactly; the old 2 px allowance let it pass.
      * What breaks: the render passes its own checks and fails the eval's card declaration.
      */
@@ -217,7 +216,7 @@ describe.skip('runRenderChecks: the real card beats on the synthetic popup take'
     const f = syntheticCardEdit('16x9');
     const b3d = f.edit.beats.find((b) => b.name === 'b3d_pick')!;
     const i = b3d.card!.frames.length - 1;
-    b3d.card!.frames[i] = { ...b3d.card!.frames[i], at: { x: 326, y: 72 } };
+    b3d.card!.frames[i] = { ...b3d.card!.frames[i], at: { x: b3d.card!.at.x + 2, y: b3d.card!.at.y } };
     // WHEN
     const v = check(f).filter((x) => x.check === 'card-steady-anchor');
     // THEN

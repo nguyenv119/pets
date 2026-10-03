@@ -179,13 +179,9 @@ export function buildOverlays(input: OverlayInput): TextItem[] {
         const lines = beat.caption.split(/(?<=\.) /);
         const px = port ? 80 : 72;
         const { w, h } = pillSize(lines, px);
-        // 16:9: left-aligned in caption_rect, centred on the card's own centre line (placement.anchor.cy); 9:16: centred in caption_rect.
-        let rect: Rect;
-        if (port) rect = { x: Math.round(cr.x + (cr.w - w) / 2), y: Math.round(cr.y + (cr.h - h) / 2), w, h };
-        else {
-          if (placement.anchor.cy === undefined) throw new Error('overlays: overlays.popup_card.placement.16x9.anchor has no cy');
-          rect = { x: cr.x, y: Math.round(placement.anchor.cy - h / 2), w, h };
-        }
+        // Centred vertically in caption_rect; 16:9 left-aligned in it, 9:16 centred in it.
+        const y = Math.round(cr.y + (cr.h - h) / 2);
+        const rect: Rect = { x: port ? Math.round(cr.x + (cr.w - w) / 2) : cr.x, y, w, h };
         // The caption is part of the card layer: it shows on card frames only. Its anchors are lagged and
         // rounded (frameOf) while the card beats' bounds are not, so caption_out ("add_mousedown+160", the
         // last card beat's own `out`) can land a frame or two past the card, onto the next page shot's pets.

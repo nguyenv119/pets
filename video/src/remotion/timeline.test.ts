@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { Events } from '../schema';
 import { STAGE_16X9 } from './camera';
-import { makeEvents } from './testEvents';
+import { makeEvents, reviewThenCardEdit } from './testEvents';
 import {
   anchorMasterFrame,
   buildTimeline,
@@ -212,7 +212,7 @@ describe('buildTimeline (integration, real fixture data)', () => {
       stage: STAGE_16X9,
       eventsByShotId: { [shot.id]: events },
       sourceByShotId: { [shot.id]: '/build/fixture/sample_hover_treat_catch/demo.mp4' },
-      music: 'assets/music/cat_caffe.ogg',
+      music: 'assets/music/funny_and_cute_town_theme.ogg',
       allowEmptyBeats: true,
     });
     expect(timeline.beats.map((b) => b.name)).toEqual(shot.beats.map((b: Shot['beats'][number]) => b.name));
@@ -233,7 +233,7 @@ describe('buildTimeline (integration, real fixture data)', () => {
       stage: STAGE_16X9,
       eventsByShotId: { [shot.id]: events },
       sourceByShotId: { [shot.id]: '/build/fixture/sample_hover_treat_catch/demo.mp4' },
-      music: 'assets/music/cat_caffe.ogg',
+      music: 'assets/music/funny_and_cute_town_theme.ogg',
       allowEmptyBeats: true,
     });
     for (const beat of timeline.beats) {
@@ -247,7 +247,7 @@ describe('buildTimeline (integration, real fixture data)', () => {
       stage: STAGE_16X9,
       eventsByShotId: { [shot.id]: events },
       sourceByShotId: { [shot.id]: '/build/fixture/sample_hover_treat_catch/demo.mp4' },
-      music: 'assets/music/cat_caffe.ogg',
+      music: 'assets/music/funny_and_cute_town_theme.ogg',
       allowEmptyBeats: true,
     });
     for (let i = 1; i < timeline.beats.length; i++) {
@@ -261,7 +261,7 @@ describe('buildTimeline (integration, real fixture data)', () => {
       stage: STAGE_16X9,
       eventsByShotId: { [shot.id]: events },
       sourceByShotId: { [shot.id]: '/build/fixture/sample_hover_treat_catch/demo.mp4' },
-      music: 'assets/music/cat_caffe.ogg',
+      music: 'assets/music/funny_and_cute_town_theme.ogg',
       allowEmptyBeats: true,
     });
     const drawn = timeline.beats.filter((b) => b.k1 > b.k0);
@@ -286,7 +286,7 @@ describe('buildTimeline (integration, real fixture data)', () => {
       stage: STAGE_16X9,
       eventsByShotId: { [shot.id]: events },
       sourceByShotId: { [shot.id]: absPath },
-      music: 'assets/music/cat_caffe.ogg',
+      music: 'assets/music/funny_and_cute_town_theme.ogg',
       allowEmptyBeats: true,
     });
     for (const beat of timeline.beats) {
@@ -311,7 +311,7 @@ describe('buildTimeline: frame grid and declared samples', () => {
     stage: STAGE_16X9,
     eventsByShotId: { [shot.id]: events },
     sourceByShotId: { [shot.id]: '/abs/demo.mp4' },
-    music: '/abs/cat_caffe.ogg',
+    music: '/abs/funny_and_cute_town_theme.ogg',
     allowEmptyBeats: true,
   });
 
@@ -343,14 +343,14 @@ describe('buildTimeline: frame grid and declared samples', () => {
   });
 
   it('extends the final hold toward the length rule by at most 1.0 s', () => {
-    /** master.length_rule: "Under 28.3 s: extend the final hold by up to 1.0 s." */
-    const longer = buildTimeline({ shots: { fps: 25, edit_order: [shot.id], shots: [shot] }, stage: STAGE_16X9, eventsByShotId: { [shot.id]: events }, sourceByShotId: { [shot.id]: '/abs/demo.mp4' }, music: 'm', allowEmptyBeats: true, minLengthMs: 28300 });
+    /** master.length_rule: "Under 27.3 s: extend the final hold by up to 1.0 s." */
+    const longer = buildTimeline({ shots: { fps: 25, edit_order: [shot.id], shots: [shot] }, stage: STAGE_16X9, eventsByShotId: { [shot.id]: events }, sourceByShotId: { [shot.id]: '/abs/demo.mp4' }, music: 'm', allowEmptyBeats: true, minLengthMs: 27300 });
     expect(longer.totalFrames - edit.totalFrames).toBe(25);
   });
 
   it('writes timeline.json in seconds with only the schema fields', () => {
     /** verify.mjs reads seconds; render-only fields (frameCrops, shiftMs) must never leak into the frozen schema. */
-    const json = timelineJson(edit);
+    const json = timelineJson(edit, []);
     const last = json.beats[json.beats.length - 1];
     expect(last.master_out).toBeCloseTo(edit.totalFrames / 25, 6);
     expect(Object.keys(last)).not.toContain('frameCrops');
@@ -423,5 +423,59 @@ describe('anchorMasterFrame / findAnchorMasterFrame', () => {
     // THEN
     expect(k).toBe(anchorMasterFrame('sleep', beat, events, 25));
     expect(() => findAnchorMasterFrame(edit, { x: other, y: events }, 'not an anchor!')).toThrow(/anchor grammar/);
+  });
+});
+
+describe('timelineJson: the v2 fields the eval reads', () => {
+  it('records the card backdrop as the review recording and the source time of its last shown frame', () => {
+    /**
+     * What: top-level backdrop = {source: the review shot's recording, source_t: the source time (s) of the
+     * last review frame the master shows}.
+     * Why: during s2b the card hangs over that frame dimmed; the eval rebuilds the backdrop from exactly
+     * this frame and compares it outside the card.
+     * What breaks: the eval rebuilds a different frame and fails a correct backdrop, or cannot rebuild it.
+     */
+    // GIVEN
+    const { edit, items } = reviewThenCardEdit('16x9');
+    // WHEN
+    const json = timelineJson(edit, items);
+    // THEN
+    // Recording frame 62 at 40 ms a frame, the fixture's last shown review frame.
+    expect(json.backdrop).toEqual({ source: '/r/s2.mp4', source_t: 2.48 });
+  });
+
+  it('names the chrome PNG on every page beat and on no card beat', () => {
+    /**
+     * What: beats[].chrome is set/chrome/<page>.png (or -narrow.png in the 9:16) on page beats only.
+     * Why: the eval's chrome check compares the master's top 208 rows against this PNG.
+     * What breaks: the chrome check has no reference, or compares a card frame against a page's chrome.
+     */
+    for (const [aspect, png] of [['16x9', 'set/chrome/review.png'], ['9x16', 'set/chrome/review-narrow.png']] as const) {
+      // GIVEN
+      const { edit, items } = reviewThenCardEdit(aspect);
+      // WHEN
+      const json = timelineJson(edit, items);
+      // THEN
+      expect(json.beats.map((b) => [b.name, b.chrome])).toEqual([['b_hold', png], ['b3c_shelter', undefined], ['b3d_pick', undefined], ['b3e_add', undefined]]);
+    }
+  });
+
+  it('lists every caption pill on screen at a beat\'s caption_t, and no other text', () => {
+    /**
+     * What: beats[].caption_rects = the rects of the caption, card caption and name tag pills drawn on the
+     * master frame at caption_t; a beat with no caption_t has none.
+     * Why: the eval counts the clock's cream only outside every pill; the pill is cream too.
+     * What breaks: the clock check counts the pill's ~70,000 cream px as the clock and passes a missing clock.
+     */
+    // GIVEN — the card caption runs across b3c-b3e
+    const { edit, items } = reviewThenCardEdit('16x9');
+    const caption = items.find((i) => i.kind === 'card_caption')!;
+    // WHEN
+    const json = timelineJson(edit, [...items, { ...caption, kind: 'clock', rect: { x: 0, y: 0, w: 1, h: 1 } }]);
+    // THEN
+    const b3c = json.beats.find((b) => b.name === 'b3c_shelter')!;
+    expect(b3c.caption_t).toBeDefined();
+    expect(b3c.caption_rects).toEqual([caption.rect]);
+    expect(json.beats.find((b) => b.name === 'b_hold')!.caption_rects).toBeUndefined();
   });
 });
