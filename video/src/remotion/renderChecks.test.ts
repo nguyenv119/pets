@@ -6,7 +6,7 @@ import { STAGE_16X9 } from './camera';
 import type { GifScene } from './gifScenes';
 import type { TextItem } from './overlays';
 import { runGifChecks, runRenderChecks } from './renderChecks';
-import { loadSyntheticPopupEvents, makeEvents, stillPets, syntheticCardEdit, VIDEO_ROOT } from './testEvents';
+import { loadFixtureEventsV2, loadSyntheticPopupEvents, makeEvents, stillPets, syntheticCardEdit, VIDEO_ROOT } from './testEvents';
 import { buildTimeline, type EditBeat, type EditTimeline, type ShotsDoc } from './timeline';
 
 const FULL = { x: 0, y: 0, w: 1920, h: 1080 };
@@ -18,7 +18,7 @@ function pageEdit(crops: { x: number; y: number; w: number; h: number }[]): Edit
 }
 
 describe('runRenderChecks: page frames and text layers', () => {
-  // Rex standing at CSS x 400 (stage 800-928, y 856-984): fed at logged t 0, so his particles live 0-1500 ms
+  // Rex standing at CSS x 400, y 372 (stage 800-928, y 952-1080): fed at logged t 0, so his particles live 0-1500 ms
   const events = makeEvents({ roster: [{ id: 'rex', name: 'Rex', type: 'dog', color: 'brown' }], tracks: stillPets({ rex: 400 }), observed: [{ t: 0, kind: 'eat', pet: 'rex' }] });
 
   it('names the frame and the element when a crop edge cuts through a pet', () => {
@@ -30,11 +30,27 @@ describe('runRenderChecks: page frames and text layers', () => {
      * What breaks: a clipped pet ships, or the abort message points nowhere.
      */
     // GIVEN — a full frame, then a 2.0x crop through Rex
-    const edit = pageEdit([FULL, { x: 850, y: 492, w: 960, h: 540 }]);
+    const edit = pageEdit([FULL, { x: 850, y: 540, w: 960, h: 540 }]);
     // WHEN
     const v = runRenderChecks({ edit, shots, eventsByShotId: { s1: events }, stage: STAGE_16X9, aspect: '16x9', outputWidth: 1920, items: [] });
     // THEN
     expect(v.map((x) => [x.frame, x.element, x.check])).toEqual([[1, 'b2a_hover camera crop', 'crop-pet-margin']]);
+  });
+
+  it('fails a page crop whose bottom is not the frame bottom (the v1 floor-band crop)', () => {
+    /**
+     * What: the v1 2.0x crop {y 492, h 540} ends at stage y 1032, above the frame bottom; the check names that
+     * frame as crop-frame-bottom, while the v2 crop {y 540} passes it.
+     * Why: v2 has no floor band, so the pets' feet are on the frame bottom only if every crop ends there.
+     * What breaks: a stale band-era crop lifts the frame off the pets' feet and the master fails the eval's
+     * floor-anchored crop check.
+     */
+    // GIVEN — a v2 crop, then the v1 band-era crop
+    const edit = pageEdit([{ x: 0, y: 540, w: 960, h: 540 }, { x: 0, y: 492, w: 960, h: 540 }]);
+    // WHEN
+    const v = runRenderChecks({ edit, shots, eventsByShotId: { s1: events }, stage: STAGE_16X9, aspect: '16x9', outputWidth: 1920, items: [] });
+    // THEN
+    expect(v.filter((x) => x.check === 'crop-frame-bottom').map((x) => x.frame)).toEqual([1]);
   });
 
   it('skips a hidden pet when checking crop edges', () => {
@@ -46,7 +62,7 @@ describe('runRenderChecks: page frames and text layers', () => {
      */
     // GIVEN — Rex hidden, the same crop through his box
     const hidden = makeEvents({ roster: [{ id: 'rex', name: 'Rex', type: 'dog', color: 'brown', hidden: true }], tracks: stillPets({ rex: 400 }) });
-    const edit = pageEdit([{ x: 850, y: 492, w: 960, h: 540 }]);
+    const edit = pageEdit([{ x: 850, y: 540, w: 960, h: 540 }]);
     // WHEN
     const v = runRenderChecks({ edit, shots, eventsByShotId: { s1: hidden }, stage: STAGE_16X9, aspect: '16x9', outputWidth: 1920, items: [] });
     // THEN
@@ -56,8 +72,8 @@ describe('runRenderChecks: page frames and text layers', () => {
   it('fails a caption placed inside an active feed particle column, and only while the particles live', () => {
     /**
      * What: conventions.camera.checks: no text inside the particle column of a pet that can emit in that
-     * span (from a feed until its particles fade, 1500 ms). At 1.0x the column is x 752-976, y 696-984; a
-     * caption at (760, 700) sits in it until frame 37.
+     * span (from a feed until its particles fade, 1500 ms). At 1.0x the column is x 752-976, y 792-1080; a
+     * caption at (760, 800) sits in it until frame 37.
      * Why: the particle column is checks.ts particleColumn scaled to output px; this pins that the code
      * the render runs is the code the unit tests cover.
      * What breaks: a caption collides with the feed hearts, or is failed after they have faded.
@@ -65,7 +81,7 @@ describe('runRenderChecks: page frames and text layers', () => {
     // GIVEN — 2 s of full frames and a caption inside the column
     const frames = 50;
     const edit = pageEdit(Array.from({ length: frames }, () => FULL));
-    const caption: TextItem = { kind: 'caption', beat: 'b2b_treat', lines: ['click: a treat.'], fontPx: 72, fromFrame: 0, toFrame: frames, rect: { x: 760, y: 700, w: 200, h: 60 }, align: 'left' };
+    const caption: TextItem = { kind: 'caption', beat: 'b2b_treat', lines: ['click: a treat.'], fontPx: 72, fromFrame: 0, toFrame: frames, rect: { x: 760, y: 800, w: 200, h: 60 }, align: 'left' };
     // WHEN
     const v = runRenderChecks({ edit, shots, eventsByShotId: { s1: events }, stage: STAGE_16X9, aspect: '16x9', outputWidth: 1920, items: [caption] });
     // THEN — from frame 0 to 37 (1500 ms / 40 = 37.5), never after
@@ -83,7 +99,7 @@ describe('runRenderChecks: page frames and text layers', () => {
      */
     // GIVEN
     const edit = pageEdit([FULL]);
-    const item: TextItem = { kind: 'brand_line', beat: 'b6_brand_line', lines: ['x'], fontPx: 84, fromFrame: 0, toFrame: 1, rect: { x: 160, y: 48, w: 10, h: 84 }, align: 'left', layoutProblem: 'does not fit' };
+    const item: TextItem = { kind: 'brand_line', beat: 'b6_brand_line', lines: ['x'], fontPx: 84, fromFrame: 0, toFrame: 1, rect: { x: 160, y: 256, w: 10, h: 84 }, align: 'left', layoutProblem: 'does not fit' };
     // WHEN
     const v = runRenderChecks({ edit, shots, eventsByShotId: { s1: events }, stage: STAGE_16X9, aspect: '16x9', outputWidth: 1920, items: [item] });
     // THEN
@@ -95,7 +111,7 @@ describe('runRenderChecks: the committed fixture take (no tracks: click-rect box
   const sample = JSON.parse(readFileSync(join(VIDEO_ROOT, 'fixtures', 'shots.sample.json'), 'utf8')) as ShotsDoc;
   const shot = sample.shots[0];
   const fixtureShots: ShotsDoc = { ...sample, edit_order: [shot.id], shots: [shot] };
-  const events = JSON.parse(readFileSync(join(VIDEO_ROOT, 'fixtures', 'events.sample.json'), 'utf8')) as Events;
+  const events = loadFixtureEventsV2();
   const plan = () => buildTimeline({ shots: fixtureShots, stage: STAGE_16X9, aspect: '16x9', eventsByShotId: { [shot.id]: events }, sourceByShotId: { [shot.id]: '/x' }, music: 'm', allowEmptyBeats: true });
 
   it('passes the honest fixture plan, whose camera frames Rex on every frame', () => {
@@ -210,7 +226,7 @@ describe.skip('runRenderChecks: the real card beats on the synthetic popup take'
 });
 
 describe('runGifChecks', () => {
-  // Rex at CSS x 400, y 476-540; the GIF band is CSS y 180-540, so in GIF px he is x 800-928, y 592-720
+  // Rex at CSS x 400, y 372-436; the GIF crop is CSS y 76-436, so in GIF px he is x 800-928, y 592-720
   const events = makeEvents({ roster: [{ id: 'rex', name: 'Rex', type: 'dog', color: 'brown' }], tracks: stillPets({ rex: 400 }), observed: [{ t: 0, kind: 'eat', pet: 'rex' }] });
   const scene = (rect: { x: number; y: number; w: number; h: number }): GifScene => ({
     shotId: 's1',
@@ -219,7 +235,7 @@ describe('runGifChecks', () => {
     fromFrame: 0,
     frames: 50,
     trimBeforeFrames: 0,
-    cropCss: { x: 0, y: 180, w: 960, h: 360 },
+    cropCss: { x: 0, y: 76, w: 960, h: 360 },
     captions: [{ kind: 'caption', beat: 'b2b_treat', lines: ['click: a treat.'], fontPx: 32, fromFrame: 0, toFrame: 50, rect, align: 'left' }],
     cursor: { track: [], clicks: [], trimBeforeMs: 0, videoLagMs: 0 },
   });

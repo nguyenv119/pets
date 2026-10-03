@@ -62,6 +62,8 @@ export interface ShotBeat {
 
 export interface Shot {
   id: string;
+  /** The set page it films (shots.json shots[].page): names its chrome PNG. */
+  page?: string;
   beats: ShotBeat[];
   /** Card beats only (s2b_shelter): the popup take's own capture viewport, for cardCrop.ts's `vw`. */
   viewport?: { width: number };
@@ -306,10 +308,10 @@ function findCatchEvent(events: Events): ObservedEvent | undefined {
  * click rect nearest `atMs` (storyboard: "fall back to the click rect when
  * tracks is absent, as in the fixture"), the box petBoxStage gives the
  * render checks. Track/click coordinates are CSS px in
- * the 960x540 recording viewport (video/shots.json conventions.units);
+ * the 960x436 recording viewport (video/shots.json conventions.units);
  * multiplying by 2 (the recording's fixed device_scale_factor) converts
  * to native/stage px, which is 1:1 with stage x for both aspect ratios
- * (only the vertical axis needs the floor-band offset).
+ * (only the vertical axis needs the chrome offset, stage.pageY).
  */
 function resolvePetFocusX(events: Events, petId: string, atMs: number): number {
   const CSS_TO_STAGE = 2;
@@ -322,7 +324,7 @@ function resolvePetFocusX(events: Events, petId: string, atMs: number): number {
     }
   }
   // No tracks (the fixture): the pet's click rect nearest in time, the same box the crop-margin check frames.
-  const box = petBoxStage(events, petId, atMs, { width: 0, height: 0, floorLine: 0, pageTopNative: 0 });
+  const box = petBoxStage(events, petId, atMs, { width: 0, height: 0, pageY: 0 });
   if (box) {
     return box.x + box.w / 2;
   }

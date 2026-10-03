@@ -90,6 +90,8 @@ function stageCommonAssets() {
   stageFile(join(videoRoot, 'assets', 'fonts', 'PressStart2P-Regular.ttf'), 'fonts/PressStart2P-Regular.ttf');
   stageFile(join(videoRoot, '..', 'assets', 'icons', 'icon-128.png'), ICON);
   stageFile(join(videoRoot, 'assets', MUSIC), MUSIC);
+  // the browser chrome strips Stage.tsx draws above each page capture (plan.ts chromePngPath)
+  for (const f of readdirSync(join(videoRoot, 'set', 'chrome'))) if (f.endsWith('.png')) stageFile(join(videoRoot, 'set', 'chrome', f), `set/chrome/${f}`);
   const walk = (dir, rel) => {
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       if (e.isDirectory()) walk(join(dir, e.name), join(rel, e.name));

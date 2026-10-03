@@ -1,0 +1,93 @@
+/* The browser chrome strip, dark theme, square corners. CSS px at DPR 2.
+   Heights: tab strip 40 + toolbar 38 + bookmarks bar 26 = 104 CSS px (208 output px).
+   Its width is the viewport's: 960 (16:9) or 540 (the 9:16 narrow window). The
+   toolbar's right end is fixed-width, so the pinned icon sits 123-139 CSS px from
+   the right edge (x 821-837 at 960, 401-417 at 540), y 51-67. */
+:root {
+  --frame: #1c1d20;     /* tab strip */
+  --bar: #2e2f33;       /* active tab, toolbar, bookmarks bar */
+  --omni: #1c1d20;
+  --text: #e3e3e3;
+  --muted: #a6a9ae;
+  --sep: #46484d;
+}
+
+html, body { background: var(--frame); }
+body { color: var(--text); font-size: 12px; }
+
+.win { position: absolute; left: 0; top: 0; width: 100%; height: 104px; }
+
+/* ---- tab strip ---- */
+.tabstrip { position: absolute; left: 0; top: 0; width: 100%; height: 40px; background: var(--frame); }
+
+.lights { position: absolute; left: 14px; top: 14px; display: flex; gap: 8px; }
+.lights i { display: block; width: 12px; height: 12px; border-radius: 50%; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.25); }
+.lights .r { background: #ff5f57; }
+.lights .y { background: #febc2e; }
+.lights .g { background: #28c840; }
+
+.tabs { position: absolute; left: 78px; top: 8px; height: 32px; display: flex; align-items: stretch; }
+
+.tab {
+  position: relative; width: 156px; height: 32px; padding: 0 10px 0 12px;
+  display: flex; align-items: center; gap: 8px; color: #c7c9cd;
+}
+.tab + .tab::before { /* separator between inactive tabs */
+  content: ""; position: absolute; left: 0; top: 9px; width: 1px; height: 16px; background: var(--sep);
+}
+.tab.active { background: var(--bar); border-radius: 9px 9px 0 0; color: var(--text); }
+.tab.active::before, .tab.active + .tab::before { display: none; }
+.tab.active::after { /* the two curved feet where the tab meets the toolbar */
+  content: ""; position: absolute; bottom: 0; left: -8px; right: -8px; height: 8px; pointer-events: none;
+  background:
+    radial-gradient(circle at 0 0, transparent 7.5px, var(--bar) 8px) left bottom / 8px 8px no-repeat,
+    radial-gradient(circle at 100% 0, transparent 7.5px, var(--bar) 8px) right bottom / 8px 8px no-repeat;
+}
+.tab .fav { width: 16px; height: 16px; flex-shrink: 0; }
+.tab .t { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 12px;
+  -webkit-mask-image: linear-gradient(90deg, #000 80%, transparent); mask-image: linear-gradient(90deg, #000 80%, transparent); }
+.tab .x { width: 16px; height: 16px; flex-shrink: 0; position: relative; opacity: 0.85; }
+.tab .x::before, .tab .x::after { content: ""; position: absolute; left: 3.5px; top: 7.4px; width: 9px; height: 1.3px; background: currentColor; border-radius: 1px; transform: rotate(45deg); }
+.tab .x::after { transform: rotate(-45deg); }
+.tab:not(.active) .x { opacity: 0; }
+
+.newtab { width: 28px; height: 28px; margin: 2px 0 0 6px; position: relative; color: #c7c9cd; }
+.newtab::before, .newtab::after { content: ""; position: absolute; left: 8px; top: 13.3px; width: 12px; height: 1.4px; background: currentColor; }
+.newtab::after { transform: rotate(90deg); }
+
+.tabsearch { position: absolute; right: 12px; top: 10px; width: 24px; height: 24px; border-radius: 6px; background: #2a2b2f; }
+.tabsearch::before { content: ""; position: absolute; left: 8.5px; top: 7.5px; width: 6px; height: 6px; border-right: 1.4px solid #c7c9cd; border-bottom: 1.4px solid #c7c9cd; transform: rotate(45deg); }
+
+/* ---- toolbar ---- */
+.toolbar { position: absolute; left: 0; top: 40px; width: 100%; height: 38px; background: var(--bar);
+  display: flex; align-items: center; padding: 0 8px 0 8px; gap: 4px; }
+.toolbar svg { width: 16px; height: 16px; display: block; }
+.nav { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; color: #c7c9cd; }
+.nav.fwd { color: #6c6f75; }
+.omni { flex: 1; height: 30px; margin: 0 6px 0 4px; border-radius: 15px; background: var(--omni);
+  display: flex; align-items: center; padding: 0 10px 0 4px; gap: 8px; }
+.omni .site { width: 24px; height: 24px; border-radius: 12px; background: #2e2f33; display: flex; align-items: center; justify-content: center; color: #c7c9cd; }
+.omni .url { flex: 1; font-size: 13px; color: var(--text); letter-spacing: 0.1px; }
+.omni .url b { font-weight: 400; }
+.omni .url .path { color: var(--muted); }
+.omni .star { color: #c7c9cd; }
+.ext { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; color: #c7c9cd; }
+img.ext { width: 16px; height: 16px; margin: 0 6px; image-rendering: pixelated; }
+.sep { width: 1px; height: 18px; background: var(--sep); margin: 0 4px; }
+.avatar { width: 22px; height: 22px; margin: 0 5px; border-radius: 50%; background: #c9d6a8; color: #3b4a2a;
+  font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.kebab { width: 24px; height: 28px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2.5px; }
+.kebab i { display: block; width: 3px; height: 3px; border-radius: 50%; background: #c7c9cd; }
+
+/* ---- bookmarks bar ---- */
+.bookmarks { position: absolute; left: 0; top: 78px; width: 100%; height: 26px; background: var(--bar);
+  border-bottom: 1px solid #3d3f44; overflow: hidden; display: flex; align-items: center; padding: 0 10px; gap: 4px; }
+.bm { display: flex; align-items: center; gap: 6px; padding: 0 8px; height: 22px; font-size: 11.5px; color: #d5d7da; }
+.bm svg { width: 14px; height: 14px; }
+.bm.all { margin-left: auto; }
+
+/* ---- the 9:16 narrow window: fewer tabs (the active one and "Weekend forecast"), no "All bookmarks" ---- */
+@media (max-width: 600px) {
+  .tab:not(.active):not([data-id="weather"]) { display: none; }
+  .bm.all { display: none; }
+}

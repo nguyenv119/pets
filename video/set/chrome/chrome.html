@@ -1,0 +1,85 @@
+<!doctype html>
+<!--
+  The Mac window and dark browser chrome: a 104 CSS px strip (tab strip 40,
+  toolbar 38, bookmarks bar 26) drawn at DPR 2 = 208 output px, which the
+  master stacks ABOVE the real 960x436 page capture (video/shots.json
+  master.stage.chrome). Square corners. Pick the active tab and URL path
+  with the hash: chrome.html#inbox | #review | #sheet | #article. At a
+  540 px wide viewport it is the 9:16 narrow window (fewer tabs).
+  scripts/chrome-png.mjs renders it to set/chrome/<page>.png and
+  <page>-narrow.png. No logos: every glyph is a plain shape drawn here; the
+  one real mark is the Pixel Pets icon pinned in the toolbar.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>window chrome</title>
+<link rel="stylesheet" href="/css/base.css" />
+<link rel="stylesheet" href="/chrome/chrome.css" />
+</head>
+<body>
+<div class="win">
+  <div class="tabstrip">
+    <span class="lights" aria-hidden="true"><i class="r"></i><i class="y"></i><i class="g"></i></span>
+    <div class="tabs">
+      <div class="tab" data-id="inbox">
+        <svg class="fav" viewBox="0 0 16 16"><rect x="1.5" y="3.5" width="13" height="9" rx="1.5" fill="none" stroke="#9db7cc" stroke-width="1.4"/><path d="M2 4.5l6 4.5 6-4.5" fill="none" stroke="#9db7cc" stroke-width="1.4"/></svg>
+        <span class="t">Inbox (12)</span><span class="x"></span>
+      </div>
+      <div class="tab" data-id="review">
+        <svg class="fav" viewBox="0 0 16 16"><rect x="1" y="1" width="14" height="14" rx="3.5" fill="#5c6b7a"/><path d="M6.2 5L3.6 8l2.6 3M9.8 5l2.6 3-2.6 3" fill="none" stroke="#e8edf2" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="t">Reset chart zoom on double-click #212</span><span class="x"></span>
+      </div>
+      <div class="tab" data-id="sheet">
+        <svg class="fav" viewBox="0 0 16 16"><rect x="1.5" y="1.5" width="13" height="13" rx="2" fill="none" stroke="#a9b98a" stroke-width="1.4"/><path d="M1.5 6h13M1.5 10.5h13M6 6v8.5" stroke="#a9b98a" stroke-width="1.4"/></svg>
+        <span class="t">Q3 budget, v7 final (2)</span><span class="x"></span>
+      </div>
+      <div class="tab" data-id="article">
+        <svg class="fav" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="#d9c9a3"/><path d="M10.5 4.6a4 4 0 1 0 0 6.8 3.3 3.3 0 0 1 0-6.8z" fill="#2a2b2e"/></svg>
+        <span class="t">A short history of the night light</span><span class="x"></span>
+      </div>
+      <div class="tab" data-id="weather">
+        <svg class="fav" viewBox="0 0 16 16"><circle cx="6" cy="6.5" r="3" fill="#e9c46a"/><path d="M5 13h7a2.5 2.5 0 0 0 0-5 3.5 3.5 0 0 0-6.6.8A2.1 2.1 0 0 0 5 13z" fill="#c9ced6"/></svg>
+        <span class="t">Weekend forecast</span><span class="x"></span>
+      </div>
+      <span class="newtab" aria-hidden="true"></span>
+    </div>
+    <span class="tabsearch" aria-hidden="true"></span>
+  </div>
+
+  <div class="toolbar">
+    <span class="nav back"><svg viewBox="0 0 16 16"><path d="M13 8H3.5M7.5 3.5L3 8l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    <span class="nav fwd"><svg viewBox="0 0 16 16"><path d="M3 8h9.5M8.5 3.5L13 8l-4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    <span class="nav reload"><svg viewBox="0 0 16 16"><path d="M13 8a5 5 0 1 1-1.6-3.7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M13.2 2.6v3.2H10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    <div class="omni">
+      <span class="site"><svg viewBox="0 0 16 16"><path d="M3 5.5h6M11.5 5.5H13M3 10.5h1.5M7 10.5h6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="10.2" cy="5.5" r="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="5.8" cy="10.5" r="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></span>
+      <span class="url"><b>pixelpets.demo</b><span class="path"></span></span>
+      <span class="star"><svg viewBox="0 0 16 16"><path d="M8 1.8l1.9 3.9 4.3.6-3.1 3 .7 4.3L8 11.6l-3.8 2 .7-4.3-3.1-3 4.3-.6z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg></span>
+    </div>
+    <img class="ext pets" src="/chrome/img/pixel-pets-16.png" alt="" />
+    <span class="ext puzzle"><svg viewBox="0 0 16 16"><path d="M3 5h2.3a1.7 1.7 0 1 1 3.4 0H11v2.3a1.7 1.7 0 1 1 0 3.4V13H8.7a1.7 1.7 0 1 0-3.4 0H3v-2.3a1.7 1.7 0 1 0 0-3.4z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg></span>
+    <span class="sep"></span>
+    <span class="avatar">AK</span>
+    <span class="kebab"><i></i><i></i><i></i></span>
+  </div>
+
+  <div class="bookmarks">
+    <span class="bm"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="#9aa0a6" stroke-width="1.3"/><path d="M2 8h12M8 2c2.2 2.3 2.2 9.7 0 12M8 2c-2.2 2.3-2.2 9.7 0 12" fill="none" stroke="#9aa0a6" stroke-width="1.1"/></svg>Team wiki</span>
+    <span class="bm"><svg viewBox="0 0 16 16"><path d="M1.5 4.5a1 1 0 0 1 1-1h3.6l1.4 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z" fill="none" stroke="#9aa0a6" stroke-width="1.3"/></svg>Recipes</span>
+    <span class="bm"><svg viewBox="0 0 16 16"><path d="M1.5 4.5a1 1 0 0 1 1-1h3.6l1.4 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z" fill="none" stroke="#9aa0a6" stroke-width="1.3"/></svg>Bills</span>
+    <span class="bm"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="#9aa0a6" stroke-width="1.3"/><path d="M2 8h12M8 2c2.2 2.3 2.2 9.7 0 12M8 2c-2.2 2.3-2.2 9.7 0 12" fill="none" stroke="#9aa0a6" stroke-width="1.1"/></svg>Trip ideas</span>
+    <span class="bm"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="#9aa0a6" stroke-width="1.3"/><path d="M2 8h12M8 2c2.2 2.3 2.2 9.7 0 12M8 2c-2.2 2.3-2.2 9.7 0 12" fill="none" stroke="#9aa0a6" stroke-width="1.1"/></svg>Plant care</span>
+    <span class="bm"><svg viewBox="0 0 16 16"><path d="M1.5 4.5a1 1 0 0 1 1-1h3.6l1.4 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z" fill="none" stroke="#9aa0a6" stroke-width="1.3"/></svg>Read later</span>
+    <span class="bm all"><svg viewBox="0 0 16 16"><path d="M1.5 4.5a1 1 0 0 1 1-1h3.6l1.4 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z" fill="none" stroke="#9aa0a6" stroke-width="1.3"/></svg>All bookmarks</span>
+  </div>
+</div>
+<script>
+  const PATHS = { inbox: '/inbox.html', review: '/review.html', sheet: '/sheet.html', article: '/article.html' };
+  const id = (location.hash || '#inbox').slice(1);
+  const tab = document.querySelector(`.tab[data-id="${id}"]`);
+  if (!PATHS[id] || !tab) throw new Error(`chrome.html: unknown page "${id}"`);
+  tab.classList.add('active');
+  document.querySelector('.url .path').textContent = PATHS[id];
+</script>
+</body>
+</html>

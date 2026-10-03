@@ -13,26 +13,21 @@ import type { Rect } from '../schema';
 export const HOLD_ZOOMS = [1, 2] as const;
 export type HoldZoom = (typeof HOLD_ZOOMS)[number];
 
-/** 16:9: how far above the frame bottom the floor line sits at output resolution (9:16: 460, the whole band). */
-export const FLOOR_MARGIN_OUTPUT_PX = 96;
-
 /** Stage geometry for one aspect ratio. Stage px == output px (crop is captured at 1:1 stage scale, then the camera magnifies it to the fixed output size). */
 export interface StageConfig {
   /** Stage width in stage px (== output width, since z=1 crop fills the frame). */
   width: number;
-  /** Stage height in stage px (== output height). */
+  /** Stage height in stage px (== output height); the pets stand on its bottom edge. */
   height: number;
-  /** Stage y where the pets' feet line sits (top of the cream floor band). */
-  floorLine: number;
-  /** Native px of the recording hidden above stage y 0 (16:9: the top 48 CSS px = 96 native; 9:16: none). */
-  pageTopNative: number;
+  /** Stage y of page CSS y 0: the browser chrome PNG fills stage y 0-pageY and the capture sits 1:1 below it (stage y = pageY + 2 x CSS y). */
+  pageY: number;
 }
 
-/** 16:9: page 1:1, top 48 CSS px hidden; stage y 0-984 is page, 984-1080 is the cream floor band. */
-export const STAGE_16X9: StageConfig = { width: 1920, height: 1080, floorLine: 984, pageTopNative: 96 };
+/** 16:9 (shots.json master.stage): chrome at stage y 0-208, the 1920x872 capture at y 208-1080. */
+export const STAGE_16X9: StageConfig = { width: 1920, height: 1080, pageY: 208 };
 
-/** 9:16: the 540x730 re-record shown 1:1 at canvas y 0-1460, cream band to 1920. */
-export const STAGE_9X16: StageConfig = { width: 1080, height: 1920, floorLine: 1460, pageTopNative: 0 };
+/** 9:16 (variants.vertical_9x16): chrome at canvas y 0-208, the 1080x1712 capture at y 208-1920. */
+export const STAGE_9X16: StageConfig = { width: 1080, height: 1920, pageY: 208 };
 
 export const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
@@ -40,11 +35,10 @@ export const clamp = (v: number, lo: number, hi: number): number => Math.min(hi,
  * The floor-anchored crop rectangle at zoom `z`, horizontally centred on
  * `focusX` (stage px) and clamped to the page edges.
  *
- * Per the storyboard: "at zoom z the crop is 1920/z x 1080/z stage px with
- * its bottom edge at stage y 984 + 96/z, so the floor line stays 96 output
- * px above the frame bottom at every zoom." Generalised here over
- * `StageConfig` so the same function serves both 16:9 and 9:16, whose
- * floor line and stage size differ.
+ * shots.json master.stage: there is no floor band, "pets stand on the
+ * frame bottom at every zoom", so at zoom z the crop is width/z x height/z
+ * stage px with its bottom edge on the stage bottom (16:9 2.0x: 960x540 at
+ * y 540; 9:16 2.0x: 540x960 at y 960).
  *
  * Crop rectangles are rounded to whole stage px (storyboard: "Crop
  * rectangles are rounded to whole stage px").
@@ -53,25 +47,14 @@ export function floorAnchoredCrop(stage: StageConfig, z: number, focusX: number)
   if (z <= 0) {
     throw new Error(`floorAnchoredCrop: zoom must be > 0, got ${z}`);
   }
-  const w = stage.width / z;
-  const h = stage.height / z;
-  // The band below the floor line keeps its OUTPUT height at every zoom: 96 px in 16:9 (984 + 96/z),
-  // 460 px in 9:16 (shots.json variants.vertical_9x16.camera.crop: "1460 + 460/z").
-  const bottom = stage.floorLine + (stage.height - stage.floorLine) / z;
-  const top = bottom - h;
-  const rawX = focusX - w / 2;
-  const x = clamp(rawX, 0, stage.width - w);
+  const w = Math.round(stage.width / z);
+  const h = Math.round(stage.height / z);
   return {
-    x: Math.round(x),
-    y: Math.round(top),
-    w: Math.round(w),
-    h: Math.round(h),
+    x: Math.round(clamp(focusX - w / 2, 0, stage.width - w)),
+    y: stage.height - h,
+    w,
+    h,
   };
-}
-
-/** The stage-px distance from the crop bottom to the floor line (x zoom = the band's output height: 96 in 16:9, 460 in 9:16). */
-export function floorMarginAtZoom(crop: Rect, stage: StageConfig): number {
-  return crop.y + crop.h - stage.floorLine;
 }
 
 // --- Eased pushes (bead pets-o3p.4, "Smooth eased push moves") ---------
@@ -122,8 +105,8 @@ export function pushEase(easing: PushEasing, u: number): number {
  * for the whole beat span without a separate steady-state branch).
  * Zoom and focus are eased independently on the same progress curve,
  * which is what "floor-anchored" pushes look like in the reference
- * (programatic-demo): the crop's floor margin (96/z output px) and
- * horizontal centre move together, never separately.
+ * (programatic-demo): the crop's bottom stays on the frame bottom while its
+ * size and horizontal centre move together.
  */
 export function easedFloorAnchoredCrop(
   stage: StageConfig,
