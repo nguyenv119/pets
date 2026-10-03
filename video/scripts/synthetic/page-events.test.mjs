@@ -163,6 +163,35 @@ describe('buildS1InboxObserved', () => {
       { t: 14403, kind: 'src', pet: 'rex', from: 'idle', to: 'swipe', x: 698 },
     ]);
   });
+  it("drops the fixture's catch-only events before the second wave, so heart_on resolves to the treat's heart", () => {
+    /**
+     * Verifies that s1_inbox keeps none of the fetch's events (heart_on,
+     * catch, ball_on, ball_off, ball_floor) logged before Rex's wave at 14403.
+     *
+     * This matters because anchors resolve to the FIRST matching event: the
+     * fixture's catch heart at 12104 would make b2b_treat's `heart_on` land
+     * before b2a_hover's `src:rex:swipe`, giving both beats empty or
+     * negative spans.
+     *
+     * If this breaks, the synthetic master has no hover or treat beat.
+     */
+    // GIVEN — the fetch's events at 8737-12104, then the treat's at 14729/14755
+    const template = [
+      { t: 8737, kind: 'ball_on' },
+      { t: 9000, kind: 'ball_floor' },
+      { t: 12104, kind: 'catch', pet: 'rex', x: 600 },
+      { t: 12104, kind: 'heart_on' },
+      { t: 12104, kind: 'ball_off' },
+      { t: 14403, kind: 'src', pet: 'rex', from: 'idle', to: 'swipe', x: 698 },
+      { t: 14729, kind: 'mouseup', pet: 'rex' },
+      { t: 14755, kind: 'heart_on' },
+    ];
+    // WHEN — building s1_inbox's observed[]
+    const result = buildS1InboxObserved(template);
+    // THEN — only the wave and the treat remain, and the first heart_on is 14755
+    expect(result.map((e) => `${e.kind}@${e.t}`)).toEqual(['src@14403', 'mouseup@14729', 'heart_on@14755']);
+    expect(result.find((e) => e.kind === 'heart_on').t).toBe(14755);
+  });
 });
 
 describe('buildS3SheetObserved', () => {

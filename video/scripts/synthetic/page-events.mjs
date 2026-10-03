@@ -96,9 +96,21 @@ export function buildPageTrackFrames({ observed, petIds, durationMs, stepMs = 40
  * fixture's SECOND wave at t=14403 instead of the first — the bead's
  * explicit remedy so b2a/b2b cover the real wave-and-treat frames
  * (mouseup:rex at 14729, heart_on at 14755) rather than the earlier greet.
+ * Also drops the fixture's catch-only events (heart_on, catch, ball_on,
+ * ball_off, ball_floor) before that wave: anchors resolve to the FIRST
+ * match, so the fetch's heart_on at 12104 would otherwise make
+ * `heart_on` land before the wave and give b2a/b2b empty spans.
  */
+const S1_SECOND_WAVE_T = 14403;
+/** The fixture's fetch (s2_review's action) logs these; an inbox take never does, and the first heart_on must be the treat's. */
+const S1_CATCH_ONLY_KINDS = new Set(['heart_on', 'catch', 'ball_on', 'ball_off', 'ball_floor']);
+
 export function buildS1InboxObserved(templateObserved) {
-  return templateObserved.filter((e) => !(e.kind === 'src' && e.pet === 'rex' && e.to === 'swipe' && e.t < 14403));
+  return templateObserved.filter(
+    (e) =>
+      !(e.kind === 'src' && e.pet === 'rex' && e.to === 'swipe' && e.t < S1_SECOND_WAVE_T) &&
+      !(S1_CATCH_ONLY_KINDS.has(e.kind) && e.t < S1_SECOND_WAVE_T),
+  );
 }
 
 /**
