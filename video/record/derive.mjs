@@ -34,16 +34,17 @@ function debounceOnOff(marks, base, windowMs) {
 }
 
 /**
- * Rebases every `t` in a raw capture onto recording-start (ms, >= 0):
- * `raw.recordStartT` (the moment observation began) when the raw log
- * carries one, else the clap-start release edge for legacy raw logs that
- * predate it (fixtures/raw.sample.json). Anchoring on the clap itself would
- * make an event that happens during the settle before the clap (a shot with
- * no initial hold can reach pets_ready, and react, before the clap fires)
- * rebase to a negative t.
+ * Rebases every `t` in a raw capture onto the start clapper's release edge
+ * (`raw.clapStart.tOff`): the events.json contract's t=0, so demo.mp4 time =
+ * trimBeforeMs + t, where trimBeforeMs is the video's own clapper release.
+ * Anything logged before the clapper (a boot greet, the first tracks) comes
+ * out negative; validateEvents
+ * allows observed[].t down to -trimBeforeMs. Every epoch time the raw log
+ * carries (hourSetT, petsReadyT, feedMouseupT) is shifted here,
+ * so nothing downstream picks its own origin.
  */
 function rebase(raw) {
-  const t0 = raw.recordStartT ?? raw.clapStart.tOff;
+  const t0 = raw.clapStart.tOff;
   const shift = (t) => t - t0;
   return {
     ...raw,
@@ -57,6 +58,8 @@ function rebase(raw) {
     clapStartMs: shift(raw.clapStart.tOff),
     clapEndMs: raw.clapEnd ? shift(raw.clapEnd.tOn) : undefined,
     hourSetMs: raw.hourSetT !== undefined ? shift(raw.hourSetT) : undefined,
+    petsReadyMs: raw.petsReadyT !== undefined ? shift(raw.petsReadyT) : undefined,
+    feedMouseupMs: raw.feedMouseupT !== undefined ? shift(raw.feedMouseupT) : undefined,
   };
 }
 
@@ -184,8 +187,9 @@ function deriveSleep(tracks, hourSetMs, roster) {
 /**
  * Derives an Events document (src/schema.ts) from one shot's raw capture
  * log. `context` supplies the fields the raw log itself does not carry:
- * name, viewport, capture, roster, shim, extensionId, url, durationMs,
- * offsetMs, trimBeforeMs, videoLagMs.
+ * name, viewport, capture, roster, shim, extensionId, url, offsetMs,
+ * trimBeforeMs, videoLagMs, and durationMs for a raw log with no end clapper
+ * (otherwise durationMs is the end clapper's onset, ms after the start one).
  */
 export function deriveEvents(raw, context) {
   const r = rebase(raw);
@@ -202,14 +206,17 @@ export function deriveEvents(raw, context) {
   const waveGreet = deriveWaveGreet(r.src, r.hover);
   const chaseStarts = deriveChaseStarts(r.src);
   const catches = deriveCatches(r.marks, r.tracks);
-  const eat = deriveEat(r.marks, context.feedMouseupMs);
+  const eat = deriveEat(r.marks, r.feedMouseupMs);
   const sleep = deriveSleep(r.tracks, r.hourSetMs, context.roster);
 
   const observed = [
     { t: r.clapStartMs, kind: 'clap' },
     ...(r.clapEndMs !== undefined ? [{ t: r.clapEndMs, kind: 'clap' }] : []),
     ...(context.firstPaintMs !== undefined ? [{ t: context.firstPaintMs, kind: 'first_paint' }] : []),
-    ...(context.petsReadyMs !== undefined ? [{ t: context.petsReadyMs, kind: 'pets_ready' }] : []),
+    ...(r.petsReadyMs !== undefined ? [{ t: r.petsReadyMs, kind: 'pets_ready' }] : []),
+    // The shim is in place from page load; it is marked at playback start
+    // (t=0), which is always inside demo.mp4. Observation start is not: it
+    // can precede the video's first frame, i.e. fall below -trimBeforeMs.
     { t: context.shimMs ?? 0, kind: 'shim' },
     ...observedSrc,
     ...waveGreet,
@@ -237,7 +244,7 @@ export function deriveEvents(raw, context) {
     ...(context.url ? { url: context.url } : {}),
     shim: context.shim,
     roster: context.roster,
-    durationMs: context.durationMs,
+    durationMs: r.clapEndMs ?? context.durationMs,
     offsetMs: context.offsetMs ?? 0,
     trimBeforeMs: context.trimBeforeMs ?? 0,
     videoLagMs: context.videoLagMs,

@@ -80,8 +80,8 @@ export function findFirstHeartFrame(frames, sinceMs, threshold = HEART_YMAX_THRE
  * Measures videoLagMs (bead step 9): the gap between a logged catch/eat
  * event and the first video frame that actually shows the heart it
  * produced. `heartMaskSignalStatsText` is ffmpeg signalstats output over
- * HEART_MASK_FILTER; `sinceMs` is the logged catch/eat event's t (Events
- * timeline, ms). Returns null if no heart frame is found after `sinceMs`
+ * HEART_MASK_FILTER; `sinceMs` is the logged catch/eat event's demo.mp4 time
+ * (demoMsOf(trimBeforeMs, t)). Returns null if no heart frame is found after `sinceMs`
  * (a heart-less take, or a take whose heart never rendered).
  */
 export function measureVideoLagFromHeart({ heartMaskSignalStatsText, sinceMs }) {
@@ -127,7 +127,7 @@ function changedPixels(a, b) {
 /**
  * Measures videoLagMs from a visible change instead of a heart (bead step
  * 9's rule, applied to the popup take's own typed text): the first frame at
- * or after `sinceMs` (the logged event, Events timeline ms) whose crop
+ * or after `sinceMs` (the logged event's demo.mp4 time, demoMsOf) whose crop
  * differs from the comparison frame in at least CHANGE_MIN_PX pixels, minus
  * `sinceMs`. The comparison frame is the last one a full frame period before
  * `sinceMs`, because the 25 fps resample can already show the change in the
@@ -146,6 +146,34 @@ export function measureVideoLagFromChange({ frames, sinceMs }) {
 }
 
 /**
+ * The demo.mp4 time (ms) of an events.json time `t`: events are ms after the
+ * start clapper's release, and trimBeforeMs is that release's own time in
+ * demo.mp4. The epic eval and the edit place every event here (plus
+ * videoLagMs), so the recorders measure videoLagMs from here too: then
+ * demoMsOf(trimBeforeMs, t) + videoLagMs is the frame that shows the event.
+ */
+export function demoMsOf(trimBeforeMs, t) {
+  return trimBeforeMs + t;
+}
+
+function clapperRuns(signalStatsText) {
+  const runs = findMagentaRuns(parseSignalStats(signalStatsText));
+  if (runs.length < 2) {
+    throw new Error(`expected 2 magenta clapper runs (start, end), found ${runs.length}`);
+  }
+  return { startRun: runs[0], endRun: runs[runs.length - 1] };
+}
+
+/**
+ * trimBeforeMs on its own: the demo.mp4 time of the start clapper's release
+ * edge, where playback starts and events.json's t=0 sits. Needs no lag, so a
+ * recorder reads it first and measures videoLagMs at demoMsOf(trimBeforeMs, t).
+ */
+export function findTrimBeforeMs(signalStatsText) {
+  return clapperRuns(signalStatsText).startRun.releaseT * 1000;
+}
+
+/**
  * Computes trimBeforeMs (how much of the assembled mp4's front to trim so
  * playback starts at the start clapper's release edge) and the clapper
  * check: |endClapResidualMs + videoLagMs| <= 40ms (one frame at 25fps).
@@ -153,21 +181,17 @@ export function measureVideoLagFromChange({ frames, sinceMs }) {
  * each clap's release (raw capture's clapStart.tOff/clapEnd.tOff).
  */
 export function computeSync({ signalStatsText, startClapLoggedMs, endClapLoggedMs, videoLagMs }) {
-  const frames = parseSignalStats(signalStatsText);
-  const runs = findMagentaRuns(frames);
-  if (runs.length < 2) {
-    throw new Error(`expected 2 magenta clapper runs (start, end), found ${runs.length}`);
-  }
-  const startRun = runs[0];
-  const endRun = runs[runs.length - 1];
+  const { startRun, endRun } = clapperRuns(signalStatsText);
 
   const trimBeforeMs = startRun.releaseT * 1000;
   const videoDurationMs = endRun.releaseT * 1000 - startRun.releaseT * 1000;
   const loggedDurationMs = endClapLoggedMs - startClapLoggedMs;
   // Positive means the logged (page-clock) gap between the two claps is
-  // wider than the video's own gap between their release edges — i.e. the
-  // video render lagged the page clock, which videoLagMs (measured
-  // separately from a heart's on-screen delay) is expected to explain.
+  // wider than the video's own gap between their release edges. videoLagMs
+  // is measured on demo.mp4's axis (trimBeforeMs + t) from a heart or the
+  // typed "P", so the start clap cancels out of the corrected residual:
+  // what the 40 ms gate really tests is that the lag event and the end clap
+  // render with the same delay.
   const endClapResidualMs = loggedDurationMs - videoDurationMs;
   const correctedResidualMs = endClapResidualMs + videoLagMs;
 

@@ -28,6 +28,10 @@ function firstObserved(events, kind, pred = () => true) {
   return events.observed.find((e) => e.kind === kind && pred(e));
 }
 
+// t=0 is the start clapper's release, not page load, so a take with no
+// pets_ready fails a rule timed from it instead of timing it from 0.
+const NO_PETS_READY = 'no pets_ready observed';
+
 function fail(rule, detail) {
   return { rule, pass: false, detail };
 }
@@ -56,7 +60,8 @@ function evalFirstTransition(rule, m, events) {
   const [, petName, transition, lo, hi] = m;
   const pet = findRosterPet(events, petName);
   if (!pet) return fail(rule, `no roster entry named "${petName}"`);
-  const readyT = firstObserved(events, 'pets_ready')?.t ?? 0;
+  const readyT = firstObserved(events, 'pets_ready')?.t;
+  if (readyT === undefined) return fail(rule, NO_PETS_READY);
   // walkLeft/walkRight both render the `walk` gif; direction is not carried
   // by the frozen schema, so this checks the walk transition's timing only.
   const gif = transition.toLowerCase().startsWith('walk') ? 'walk' : transition.toLowerCase();
@@ -154,7 +159,8 @@ const RE_DBLCLICK_TARGET = /^elementFromPoint at \((\d+), (\d+)\) is div#dbl-zon
 
 function evalDblclickTarget(rule, m, events) {
   const [, , , withinMs] = m;
-  const readyT = firstObserved(events, 'pets_ready')?.t ?? 0;
+  const readyT = firstObserved(events, 'pets_ready')?.t;
+  if (readyT === undefined) return fail(rule, NO_PETS_READY);
   const dblclick = events.observed.find((e) => e.kind === 'dblclick');
   if (!dblclick) return fail(rule, 'no dblclick observed');
   const delta = dblclick.t - readyT;
@@ -229,7 +235,8 @@ function evalGreetStart(rule, m, events) {
   const petA = findRosterPet(events, petAName);
   const petB = findRosterPet(events, petBName);
   if (!petA || !petB) return fail(rule, `roster missing ${petAName} or ${petBName}`);
-  const readyT = firstObserved(events, 'pets_ready')?.t ?? 0;
+  const readyT = firstObserved(events, 'pets_ready')?.t;
+  if (readyT === undefined) return fail(rule, NO_PETS_READY);
   const starts = events.observed.filter((e) => e.kind === 'greet_start' && (e.pet === petA.id || e.pet === petB.id));
   if (starts.length < 2) return fail(rule, `only ${starts.length} greet_start events for ${petAName}/${petBName}`);
   const delta = Math.max(...starts.map((e) => e.t)) - readyT;
@@ -253,7 +260,8 @@ const RE_ALL_IDLE_UNTIL_OUT = /^all three pets show the idle sprite from greet_e
 
 function evalAllIdleUntilOut(rule, m, events) {
   const outOffset = Number(m[1]);
-  const readyT = firstObserved(events, 'pets_ready')?.t ?? 0;
+  const readyT = firstObserved(events, 'pets_ready')?.t;
+  if (readyT === undefined) return fail(rule, NO_PETS_READY);
   const greetEndT = firstObserved(events, 'greet_end')?.t;
   if (greetEndT === undefined) return fail(rule, 'no greet_end observed');
   const outT = readyT + outOffset;

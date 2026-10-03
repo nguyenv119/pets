@@ -56,7 +56,7 @@ describe('deriveEvents', () => {
     // GIVEN — the proof render, where Rex ("a", dog/brown) and Bao ("b", panda/black) both switch walk->swipe at
     // t=1790454917337.5 unhovered, then both switch swipe->walk at t=1790454918388.9 (absolute page ms)
     const raw = fromLegacyProofRaw(rawSample);
-    const t0 = raw.recordStartT ?? raw.clapStart.tOff;
+    const t0 = raw.clapStart.tOff;
 
     // WHEN — events are derived
     const events = deriveEvents(raw, baseContext());
@@ -160,5 +160,107 @@ describe('_internal.debounceOnOff', () => {
     // THEN — only the two genuine appearances remain (the flickered pair at 40/60 is dropped)
     const onEvents = result.filter((m) => m.kind === 'heart_on');
     expect(onEvents.map((m) => m.t)).toEqual([0, 5000]);
+  });
+});
+
+describe('deriveEvents time origin', () => {
+  /**
+   * Builds a raw capture whose start clapper releases (tOff) at epoch
+   * 10700: every expected t below is an epoch time minus 10700.
+   */
+  function rawWithClapAt10700(overrides = {}) {
+    return {
+      clapStart: { tOn: 10540, tOff: 10700 },
+      clapEnd: { tOn: 14700, tOff: 14860 },
+      petsReadyT: 10200,
+      feedMouseupT: 12000,
+      hourSetT: 13000,
+      src: [{ t: 10300, pet: 'rex', from: 'idle', to: 'walk' }],
+      hover: [],
+      mouse: [{ t: 11500, kind: 'mousedown', x: 5, y: 6 }],
+      cursor: [{ t: 10100, x: 1, y: 2 }, { t: 11000, x: 3, y: 4 }],
+      tracks: [{ t: 10050, pets: [{ id: 'rex', x: 0, y: 0, w: 64, h: 64, src: 'assets/dog/brown_idle_8fps.gif' }] }],
+      marks: [{ t: 12100, kind: 'heart_on', x: 10, y: 10 }],
+      clicks: [{ label: 'click-rex', kind: 'click', tMs: 12000, tDepartMs: 11800, tDownMs: 11900, x: 1, y: 1, rect: { x: 0, y: 0, w: 1, h: 1 }, pet: 'rex' }],
+      ...overrides,
+    };
+  }
+  const rexRoster = [{ id: 'rex', name: 'Rex', type: 'dog', color: 'brown' }];
+
+  it('puts the start clapper release at t=0', () => {
+    /**
+     * Verifies that t=0 is the start clapper's release (clapStart.tOff), the
+     * origin the events.json contract and the epic eval share: demo.mp4 time
+     * = trimBeforeMs + t, and trimBeforeMs is the video's own clapper release.
+     * If t=0 were capture start instead, every event would land about
+     * trimBeforeMs late in the eval and in the edit.
+     */
+    // GIVEN — a raw log whose start clapper releases 700 ms after observation began
+    const raw = rawWithClapAt10700();
+
+    // WHEN — events are derived
+    const events = deriveEvents(raw, baseContext({ roster: rexRoster }));
+
+    // THEN — the first clap is at exactly 0
+    expect(events.observed.filter((e) => e.kind === 'clap').map((e) => e.t)).toEqual([0, 4000]);
+  });
+
+  it('gives an event logged before the start clapper a negative t', () => {
+    /**
+     * Verifies that pets_ready and a src transition logged during the settle
+     * before the clapper come out negative (ms before the clapper), which
+     * validateEvents allows down to -trimBeforeMs. Clamping or re-anchoring
+     * them would move them off the frame that actually shows them.
+     */
+    // GIVEN — pets_ready 500 ms and Rex's walk 400 ms before the clapper releases
+    const raw = rawWithClapAt10700();
+
+    // WHEN — events are derived
+    const events = deriveEvents(raw, baseContext({ roster: rexRoster }));
+
+    // THEN — both are negative by exactly those amounts
+    const at = (kind) => events.observed.find((e) => e.kind === kind)?.t;
+    expect(at('pets_ready')).toBe(-500);
+    expect(at('src')).toBe(-400);
+  });
+
+  it('measures clicks, cursorTrack, tracks, hour_set, the feed mouseup and durationMs from the start clapper', () => {
+    /**
+     * Verifies that every recorder-relative time in the document shares the
+     * one origin, not just observed[]: the eval places click points, cursor
+     * samples and pet boxes on demo.mp4 with the same trimBeforeMs + t rule,
+     * and durationMs bounds observed[].t in validateEvents. A field left on
+     * the old origin would put its pet box or cursor ~700 ms off.
+     */
+    // GIVEN — the same raw log
+    const raw = rawWithClapAt10700();
+
+    // WHEN — events are derived
+    const events = deriveEvents(raw, baseContext({ roster: rexRoster }));
+
+    // THEN — each field is its epoch time minus 10700
+    expect(events.clicks[0]).toMatchObject({ tMs: 1300, tDepartMs: 1100, tDownMs: 1200 });
+    expect(events.cursorTrack.map((c) => c.t)).toEqual([-600, 300]);
+    expect(events.tracks.map((f) => f.t)).toEqual([-650]);
+    expect(events.observed.find((e) => e.kind === 'hour_set')?.t).toBe(2300);
+    expect(events.observed.find((e) => e.kind === 'eat')?.t).toBe(1400);
+    expect(events.durationMs).toBe(4000);
+  });
+
+  it('marks the shim at playback start, t=0', () => {
+    /**
+     * Verifies the synthetic shim mark sits at t=0. Observation can start
+     * before demo.mp4's first frame (on the real popup take, by about 11 ms),
+     * so a mark at observation start could fall below -trimBeforeMs and fail
+     * validateEvents on an otherwise good take.
+     */
+    // GIVEN — the same raw log
+    const raw = rawWithClapAt10700();
+
+    // WHEN — events are derived
+    const events = deriveEvents(raw, baseContext({ roster: rexRoster }));
+
+    // THEN — the shim mark is at 0
+    expect(events.observed.find((e) => e.kind === 'shim')?.t).toBe(0);
   });
 });

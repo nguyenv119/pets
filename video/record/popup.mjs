@@ -12,7 +12,7 @@ import { evaluateRules } from './accept.mjs';
 import { assembleFrames, extractGrayCrop, generateSignalStats, probeVideo } from './assemble.mjs';
 import { installClap } from './clap.js';
 import { startScreencast } from './screencast.mjs';
-import { computeSync, measureVideoLagFromChange, splitGrayFrames } from './sync.mjs';
+import { computeSync, demoMsOf, findTrimBeforeMs, measureVideoLagFromChange, splitGrayFrames } from './sync.mjs';
 import { VIDEO_LAG_MAX_MS } from './video-lag.mjs';
 
 const CLAP_MS = 160;
@@ -233,7 +233,6 @@ async function captureOnePopupTake({ shot, ext, timezoneId, homeDaysOverride, do
 
     await page.evaluate(installPopupObserver);
     await page.evaluate(installClap);
-    const recordStartT = await pageNow(page);
 
     await waitPopupReady(page, shot.layout_expect, 5000);
     const layout = await assertLayout(page, shot.layout_expect);
@@ -274,7 +273,6 @@ async function captureOnePopupTake({ shot, ext, timezoneId, homeDaysOverride, do
       workDir,
       frames: screencast.frames,
       extensionId,
-      recordStartT,
       clapStart,
       clapEnd,
       popupReadyT,
@@ -295,7 +293,7 @@ async function captureOnePopupTake({ shot, ext, timezoneId, homeDaysOverride, do
  * lands outside the epic eval's 0-VIDEO_LAG_MAX_MS bound: a lag out there is
  * a recorder bug to fix, never a value to write (bead step 9).
  */
-function measurePopupLag({ take, mp4Path, dpr, fps, shift }) {
+function measurePopupLag({ take, mp4Path, dpr, fps, trimBeforeMs }) {
   const first = take.nameInputs[0];
   if (!first) return { reject: 'no input event on #pet-name to measure videoLagMs from' };
   // Inset 3 CSS px inside the field so its 1 px border, whose colour
@@ -308,14 +306,59 @@ function measurePopupLag({ take, mp4Path, dpr, fps, shift }) {
     h: Math.round((first.rect.h - 2 * inset) * dpr),
   };
   const frames = splitGrayFrames(extractGrayCrop(mp4Path, crop), { width: crop.w, height: crop.h, fps });
-  const sinceMs = shift(first.t);
+  // The keystroke's demo.mp4 time (trimBeforeMs + its events.json t), where
+  // the epic eval and the edit place it, so that time + videoLagMs is the
+  // frame that shows the "P".
+  const sinceMs = demoMsOf(trimBeforeMs, msAfterStartClap(take, first.t));
   const videoLagMs = measureVideoLagFromChange({ frames, sinceMs });
-  const source = `measured from the typed "${first.value}" in #pet-name, logged at ${sinceMs.toFixed(1)}ms`;
-  if (videoLagMs === null) return { reject: `the typed "${first.value}" never showed in #pet-name after ${sinceMs.toFixed(1)}ms` };
+  const source = `measured from the typed "${first.value}" in #pet-name, logged at demo.mp4 ${sinceMs.toFixed(1)}ms`;
+  if (videoLagMs === null) return { reject: `the typed "${first.value}" never showed in #pet-name after demo.mp4 ${sinceMs.toFixed(1)}ms` };
   if (videoLagMs < 0 || videoLagMs > VIDEO_LAG_MAX_MS) {
     return { reject: `videoLagMs ${videoLagMs.toFixed(1)}ms outside the epic eval's 0-${VIDEO_LAG_MAX_MS}ms bound (${source})` };
   }
   return { videoLagMs, source };
+}
+
+/** ms after the take's start clapper release (events.json's t=0) of an epoch time logged in the popup. */
+function msAfterStartClap(take, epochMs) {
+  return epochMs - take.clapStart.tOff;
+}
+
+/**
+ * Builds the s2b_shelter Events document from one captured take, every time
+ * in ms after the start clapper's release (the events.json contract: demo.mp4
+ * time = trimBeforeMs + t). Tracks logged before the clapper (logPopupRects
+ * starts during the settle) are negative. trimBeforeMs and videoLagMs are
+ * placeholders here; recordPopupTake fills them from the assembled video.
+ */
+export function buildPopupEvents({ take, shot, doc }) {
+  const shift = (t) => msAfterStartClap(take, t);
+  const tracks = take.tracks.map((f) => ({ t: shift(f.t), cells: f.cells, els: f.els }));
+  const observed = [
+    { t: shift(take.clapStart.tOff), kind: 'clap' },
+    { t: shift(take.clapEnd.tOn), kind: 'clap' },
+    { t: shift(take.popupReadyT), kind: 'popup_ready' },
+    ...take.observed.map((e) => ({ ...e, t: shift(e.t) })),
+  ].sort((a, b) => a.t - b.t);
+
+  return {
+    name: 's2b_shelter',
+    viewport: { width: shot.viewport.width, height: shot.viewport.height },
+    capture: { method: 'cdp-screencast', dpr: shot.viewport.device_scale_factor ?? 2, fps: doc.fps ?? 25 },
+    recordedAt: take.clapStart.tOff,
+    extensionId: take.extensionId,
+    url: `chrome-extension://${take.extensionId}/popup/popup.html`,
+    shim: 'fixture',
+    roster: shot.seed.roster,
+    durationMs: shift(take.clapEnd.tOn),
+    offsetMs: 0,
+    trimBeforeMs: 0,
+    videoLagMs: 0,
+    cursorTrack: [],
+    clicks: [],
+    observed,
+    tracks,
+  };
 }
 
 /** Records the s2b_shelter take once (no seed search) and writes build/<run>/s2b_shelter/{demo.mp4,events.json}. */
@@ -335,35 +378,7 @@ export async function recordPopupTake({ shot, doc, ext, opts, runId, buildDir })
       throw err;
     }
 
-    const t0 = take.recordStartT;
-    const shift = (t) => t - t0;
-
-    const tracks = take.tracks.map((f) => ({ t: shift(f.t), cells: f.cells, els: f.els }));
-    const observed = [
-      { t: shift(take.clapStart.tOff), kind: 'clap' },
-      { t: shift(take.clapEnd.tOn), kind: 'clap' },
-      { t: shift(take.popupReadyT), kind: 'popup_ready' },
-      ...take.observed.map((e) => ({ ...e, t: shift(e.t) })),
-    ].sort((a, b) => a.t - b.t);
-
-    const events = {
-      name: 's2b_shelter',
-      viewport: { width: shot.viewport.width, height: shot.viewport.height },
-      capture: { method: 'cdp-screencast', dpr: shot.viewport.device_scale_factor ?? 2, fps: doc.fps ?? 25 },
-      recordedAt: take.clapStart.tOff,
-      extensionId: take.extensionId,
-      url: `chrome-extension://${take.extensionId}/popup/popup.html`,
-      shim: 'fixture',
-      roster: shot.seed.roster,
-      durationMs: shift(take.clapEnd.tOn),
-      offsetMs: 0,
-      trimBeforeMs: 0,
-      videoLagMs: 0,
-      cursorTrack: [],
-      clicks: [],
-      observed,
-      tracks,
-    };
+    const events = buildPopupEvents({ take, shot, doc });
 
     const ctx = { layoutExpect: shot.layout_expect };
     const results = evaluateRules(shot.accept, events, ctx);
@@ -398,11 +413,13 @@ export async function recordPopupTake({ shot, doc, ext, opts, runId, buildDir })
 
     const dumpPath = join(take.workDir, 'sig.txt');
     const sig = generateSignalStats(mp4Path, dumpPath);
+    const trimBeforeMs = findTrimBeforeMs(sig);
     // s2b_shelter has no heart, so it measures its own lag the way record.mjs
     // measures the heart's: the first demo.mp4 frame at or after the logged
     // first keystroke whose #pet-name field shows the typed "P", minus the
-    // logged time. A borrowed page-shot lag does not describe this capture.
-    const lag = measurePopupLag({ take, mp4Path, dpr, fps: doc.fps ?? 25, shift });
+    // keystroke's demo.mp4 time. A borrowed page-shot lag does not describe
+    // this capture.
+    const lag = measurePopupLag({ take, mp4Path, dpr, fps: doc.fps ?? 25, trimBeforeMs });
     if (lag.reject) {
       rmSync(take.workDir, { recursive: true, force: true });
       rejections.push(lag.reject);

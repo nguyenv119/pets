@@ -4,8 +4,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   computeSync,
+  demoMsOf,
   findFirstHeartFrame,
   findMagentaRuns,
+  findTrimBeforeMs,
   measureVideoLagFromChange,
   measureVideoLagFromHeart,
   parseSignalStats,
@@ -305,5 +307,59 @@ describe('splitGrayFrames / measureVideoLagFromChange', () => {
 
     // THEN — null
     expect(lag).toBeNull();
+  });
+
+  it('demoMsOf: puts a lag measured at trimBeforeMs + t on the frame that shows the event', () => {
+    /**
+     * Verifies the axis a recorder measures videoLagMs on: the eval and the
+     * edit expect an event on screen at demo.mp4 time trimBeforeMs + t +
+     * videoLagMs, with t counted from the start clapper. Measuring from
+     * capture start instead (the old origin) puts that prediction a few ms
+     * away from the real frame, enough to cross a 40 ms frame boundary.
+     */
+    // GIVEN — the real popup take's numbers: the start clapper released 690.8 ms and the typed "P" 2683.5 ms
+    // after capture start, demo.mp4's clapper release at 680 ms, and the "P" first visible in the 2680 ms frame
+    const trimBeforeMs = 680;
+    const t = 2683.5 - 690.8;
+    const grays = [];
+    for (let n = 0; n < 80; n++) grays.push(n * 40 >= 2680 ? field({ glyphPx: 333 }) : field());
+    const frames = framesOf(grays);
+
+    // WHEN — the lag is measured at demoMsOf(trimBeforeMs, t)
+    const lag = measureVideoLagFromChange({ frames, sinceMs: demoMsOf(trimBeforeMs, t) });
+
+    // THEN — trimBeforeMs + t + lag lands exactly on the 2680 ms frame
+    expect(trimBeforeMs + t + lag).toBeCloseTo(2680, 6);
+  });
+});
+
+describe('findTrimBeforeMs', () => {
+  it('reads the start clapper release from the video alone, matching computeSync', () => {
+    /**
+     * Verifies that trimBeforeMs (demo.mp4 time of the start clapper's
+     * release, the events.json t=0) can be read before any lag is known. The
+     * recorders need it first: a lag is measured at demo.mp4 time
+     * trimBeforeMs + t. If the two disagreed, the lag and the edit would sit
+     * on different axes.
+     */
+    // GIVEN — the proof render's real signalstats output
+    // WHEN — trimBeforeMs is read on its own
+    const trimBeforeMs = findTrimBeforeMs(sigSample);
+
+    // THEN — 1080 ms, the same value computeSync reports for the same video
+    expect(trimBeforeMs).toBe(1080);
+    expect(trimBeforeMs).toBe(computeSync({ signalStatsText: sigSample, startClapLoggedMs: 0, endClapLoggedMs: 0, videoLagMs: 0 }).trimBeforeMs);
+  });
+
+  it('throws when the video has fewer than two clapper runs', () => {
+    /**
+     * A take with no visible end clapper cannot be synced. Returning the
+     * first run's release anyway would hide a broken capture.
+     */
+    // GIVEN — signalstats with one magenta run only
+    const text = [0, 1, 2, 3].map((n) => `frame:${n} pts:${n} pts_time:${n * 0.04}\nlavfi.signalstats.SATMIN=${n === 1 ? 200 : 0}`).join('\n');
+
+    // WHEN / THEN — it throws
+    expect(() => findTrimBeforeMs(text)).toThrow(/expected 2 magenta clapper runs/);
   });
 });

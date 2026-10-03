@@ -22,7 +22,7 @@ import { deriveEvents } from './derive.mjs';
 import { installObservers } from './observe.js';
 import { recordPopupTake } from './popup.mjs';
 import { startScreencast } from './screencast.mjs';
-import { computeSync, HEART_MASK_FILTER, measureVideoLagFromHeart } from './sync.mjs';
+import { computeSync, demoMsOf, findTrimBeforeMs, HEART_MASK_FILTER, measureVideoLagFromHeart } from './sync.mjs';
 import { fallbackVideoLagMs, keptHeartLagsMs, VIDEO_LAG_MAX_MS } from './video-lag.mjs';
 
 const VIDEO_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -153,12 +153,9 @@ async function captureOneTake({ shot, aspect, viewport, seedValue, ext, setDir, 
     await page.goto(url, { waitUntil: 'load' });
     await page.evaluate(installObservers, seedDoc.roster);
     await page.evaluate(installClap);
-    // recordStartT anchors t=0 for the derived Events document: the moment
-    // observation begins, not the clap's release edge. A shot with no
-    // initial hold can reach pets_ready (and any immediate reaction, e.g.
-    // greet) before the 500ms settle below completes, which would rebase to
-    // a negative t if t=0 were the (necessarily later) clap release instead.
-    const recordStartT = await page.evaluate(() => performance.timeOrigin + performance.now());
+    // derive.mjs puts t=0 at the start clapper's release (the events.json
+    // contract), so anything a shot logs during this 500ms settle (a boot
+    // greet, the first tracks) comes out negative.
     await new Promise((r) => setTimeout(r, 500));
 
     const clapStart = await page.evaluate(([label, ms]) => window.__clap(label, ms), ['start', CLAP_MS]);
@@ -182,7 +179,6 @@ async function captureOneTake({ shot, aspect, viewport, seedValue, ext, setDir, 
       workDir,
       frames: screencast.frames,
       raw: {
-        recordStartT,
         clapStart,
         clapEnd,
         src: pp.src,
@@ -193,12 +189,12 @@ async function captureOneTake({ shot, aspect, viewport, seedValue, ext, setDir, 
         marks: pp.marks,
         clicks: choreoResult.clicks,
         hourSetT: choreoResult.hourSetMs,
+        petsReadyT: choreoResult.petsReadyMs,
+        feedMouseupT: choreoResult.feedMouseupMs,
       },
       context: {
         extensionId,
         roster: seedDoc.roster,
-        feedMouseupMs: choreoResult.feedMouseupMs,
-        petsReadyMs: choreoResult.petsReadyMs,
       },
       shim,
       routeLog,
@@ -259,7 +255,6 @@ async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId })
     }
 
     const shim = take.shim;
-    const t0 = take.raw.recordStartT;
     const events = deriveEvents(take.raw, {
       name: `${shot.id}_${aspect === '16:9' ? '16x9' : '9x16'}`,
       viewport: { width: viewport.width, height: viewport.height },
@@ -267,10 +262,7 @@ async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId })
       extensionId: take.context.extensionId,
       shim,
       roster: take.context.roster,
-      durationMs: take.raw.clapEnd.tOn - t0,
       videoLagMs: 56,
-      feedMouseupMs: take.context.feedMouseupMs !== undefined ? take.context.feedMouseupMs - t0 : undefined,
-      petsReadyMs: take.context.petsReadyMs !== undefined ? take.context.petsReadyMs - t0 : undefined,
     });
 
     const results = evaluateShotRules(shot.accept ?? [], extraRules, events);
@@ -310,10 +302,14 @@ async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId })
 
     const dumpPath = join(take.workDir, 'sig.txt');
     const sig = generateSignalStats(mp4Path, dumpPath);
+    const trimBeforeMs = findTrimBeforeMs(sig);
 
     // videoLagMs (bead step 9): the gap between a logged catch/eat event and
     // the first video frame that actually shows the heart it produced,
-    // measured for real over this take's own assembled mp4 (not borrowed).
+    // measured for real over this take's own assembled mp4 (not borrowed),
+    // from the event's demo.mp4 time trimBeforeMs + t: the time the epic
+    // eval and the edit place it at, so that time + videoLagMs is the frame
+    // that shows the heart.
     const heartAnchor = events.observed.find((e) => e.kind === 'eat') ?? events.observed.find((e) => e.kind === 'catch');
     let videoLagMs;
     let videoLagSource;
@@ -321,7 +317,7 @@ async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId })
     if (heartAnchor) {
       const heartDumpPath = join(take.workDir, 'heart.txt');
       const heartSig = generateSignalStats(mp4Path, heartDumpPath, HEART_MASK_FILTER);
-      const measured = measureVideoLagFromHeart({ heartMaskSignalStatsText: heartSig, sinceMs: heartAnchor.t });
+      const measured = measureVideoLagFromHeart({ heartMaskSignalStatsText: heartSig, sinceMs: demoMsOf(trimBeforeMs, heartAnchor.t) });
       if (measured !== null) {
         videoLagMs = measured;
         videoLagSource = `measured from the heart after ${heartAnchor.kind}`;
