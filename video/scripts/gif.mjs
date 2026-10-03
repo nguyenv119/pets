@@ -18,7 +18,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, statSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { basename, join, relative } from 'node:path';
 import { buildGifScenes } from '../src/remotion/gifScenes.ts';
 import { sampleCursor } from '../src/remotion/Cursor.tsx';
 import { CHECK_THRESHOLDS } from '../src/remotion/checks.ts';
@@ -405,7 +405,7 @@ export function makeGif({ runDir, framesDir = FRAMES_DIR, outPath = GIF_PATH, ma
     return sprites.get(path);
   };
   const gate = colourGate({ scenes, fps, totalFrames: Math.min(totalFrames, gifFrames.length), eventsByShotId, frameAt: (k) => gifFrames[k], loadSprite });
-  const report = { bytes, seconds, width: v.width, height: v.height, frames: gifFrames.length, specFailures: failures, gate };
+  const report = { path: outPath, bytes, seconds, width: v.width, height: v.height, frames: gifFrames.length, specFailures: failures, gate };
   const all = [...failures, ...gate.failures];
   if (all.length) {
     const err = new Error(`gif: ${all.slice(0, 8).join('; ')}${all.length > 8 ? `; and ${all.length - 8} more` : ''}`);
@@ -419,7 +419,7 @@ export function describeReport(r) {
   const g = r.gate;
   const skipped = Object.entries(g.skipped).map(([k, n]) => `${k} ${n}`).join(', ') || 'none';
   const at = g.worstAt ? ` at frame ${g.worstAt.k} (${g.worstAt.shotId}, sprite frame ${g.worstAt.frame}${g.worstAt.flip ? ' flipped' : ''}, shift ${g.worstAt.dx},${g.worstAt.dy}, ${g.worstAt.n} px)` : '';
-  return `gif: out/pixel-pets.gif ${r.width}x${r.height} ${r.seconds.toFixed(2)} s ${r.frames} frames ${(r.bytes / 1e6).toFixed(2)} MB; colour gate: ${g.judged} frames judged, worst Rex error ${g.worst} RGB units${at} (limit ${MAX_COLOUR_ERROR}); skipped: ${skipped}`;
+  return `gif: ${relative(VIDEO_DIR, r.path)} ${r.width}x${r.height} ${r.seconds.toFixed(2)} s ${r.frames} frames ${(r.bytes / 1e6).toFixed(2)} MB; colour gate: ${g.judged} frames judged, worst Rex error ${g.worst} RGB units${at} (limit ${MAX_COLOUR_ERROR}); skipped: ${skipped}`;
 }
 
 if (isMain(import.meta.url)) {
