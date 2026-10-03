@@ -414,3 +414,51 @@ describe('9:16 base-rule replacement (mergeAcceptRules / evaluateShotRules)', ()
     expect(() => mergeAcceptRules(s2.accept, [badExtra])).toThrow();
   });
 });
+
+describe('rules timed from pets_ready', () => {
+  /** The families that time something from pets_ready, and every rule text the recorder can see in them. */
+  const READY_FAMILIES = ['evalAllIdleUntilOut', 'evalDblclickTarget', 'evalFirstTransition', 'evalGreetStart'];
+  const readyRules = [...allRuleTexts].filter((r) => READY_FAMILIES.includes(familyNameForRule(r)));
+
+  it('covers at least one rule of each pets_ready family', () => {
+    /**
+     * Guards the test below against passing vacuously: if shots.json ever
+     * dropped every pets_ready rule, the next test would check nothing.
+     */
+    // GIVEN / WHEN — the pets_ready rules' evaluator names
+    const families = new Set(readyRules.map((r) => familyNameForRule(r)));
+
+    // THEN — all four pets_ready families are present
+    expect([...families].sort()).toEqual(READY_FAMILIES);
+  });
+
+  it('fails a rule timed from pets_ready when the take logged no pets_ready', () => {
+    /**
+     * Verifies that a missing pets_ready fails the rule instead of falling
+     * back to t=0. t=0 is the start clapper's release, about 500 ms after the
+     * page is ready, so a silent fallback would time the rule from the wrong
+     * moment and could pass or fail a take for no real reason.
+     */
+    // GIVEN — an events document with a greet, a walk, a dblclick and tracks, but no pets_ready
+    const events = wrap({
+      roster: rosterOf('Rex', 'Pip', 'Bao'),
+      observed: [
+        { t: 10, kind: 'greet_start', pet: 'rex' },
+        { t: 10, kind: 'greet_start', pet: 'pip' },
+        { t: 50, kind: 'greet_end' },
+        { t: 60, kind: 'src', pet: 'rex', from: 'idle', to: 'walk' },
+        { t: 70, kind: 'dblclick' },
+      ],
+      tracks: [{ t: 100, pets: [{ id: 'rex', x: 0, y: 0, w: 1, h: 1, src: 'x_idle_y' }] }],
+    });
+
+    // WHEN — every pets_ready rule is evaluated
+    const results = readyRules.map((r) => evaluateRule(r, events, CTX));
+
+    // THEN — each one fails and says pets_ready is missing
+    for (const r of results) {
+      expect(r.pass, r.rule).toBe(false);
+      expect(r.detail, r.rule).toMatch(/no pets_ready observed/);
+    }
+  });
+});
