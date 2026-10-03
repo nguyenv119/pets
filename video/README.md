@@ -60,7 +60,7 @@ The four renders take a few minutes each.
 
 | Path | What |
 |---|---|
-| `out/pixel-pets-16x9.mp4` | The 1920x1080 master, 28.3-31.0 s, h264 + AAC |
+| `out/pixel-pets-16x9.mp4` | The 1920x1080 master, 27.3-30.0 s, h264 + AAC |
 | `out/pixel-pets-9x16.mp4` | The 1080x1920 cut for Shorts, Reels and TikTok |
 | `out/pixel-pets.gif` | The README GIF, 960x360, about 8.6 s, under 5 MB |
 | `out/thumbnail.png`, `out/x-poster.png` | The YouTube thumbnail and the X poster frame |
@@ -103,9 +103,11 @@ The pipeline proves the film has the approved beats. It cannot hear or judge
 taste, and nobody has listened to the audio yet.
 
 1. Watch and listen to both cuts. Look through `out/contact-sheet.png`.
-2. Pick the music by ear. The edit uses "Cat caffe"; "forgotten path" is the
-   other bed in `assets/music/`. The description credits whichever one
-   `out/timeline.json` names.
+2. Listen to the music bed, "Funny and Cute Town Theme" by ISAo
+   (`assets/music/funny_and_cute_town_theme.ogg`, OGA-BY 3.0). Its credit is
+   required: "Funny and Cute Town Theme" by ISAo, SOUND AIRYLUVS
+   (https://airyluvs.com/), OGA-BY 3.0, in the description and in
+   `assets/LICENSES.md`.
 3. Confirm the sprite licences before publishing: the dog, panda and
    chicken on camera, and the crab and snail whose cells the popup card
    shows. `assets/CREDITS.json` lists each artist, licence and source.
