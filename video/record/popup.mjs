@@ -13,7 +13,7 @@ import { assembleFrames, extractGrayCrop, generateSignalStats, probeVideo } from
 import { installClap } from './clap.js';
 import { shotDir } from './layout.mjs';
 import { dropLeadingMisSizedFrames, startScreencast } from './screencast.mjs';
-import { computeSync, demoMsOf, findTrimBeforeMs, measureVideoLagFromChange, splitGrayFrames } from './sync.mjs';
+import { computeSync, demoMsOf, findTrimBeforeMsOrDiscard, measureVideoLagFromChange, splitGrayFrames } from './sync.mjs';
 import { ownProfileDir, profileDirs } from './tempdirs.mjs';
 import { VIDEO_LAG_MAX_MS } from './video-lag.mjs';
 
@@ -444,7 +444,14 @@ export async function recordPopupTake({ shot, doc, ext, opts, runId, buildDir })
 
     const dumpPath = join(take.workDir, 'sig.txt');
     const sig = generateSignalStats(mp4Path, dumpPath);
-    const trimBeforeMs = findTrimBeforeMs(sig);
+    const clapper = findTrimBeforeMsOrDiscard(sig);
+    if (clapper.discard) {
+      rmSync(take.workDir, { recursive: true, force: true });
+      rejections.push(clapper.discard.message);
+      console.log(`[${shot.id}] attempt ${attempt} discarded: ${clapper.discard.message}`);
+      continue;
+    }
+    const { trimBeforeMs } = clapper;
     // s2b_shelter has no heart, so it measures its own lag the way record.mjs
     // measures the heart's: the first demo.mp4 frame at or after the logged
     // first keystroke whose #pet-name field shows the typed "P", minus the

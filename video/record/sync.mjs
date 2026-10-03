@@ -156,10 +156,13 @@ export function demoMsOf(trimBeforeMs, t) {
   return trimBeforeMs + t;
 }
 
+/** Thrown when a video does not show both clapper flashes. */
+export class ClapperNotFound extends Error {}
+
 function clapperRuns(signalStatsText) {
   const runs = findMagentaRuns(parseSignalStats(signalStatsText));
   if (runs.length < 2) {
-    throw new Error(`expected 2 magenta clapper runs (start, end), found ${runs.length}`);
+    throw new ClapperNotFound(`expected 2 magenta clapper runs (start, end), found ${runs.length}`);
   }
   return { startRun: runs[0], endRun: runs[runs.length - 1] };
 }
@@ -171,6 +174,22 @@ function clapperRuns(signalStatsText) {
  */
 export function findTrimBeforeMs(signalStatsText) {
   return clapperRuns(signalStatsText).startRun.releaseT * 1000;
+}
+
+/**
+ * findTrimBeforeMs for the recorders' take loop: `{ trimBeforeMs }` for a
+ * synced video, or `{ discard: { message, capture: true } }` when a clapper
+ * is missing. A lost clapper is a capture failure (the seed fixes the pets,
+ * not the screencast), so the take is retried and never counts toward the
+ * fixed-seed repeat guard; a throw here used to end the whole shot.
+ */
+export function findTrimBeforeMsOrDiscard(signalStatsText) {
+  try {
+    return { trimBeforeMs: findTrimBeforeMs(signalStatsText) };
+  } catch (err) {
+    if (!(err instanceof ClapperNotFound)) throw err;
+    return { discard: { message: err.message, capture: true } };
+  }
 }
 
 /**

@@ -25,7 +25,7 @@ import { deriveEvents } from './derive.mjs';
 import { installObservers } from './observe.js';
 import { recordPopupTake } from './popup.mjs';
 import { dropLeadingMisSizedFrames, startScreencast } from './screencast.mjs';
-import { computeSync, demoMsOf, findTrimBeforeMs, HEART_MASK_FILTER, measureVideoLagFromHeart } from './sync.mjs';
+import { computeSync, demoMsOf, findTrimBeforeMsOrDiscard, HEART_MASK_FILTER, measureVideoLagFromHeart } from './sync.mjs';
 import { fallbackVideoLagMs, keptHeartLagsMs, VIDEO_LAG_MAX_MS } from './video-lag.mjs';
 
 const VIDEO_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -306,7 +306,13 @@ async function recordShotAspect({ shot, aspect, doc, setDir, ext, opts, runId })
 
     const dumpPath = join(take.workDir, 'sig.txt');
     const sig = generateSignalStats(mp4Path, dumpPath);
-    const trimBeforeMs = findTrimBeforeMs(sig);
+    const clapper = findTrimBeforeMsOrDiscard(sig);
+    if (clapper.discard) {
+      rmSync(outDir, { recursive: true, force: true });
+      if (discard(seedValue, clapper.discard, take.workDir)) break;
+      continue;
+    }
+    const { trimBeforeMs } = clapper;
 
     // videoLagMs (bead step 9): the gap between a logged catch/eat event and
     // the first video frame that actually shows the heart it produced,

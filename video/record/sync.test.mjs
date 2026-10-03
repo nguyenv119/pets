@@ -8,11 +8,13 @@ import {
   findFirstHeartFrame,
   findMagentaRuns,
   findTrimBeforeMs,
+  findTrimBeforeMsOrDiscard,
   measureVideoLagFromChange,
   measureVideoLagFromHeart,
   parseSignalStats,
   splitGrayFrames,
 } from './sync.mjs';
+import { createRepeatGuard } from './search.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const sigSample = readFileSync(join(HERE, '..', 'fixtures', 'sig.sample.txt'), 'utf-8');
@@ -361,5 +363,64 @@ describe('findTrimBeforeMs', () => {
 
     // WHEN / THEN — it throws
     expect(() => findTrimBeforeMs(text)).toThrow(/expected 2 magenta clapper runs/);
+  });
+});
+
+describe('findTrimBeforeMsOrDiscard', () => {
+  // The s1_inbox/16:9 take that ended win attempt 2 (run 2026-10-03T11-31-44-102Z):
+  // 249 frames, the start clapper never reached the 25 fps video, the end
+  // clapper sat at frames 241-244.
+  const oneRunText = Array.from({ length: 249 }, (_, n) => `frame:${n} pts:${n * 512} pts_time:${(n * 0.04).toFixed(2)}\nlavfi.signalstats.SATMIN=${n >= 241 && n <= 244 ? 133 : 0}`).join('\n');
+
+  it('turns a video with one clapper run into a capture-side discard instead of a throw', () => {
+    /**
+     * Verifies that a take whose video lost a clapper comes back as a
+     * discard marked capture: true, carrying the run count in its message.
+     *
+     * A missing clapper is a screencast problem (a frame delivered late,
+     * a dropped flash), not a property of the seed, so the take must be
+     * retried like any other capture failure. Before this, the throw escaped
+     * recordShotAspect and ended the whole shot after one take: win attempt
+     * 2 lost s1_inbox/16:9 that way.
+     */
+    // GIVEN — the real failing take's shape: only the end clapper is in the video
+    // WHEN — trimBeforeMs is read through the discard-aware helper
+    const result = findTrimBeforeMsOrDiscard(oneRunText);
+
+    // THEN — no trim, and a capture-side discard naming what was found
+    expect(result.trimBeforeMs).toBeUndefined();
+    expect(result.discard).toEqual({ message: 'expected 2 magenta clapper runs (start, end), found 1', capture: true });
+  });
+
+  it('never stops a fixed-seed shot however often the clapper goes missing', () => {
+    /**
+     * Verifies that the discard the helper returns does not count toward the
+     * fixed-seed repeat guard (FIXED_SEED_REPEAT_LIMIT).
+     *
+     * The seed fixes the pets, not the screencast's timing, so a lost
+     * clapper says nothing about the seed. If it counted, three unlucky
+     * captures would end a fixed-seed shot that a fourth take would pass.
+     */
+    // GIVEN — a fixed-seed repeat guard and the one-run video
+    const guard = createRepeatGuard({ fixedSeed: true });
+
+    // WHEN — five takes in a row lose their clapper
+    const stops = Array.from({ length: 5 }, () => guard.record(findTrimBeforeMsOrDiscard(oneRunText).discard));
+
+    // THEN — the guard never asks the shot to stop
+    expect(stops).toEqual([null, null, null, null, null]);
+  });
+
+  it('returns the same trimBeforeMs as findTrimBeforeMs when both clappers are there', () => {
+    /**
+     * The helper must change nothing for a good take: the proof render's
+     * real signalstats still reads 1080 ms, with no discard.
+     */
+    // GIVEN — the proof render's real signalstats output
+    // WHEN — it is read through the helper
+    const result = findTrimBeforeMsOrDiscard(sigSample);
+
+    // THEN — the same 1080 ms trim and no discard
+    expect(result).toEqual({ trimBeforeMs: 1080 });
   });
 });
