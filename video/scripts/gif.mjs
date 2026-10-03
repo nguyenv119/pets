@@ -412,7 +412,8 @@ export function encodeGif(framesDir, outPath, fps, palettes) {
       const gen = join(tmp, `gen-${i}.png`);
       ffmpeg([
         '-y', '-v', 'error', '-framerate', String(fps), '-start_number', String(p.fromFrame), '-i', join(framesDir, 'frame-%04d.png'),
-        '-frames:v', String(p.frames), '-vf', `${HALVE},palettegen=max_colors=${256 - p.reserve.length}:reserve_transparent=0:stats_mode=diff`,
+        // trim bounds palettegen's INPUT to this scene; `-frames:v` after `-i` limits only output, and palettegen still read every later scene's frames
+        '-vf', `trim=end_frame=${p.frames},${HALVE},palettegen=max_colors=${256 - p.reserve.length}:reserve_transparent=0:stats_mode=diff`,
         '-update', '1', gen,
       ]);
       const raw = execFileSync('ffmpeg', ['-nostdin', '-v', 'error', '-i', gen, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { maxBuffer: 1 << 20 });

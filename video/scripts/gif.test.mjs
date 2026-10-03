@@ -523,6 +523,33 @@ describe('encodeGif (real ffmpeg)', () => {
     for (const [k, img] of [a, a, b, b].entries()) expect(worstError(gif[k], img)).toBeLessThanOrEqual(1);
   });
 
+  it("builds the first scene's palette from that scene's frames only, even when a later scene moves", () => {
+    /**
+     * palettegen's frame limit must bound its input. As an output limit
+     * (`-frames:v` after `-i`) it still read every frame to the end of the
+     * sequence, so the first scene's palette also counted the next scene's
+     * colours once that scene had motion, and starved the first scene. The
+     * static-scene test above can't see this: stats_mode=diff counts nothing
+     * for a frame identical to the one before it.
+     */
+    // GIVEN — a static scene of 200 colours, then a moving scene of 200 other colours (the same colours shuffled between its two frames)
+    const W = 20;
+    const H = 10;
+    const a = randomColours(W * H, 1);
+    const b1 = randomColours(W * H, 2);
+    const b2 = [...b1.slice(1), b1[0]];
+    const dir = writeFrames([a, a, b1, b2], W, H);
+    const out = join(tmp, 'out.gif');
+
+    // WHEN
+    encodeGif(dir, out, FPS, [{ fromFrame: 0, frames: 2, reserve: [] }, { fromFrame: 2, frames: 2, reserve: [] }]);
+
+    // THEN — every frame of both scenes decodes to its source colours (within the halving's 1 unit)
+    const gif = decodeGifRgb(out);
+    expect(gif).toHaveLength(4);
+    for (const [k, img] of [a, a, b1, b2].entries()) expect(worstError(gif[k], img)).toBeLessThanOrEqual(1);
+  });
+
   it('keeps a reserved colour exact in a scene with more colours than a palette holds', () => {
     /**
      * A sprite pixel of a colour the page barely uses gets merged into a
