@@ -27,16 +27,43 @@ describe('buildGifScenes', () => {
     expect(c.fontPx).toBe(32);
   });
 
-  it('throws when a scene crop reaches past the capture viewport', () => {
+  const withCrop = (crop_css: { x: number; y: number; w: number; h: number }) => ({
+    ...shots,
+    variants: { readme_gif: { ...shots.variants.readme_gif, scenes: [{ ...shots.variants.readme_gif.scenes[0], crop_css }] } },
+  });
+
+  it.each([
+    ['the v1 crop runs past the bottom (y + h > height)', { x: 0, y: 180, w: 960, h: 360 }],
+    ['it starts above the top (y < 0)', { x: 0, y: -1, w: 960, h: 360 }],
+    ['it starts left of the edge (x < 0)', { x: -1, y: 76, w: 960, h: 360 }],
+    ['it runs past the right edge (x + w > width)', { x: 1, y: 76, w: 960, h: 360 }],
+  ])('throws when a scene crop reaches outside the capture: %s', (_label, crop) => {
     /**
-     * The GIF crops the raw capture (960x436 CSS in v2). A crop sized for the
-     * v1 540 px viewport (CSS y 180-540) would leave the band's bottom 104 CSS
-     * rows with no footage, showing the composition's background instead of
-     * the page. Failing at plan time keeps that from ever reaching the GIF.
+     * What: buildGifScenes rejects a crop that is not wholly inside the 960x436 CSS capture, on every side.
+     * Why: the raw capture is the only footage under the GIF band. A crop sized for the v1 540 px viewport
+     * (CSS y 180-540), or one a pixel off any edge, leaves rows or columns with no footage, which show the
+     * composition's background instead of the page.
+     * What breaks: the README GIF ships a strip of black backdrop along one edge.
      */
-    // GIVEN — the v1 crop (y 180, h 360) against the 436 px v2 viewport
-    const v1Crop = { ...shots, variants: { readme_gif: { ...shots.variants.readme_gif, scenes: [{ ...shots.variants.readme_gif.scenes[0], crop_css: { x: 0, y: 180, w: 960, h: 360 } }] } } };
-    // WHEN / THEN
-    expect(() => buildGifScenes(v1Crop, { s1: events }, { s1: 's1/demo.mp4' })).toThrow(/crop .* outside the 960x436 capture/);
+    // GIVEN — a readme_gif scene with this crop against the 960x436 viewport
+    const doc = withCrop(crop);
+    // WHEN
+    const build = () => buildGifScenes(doc, { s1: events }, { s1: 's1/demo.mp4' });
+    // THEN
+    expect(build).toThrow(/crop .* outside the 960x436 capture/);
+  });
+
+  it('accepts a crop that touches every edge of the capture exactly', () => {
+    /**
+     * What: the bounds are inclusive, so a full 960x436 crop is allowed.
+     * Why: an off-by-one in the check would reject the largest valid crop.
+     * What breaks: a full-frame GIF scene would fail at plan time for no reason.
+     */
+    // GIVEN — a crop equal to the whole viewport
+    const doc = withCrop({ x: 0, y: 0, w: 960, h: 436 });
+    // WHEN
+    const build = () => buildGifScenes(doc, { s1: events }, { s1: 's1/demo.mp4' });
+    // THEN
+    expect(build).not.toThrow();
   });
 });

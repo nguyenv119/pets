@@ -122,13 +122,45 @@ describe('buildPageTrackFrames', () => {
      * rAF loop never has, and camera.ts's 400 ms smoothing window could
      * see no samples in a stretch it expects one every frame.
      */
-    // GIVEN — a 1000 ms span, sampled every 100 ms
+    // GIVEN — a 1000 ms span in the 960x436 viewport, sampled every 100 ms
     // WHEN — building the track
-    const frames = buildPageTrackFrames({ observed: SRC_EVENTS, petIds: ['rex'], durationMs: 1000, stepMs: 100 });
-    // THEN — 11 frames (0, 100, ..., 1000), each with rex's box
+    const frames = buildPageTrackFrames({ observed: SRC_EVENTS, petIds: ['rex'], durationMs: 1000, innerHeight: 436, stepMs: 100 });
+    // THEN — 11 frames (0, 100, ..., 1000), each with rex's box on the floor (436 - 64)
     expect(frames).toHaveLength(11);
-    expect(frames[0].pets).toEqual([{ id: 'rex', x: 100, y: 476, w: 64, h: 64, src: 'walk' }]);
+    expect(frames[0].pets).toEqual([{ id: 'rex', x: 100, y: 372, w: 64, h: 64, src: 'walk' }]);
     expect(frames.at(-1).t).toBe(1000);
+  });
+
+  for (const [innerHeight, floorY] of [
+    [540, 476],
+    [436, 372],
+    [856, 792],
+  ]) {
+    it(`stands every box on the viewport floor: innerHeight ${innerHeight} -> y ${floorY}`, () => {
+      /**
+       * What: the box y is innerHeight - PET_BOX_PX for the viewport the events are in.
+       * Why: v1 hardcoded 476 (a 540 px viewport); the v2 16:9 capture is 436 px tall, so a fixed y puts
+       * every box below the frame and the GIF colour gate finds no pet pixels to judge.
+       * What breaks: gif-gate-control judges 0 frames and its PASS/FAIL controls stop measuring anything.
+       */
+      // GIVEN — one pet's src events
+      // WHEN — building the track for this viewport height
+      const frames = buildPageTrackFrames({ observed: SRC_EVENTS, petIds: ['rex'], durationMs: 200, innerHeight, stepMs: 100 });
+      // THEN — every box sits on that viewport's floor
+      expect(new Set(frames.map((f) => f.pets[0].y))).toEqual(new Set([floorY]));
+    });
+  }
+
+  it('throws without innerHeight rather than guessing a floor', () => {
+    /**
+     * What: buildPageTrackFrames refuses to run with no viewport height.
+     * Why: there is no viewport-independent floor; a default would silently be the wrong one for some shot.
+     * What breaks: a caller that forgets innerHeight would ship boxes off the frame again.
+     */
+    // GIVEN — no innerHeight
+    const build = () => buildPageTrackFrames({ observed: SRC_EVENTS, petIds: ['rex'], durationMs: 200, stepMs: 100 });
+    // WHEN / THEN
+    expect(build).toThrow(/innerHeight/);
   });
 });
 

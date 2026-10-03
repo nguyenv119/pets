@@ -1,8 +1,9 @@
 // gifScenes.ts: the README GIF's scenes resolved to frames (epic pets-o3p,
-// bead pets-o3p.4). Pure. Each scene's crop must lie inside the capture viewport. video/shots.json variants.readme_gif: scene
-// in/out anchors on each shot's own events, 12.5 fps, and each scene's two
-// captions shown over their own beats' caption windows (the beat in that
-// shot whose caption is that text), shifted by videoLagMs like the master.
+// bead pets-o3p.4). Pure. video/shots.json variants.readme_gif: scene in/out
+// anchors on each shot's own events, 12.5 fps, and each scene's two captions
+// shown over their own beats' caption windows (the beat in that shot whose
+// caption is that text), shifted by videoLagMs like the master. Each scene's
+// crop must lie inside the capture viewport.
 
 import type { Events } from '../schema';
 import { PILL, textWidth, type TextItem } from './overlays';

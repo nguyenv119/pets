@@ -38,13 +38,11 @@ export const CUTS = {
 export const LUFS = [-18, -14];
 /**
  * The GIF's treat frame against this run's recording, over Rex's tracked box
- * at the moment the frame shows, one frame against one frame. Measured on
- * win attempts 3 and 4 (qa.test.mjs "provenance controls"): this run 0.992
- * and 1.000; the synthetic run's and the fixture's footage (the same file)
- * 0.429 and 0.458; this run one recording frame (40 ms) early 0.539 and
- * 0.496, 80 ms early 0.539 and 0.546. Over the whole GIF band the synthetic
- * footage scored 0.839, so a band-wide 0.8 passed anything filmed on the
- * inbox page.
+ * at the moment the frame shows, one frame against one frame. Measured on v2
+ * run 2026-10-03T15-20-57-905Z (qa.test.mjs "provenance controls"): this run
+ * 1.000; the synthetic run's footage 0.208 and the fixture's 0.200; this run
+ * -80, -40, +40 and +80 ms 0.474, 1.000, 0.506 and 0.499 (the -40 ms match is
+ * the same 8 fps sprite pose).
  */
 export const PROVENANCE_SSIM_MIN = 0.8;
 /** A region smaller than this (CSS px, either side) is too small for SSIM to mean anything. */

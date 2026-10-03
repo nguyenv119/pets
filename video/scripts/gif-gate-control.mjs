@@ -26,6 +26,7 @@ import { join } from 'node:path';
 import { buildConcatList, BT709_TAGS, BT709_VF, LOSSLESS_H264 } from '../record/assemble.mjs';
 import { pageShotIds, shotDir } from '../record/layout.mjs';
 import { describeReport, makeGif, MAX_COLOUR_ERROR } from './gif.mjs';
+import { LAND } from './make-synthetic-run.mjs';
 import { buildPageTrackFrames } from './synthetic/page-events.mjs';
 import { ffmpeg, isMain, probe, readJson, VIDEO_DIR } from './stage-io.mjs';
 
@@ -37,6 +38,19 @@ export const ENCODES = {
   tagged: ['-vf', `${BT709_VF},fps=25`, ...LOSSLESS_H264, ...BT709_TAGS],
   untagged: ['-vf', 'fps=25', '-c:v', 'libx264', '-qp', '0', '-pix_fmt', 'yuv444p'],
 };
+
+/**
+ * The -vf for one encode of the proof frames. The proof capture is a v1
+ * 1920x1080 take (pets at CSS y 476-540), like the fixture, so it gets the
+ * same cut as the synthetic 16:9 stand-in (make-synthetic-run.mjs LAND): the
+ * bottom 1920x872, which puts the pets on the v2 960x436 floor (CSS y 372)
+ * where the synthetic run's events say they are. tpad holds the last frame so
+ * the clip reaches demo.sample.mp4's length; the encode's own filter follows.
+ */
+export function proofFilter(variant) {
+  const { x, y, w, h } = LAND.crop;
+  return `tpad=stop_mode=clone:stop_duration=2,crop=${w}:${h}:${x}:${y},${ENCODES[variant][1]}`;
+}
 
 /**
  * The control's verdict, on the colour gate alone (the synthetic run's GIF
@@ -61,7 +75,8 @@ export function controlVerdict(results) {
  */
 function trackEveryFilmedPet(eventsPath) {
   const events = readJson(eventsPath);
-  events.tracks = buildPageTrackFrames({ observed: events.observed, petIds: ['rex', 'bao'], durationMs: events.durationMs, stepMs: 40 });
+  // events.json is already in the v2 shot's coordinates (shifted by make-synthetic-run), so the pets stand on its own viewport's floor.
+  events.tracks = buildPageTrackFrames({ observed: events.observed, petIds: ['rex', 'bao'], durationMs: events.durationMs, innerHeight: events.viewport.height, stepMs: 40 });
   writeFileSync(eventsPath, JSON.stringify(events, null, 1));
 }
 
@@ -77,9 +92,9 @@ function encode(proofMkv, variant, frameCount) {
   const list = join(CACHE, 'concat.txt');
   writeFileSync(list, buildConcatList(raw.frames.map((f, i) => ({ file: join(framesDir, `f${String(i).padStart(5, '0')}.png`), ts: f.ts }))));
   const out = join(CACHE, `${variant}.mp4`);
-  // tpad holds the last frame so the clip reaches demo.sample.mp4's length; -frames:v trims to it exactly
-  const [vfFlag, vf, ...rest] = ENCODES[variant];
-  ffmpeg(['-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', list, vfFlag, `tpad=stop_mode=clone:stop_duration=2,${vf}`, ...rest, '-frames:v', String(frameCount), out]);
+  // -frames:v trims to demo.sample.mp4's length exactly (proofFilter's tpad reaches it)
+  const [, , ...rest] = ENCODES[variant];
+  ffmpeg(['-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', list, '-vf', proofFilter(variant), ...rest, '-frames:v', String(frameCount), out]);
   return out;
 }
 

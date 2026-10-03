@@ -371,13 +371,14 @@ describe.skipIf(!realFootage)('provenance controls (real footage on disk)', () =
      * Rex's box 64x64 at band px (552, 296): this run 1.000; the synthetic
      * run's and the fixture's footage 0.208 and 0.200; this run -80, -40,
      * +40 and +80 ms 0.474, 1.000, 0.506, 0.499.
-     * One neighbouring frame can match: the sprites animate at 8 fps (125 ms
-     * a sprite frame), so a 40 ms step can land on the same sprite frame
-     * (v1 measured 0.539 there, v2 1.000). The time control is therefore the
-     * worst of the four neighbours: at least one must fail, or the check
-     * could not tell the right moment from the wrong one. (v1's band-wide
-     * synthetic control scored 0.839; the v2 dark inbox no longer looks like
-     * the fixture's page, so that blind spot is gone and is not asserted.)
+     * The time control is the two 80 ms neighbours: each must fail, or the
+     * check could not tell the right moment from one two recording frames
+     * away. The 40 ms neighbours are logged, not asserted: the sprites
+     * animate at 8 fps (125 ms a sprite frame), so an offset smaller than one
+     * sprite frame can land on the same pose (v2 measured 1.000 at -40 ms),
+     * and that tolerance is by design.
+     * What breaks: a GIF frame taken from the wrong moment of this run, or
+     * from the synthetic run or fixture, would pass the provenance check.
      */
     // GIVEN — the treat frame of the GIF out/gif-frames holds, and Rex's box at that moment
     const { scenes, fps, eventsByShotId } = planScenes(runDir);
@@ -391,11 +392,15 @@ describe.skipIf(!realFootage)('provenance controls (real footage on disk)', () =
     const match = at(runDemo);
     const synthetic = at(syntheticDemo);
     const fixture = at(fixtureDemo);
-    const neighbours = [-0.08, -0.04, 0.04, 0.08].map((o) => at(runDemo, o));
+    const early80 = at(runDemo, -0.08);
+    const late80 = at(runDemo, 0.08);
+    // Sub-sprite-frame offsets (8 fps sprites, 125 ms a pose) may match; logged for the record only.
+    console.log(`provenance controls: match ${match.toFixed(3)}, synthetic ${synthetic.toFixed(3)}, fixture ${fixture.toFixed(3)}, -80 ms ${early80.toFixed(3)}, -40 ms ${at(runDemo, -0.04).toFixed(3)}, +40 ms ${at(runDemo, 0.04).toFixed(3)}, +80 ms ${late80.toFixed(3)}`);
     // THEN
     expect(match).toBeGreaterThanOrEqual(PROVENANCE_SSIM_MIN);
     expect(synthetic).toBeLessThan(PROVENANCE_SSIM_MIN);
     expect(fixture).toBeLessThan(PROVENANCE_SSIM_MIN);
-    expect(Math.min(...neighbours)).toBeLessThan(PROVENANCE_SSIM_MIN);
+    expect(early80).toBeLessThan(PROVENANCE_SSIM_MIN);
+    expect(late80).toBeLessThan(PROVENANCE_SSIM_MIN);
   });
 });
