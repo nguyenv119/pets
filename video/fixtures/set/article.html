@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en" data-pp-seed="" data-pp-hour="14">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overnight Rosemary Focaccia - Crumb Notes</title>
+<style>
+  @font-face { font-family: "VT323"; src: url("/fonts/VT323-Regular.ttf") format("truetype"); font-display: block; }
+  @font-face { font-family: "Press Start 2P"; src: url("/fonts/PressStart2P-Regular.ttf") format("truetype"); font-display: block; }
+  :root { --paper:#faf6ef; --ink:#2b2620; --muted:#7a6f62; --rule:#e6ddcf; --accent:#b5652b; --card:#fffdf8; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { background: var(--paper); color: var(--ink); font: 13px/1.5 Georgia, "Times New Roman", serif; overflow: hidden; user-select: none; }
+  .masthead { height: 42px; display: flex; align-items: center; gap: 28px; padding: 0 44px; border-bottom: 1px solid var(--rule); background: var(--card); }
+  .brand { font-family: "Press Start 2P", monospace; font-size: 10px; letter-spacing: 1px; color: var(--accent); }
+  .nav { display: flex; gap: 18px; font: 11px/1 -apple-system, "Helvetica Neue", Arial, sans-serif; color: var(--muted); }
+  .nav span:first-child { color: var(--ink); }
+  /* 540 - 42 masthead - 110 floor = 388 px of content, then an empty floor band */
+  .stage { height: 388px; display: grid; grid-template-columns: 520px 300px; gap: 48px; padding: 20px 44px 0; overflow: hidden; }
+  .kicker { font-family: "VT323", monospace; font-size: 17px; color: var(--accent); letter-spacing: 1px; line-height: 1; }
+  h1 { font-size: 27px; line-height: 1.1; margin: 4px 0 6px; font-weight: 700; }
+  .byline { font: 10.5px/1.4 -apple-system, "Helvetica Neue", Arial, sans-serif; color: var(--muted); margin-bottom: 10px; }
+  .lede { font-size: 13.5px; margin-bottom: 8px; }
+  h2 { font: 700 10px/1 -apple-system, "Helvetica Neue", Arial, sans-serif; letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted); margin: 10px 0 7px; }
+  ol { padding-left: 18px; font-size: 12.5px; }
+  ol li { margin-bottom: 4px; }
+  .hero { width: 300px; height: 150px; display: block; border-radius: 8px; object-fit: cover; }
+  .caption { font: 10px/1.4 -apple-system, "Helvetica Neue", Arial, sans-serif; color: var(--muted); margin: 5px 0 12px; }
+  .card { background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: 10px 14px; }
+  .card h2 { margin-top: 0; }
+  .card ul { list-style: none; font-size: 12px; }
+  .card li { display: flex; justify-content: space-between; border-bottom: 1px dashed var(--rule); padding: 2px 0; }
+  .card li:last-child { border-bottom: 0; }
+  .card li b { font-family: "VT323", monospace; font-size: 16px; font-weight: 400; color: var(--accent); }
+  /* Empty floor: no text, no links, no buttons. Pets walk here; double-clicks land here. */
+  .floor { position: fixed; left: 0; right: 0; bottom: 0; height: 110px;
+    background: linear-gradient(to bottom, rgba(230,221,207,0) 0%, rgba(230,221,207,.6) 100%); border-top: 1px solid var(--rule); }
+</style>
+</head>
+<body>
+  <header class="masthead">
+    <div class="brand">CRUMB NOTES</div>
+    <nav class="nav" aria-label="Sections"><span>Bread</span><span>Weeknight</span><span>Pantry</span><span>About</span></nav>
+  </header>
+  <main class="stage">
+    <article>
+      <div class="kicker">&gt; BREAD / SLOW DOUGH</div>
+      <h1>Overnight Rosemary Focaccia</h1>
+      <p class="byline">By Ines Marlowe &middot; 12 min read &middot; Serves 8</p>
+      <p class="lede">Mix it after dinner, forget about it, and bake it for lunch. A long, cold rest does the kneading for you.</p>
+      <h2>Method</h2>
+      <ol>
+        <li>Stir 500 g bread flour, 400 g cool water, 10 g salt and 3 g yeast until no dry flour remains.</li>
+        <li>Fold the dough over itself four times. Repeat twice more, 30 minutes apart.</li>
+        <li>Turn it in 40 g olive oil in a 23 x 33 cm tin and refrigerate 12 to 18 hours.</li>
+        <li>Warm for 2 hours, dimple deeply, then bake at 230 &deg;C for 22 to 25 minutes.</li>
+      </ol>
+    </article>
+    <aside class="side">
+      <img class="hero" src="/img/focaccia.svg" alt="Illustration of a dimpled focaccia in a baking tin">
+      <p class="caption">Dimple all the way to the tin; shallow dents fill back in.</p>
+      <section class="card">
+        <h2>At a glance</h2>
+        <ul>
+          <li>Hands-on <b>25 MIN</b></li>
+          <li>Cold rest <b>12-18 H</b></li>
+          <li>Oven <b>230&deg;C</b></li>
+        </ul>
+      </section>
+    </aside>
+  </main>
+  <div class="floor" aria-hidden="true"></div>
+</body>
+</html>

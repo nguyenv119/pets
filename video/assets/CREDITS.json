@@ -1,0 +1,45 @@
+{
+  "note": "Cast sprite credits for the promo video. Source: .claude/marketing-video/research/sprite-licences.md (rights review, 2026-09-27) — read its correction at the top before adding a species.",
+  "cast": [
+    {
+      "species": "dog",
+      "artist": "NVPH Studio",
+      "url": "https://nvph-studio.itch.io/dog-animation-4-different-dogs",
+      "licence": "CC BY-ND 4.0",
+      "licence_url": "https://creativecommons.org/licenses/by-nd/4.0/",
+      "note": "the wave (swipe) and lie poses were added or changed in vscode-pets (commits 88518fd, a7e5aef)"
+    },
+    {
+      "species": "panda",
+      "artist": "Jessie Ferris",
+      "url": "https://github.com/jeferris",
+      "licence": "MIT",
+      "licence_url": "https://github.com/tonybaloney/vscode-pets/blob/main/LICENSE",
+      "note": "via vscode-pets, Copyright (c) 2022 Anthony Shaw"
+    },
+    {
+      "species": "chicken",
+      "artist": "Gulnur Baimukhambetova",
+      "url": "https://github.com/gulyapulya",
+      "licence": "MIT",
+      "licence_url": "https://github.com/tonybaloney/vscode-pets/blob/main/LICENSE",
+      "note": "via vscode-pets, Copyright (c) 2022 Anthony Shaw. Chicken sprites by Gulnur Baimukhambetova"
+    },
+    {
+      "species": "crab",
+      "artist": "Marc Duiker",
+      "url": "https://github.com/marcduiker",
+      "licence": "MIT",
+      "licence_url": "https://github.com/tonybaloney/vscode-pets/blob/main/LICENSE",
+      "note": "via vscode-pets. Character concept: Ferris the Rustacean by Karen Rustad Tölva (CC0, rustacean.net). Shown in the popup shelter card's crop B (the type grid), never cast on camera"
+    },
+    {
+      "species": "snail",
+      "artist": "Kennet Shin",
+      "url": "https://github.com/WoofWoof0",
+      "licence": "MIT",
+      "licence_url": "https://github.com/tonybaloney/vscode-pets/blob/main/LICENSE",
+      "note": "via vscode-pets, Copyright (c) 2022 Anthony Shaw. Shown in the popup shelter card's crop B (the type grid), never cast on camera"
+    }
+  ]
+}

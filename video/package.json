@@ -1,0 +1,35 @@
+{
+  "name": "pixel-pets-video",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Promo-video pipeline for Pixel Pets (epic pets-o3p): records the real extension and edits an auto-zoom promo. A self-contained npm project so its heavy deps (Playwright, Remotion) never leak into the extension's npm ci.",
+  "scripts": {
+    "test": "vitest run",
+    "test:smoke": "vitest run --config vitest.smoke.config.ts",
+    "typecheck": "tsc -p .",
+    "record": "tsx record/record.mjs",
+    "check:pages": "tsx set/check-pages.mjs",
+    "render": "tsx scripts/render.mjs",
+    "render:fixture": "tsx scripts/render.mjs --fixture",
+    "video": "tsx scripts/pipeline.mjs"
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.529",
+    "@remotion/cli": "4.0.529",
+    "@remotion/media": "4.0.529",
+    "@remotion/motion-blur": "4.0.529",
+    "@remotion/renderer": "4.0.529",
+    "playwright": "1.63.0",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "remotion": "4.0.529"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "@types/react": "19.2.7",
+    "tsx": "^4.23.15",
+    "typescript": "^5.3.3",
+    "vitest": "^3.2.4"
+  }
+}
