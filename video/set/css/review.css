@@ -1,0 +1,175 @@
+body {
+  background: #1e2127;
+  color: #c9d1d9;
+}
+
+.appbar {
+  position: absolute;
+  top: 48px;
+  left: 0;
+  right: 0;
+  height: 44px;
+  background: #16181d;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 20px;
+}
+
+.appbar .mark {
+  width: 16px;
+  height: 16px;
+  background: #5a5f6b;
+  border-radius: 3px;
+}
+
+.appbar .app {
+  font-size: 13px;
+  color: #8b93a1;
+}
+
+.appbar .title {
+  font-size: 13px;
+  font-weight: 600;
+  flex: 1;
+}
+
+.appbar .chip {
+  font-size: 11px;
+  padding: 3px 8px;
+  border: 1px solid #3a3f47;
+  border-radius: 10px;
+  color: #8b93a1;
+}
+
+.appbar .approve {
+  font-size: 11px;
+  padding: 5px 10px;
+  background: #2ea043;
+  color: #ffffff;
+  border-radius: 4px;
+}
+
+.desc {
+  position: absolute;
+  top: 98px;
+  left: 20px;
+  right: 20px;
+  font-size: 12px;
+  color: #8b93a1;
+}
+
+.tree {
+  position: absolute;
+  top: 138px;
+  left: 0;
+  width: 260px;
+  height: 148px;
+  background: #191b20;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #8b93a1;
+}
+
+.tree div {
+  padding: 3px 0;
+}
+
+.diff {
+  position: absolute;
+  top: 138px;
+  left: 276px;
+  width: 668px;
+  height: 148px;
+}
+
+.diff .diff-header {
+  height: 24px;
+  font-size: 11px;
+  color: #8b93a1;
+  display: flex;
+  align-items: center;
+}
+
+.diff .diff-body {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.diff .line {
+  display: flex;
+  gap: 10px;
+}
+
+.diff .line .num {
+  width: 22px;
+  text-align: right;
+  color: #565c66;
+  flex-shrink: 0;
+}
+
+.diff .line .code {
+  white-space: pre;
+}
+
+.diff .line.add {
+  background: #1c3326;
+}
+
+.diff .line.add .code {
+  color: #7ee2a8;
+}
+
+.diff .line.remove {
+  background: #3b2328;
+}
+
+.diff .line.remove .code {
+  color: #f28b96;
+}
+
+.diff .line .target {
+  color: #b5d92a;
+}
+
+#dbl-zone {
+  position: absolute;
+  left: 700px;
+  top: 380px;
+  width: 200px;
+  height: 60px;
+  background: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+@media (max-width: 599px) {
+  .appbar {
+    top: 20px;
+    height: 38px;
+    padding: 0 16px;
+  }
+
+  .desc {
+    display: none;
+  }
+
+  .tree {
+    display: none;
+  }
+
+  .diff {
+    top: 70px;
+    left: 16px;
+    width: 508px;
+    height: 200px;
+  }
+
+  #dbl-zone {
+    left: 200px;
+    top: 470px;
+    width: 200px;
+    height: 60px;
+  }
+}

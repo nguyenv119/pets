@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en" data-theme="dark" data-pp-seed="" data-pp-hour="14" style="background:#1e2127">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Reset chart zoom on double-click #212</title>
+<link rel="stylesheet" href="/css/base.css" />
+<link rel="stylesheet" href="/css/review.css" />
+</head>
+<body>
+  <div class="appbar">
+    <span class="mark" aria-hidden="true"></span>
+    <span class="app">Review</span>
+    <span class="title">Reset chart zoom on double-click #212</span>
+    <span class="chip">1 of 2 approvals</span>
+    <span class="approve">Approve</span>
+  </div>
+
+  <div class="desc">Single click now selects a bar, so reset zoom moves to double-click.</div>
+
+  <nav class="tree" aria-hidden="true">
+    <div>src/chart/interactions.ts</div>
+    <div>src/chart/render.ts</div>
+    <div>src/chart/state.ts</div>
+    <div>src/chart/types.ts</div>
+    <div>src/chart/index.ts</div>
+  </nav>
+
+  <div class="diff">
+    <div class="diff-header">src/chart/interactions.ts +2 -1</div>
+    <div class="diff-body">
+      <div class="line"><span class="num">41</span><span class="code">export function bindChartEvents(chart) {</span></div>
+      <div class="line"><span class="num">42</span><span class="code">  chart.canvas.addEventListener("wheel", zoomAt);</span></div>
+      <div class="line remove"><span class="num">43</span><span class="code">- chart.canvas.addEventListener("click", resetZoom);</span></div>
+      <div class="line add"><span class="num">44</span><span class="code">+ chart.canvas.addEventListener(<span id="dbl" class="target">"dblclick"</span>, resetZoom);</span></div>
+      <div class="line add"><span class="num">45</span><span class="code">+ // single click selects a bar now</span></div>
+      <div class="line"><span class="num">46</span><span class="code">  chart.canvas.addEventListener("mousemove", showTooltip);</span></div>
+      <div class="line"><span class="num">47</span><span class="code">}</span></div>
+    </div>
+  </div>
+
+  <div id="dbl-zone" aria-hidden="true"></div>
+</body>
+</html>

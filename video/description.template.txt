@@ -1,0 +1,28 @@
+Get it free: https://chromewebstore.google.com/detail/pixel-pets/mgamneidfkkigbniedjohbglcmecjffg
+
+A small pixel dog stands at the bottom of the sites you visit. Hover over him and he waves. Click him and he gets a treat. Double-click the page and he chases a ball. To adopt another, open the popup's shelter, pick a kind, a name and a color, and it shows up on your pages; in the video it's a chicken named Pip. At 10 pm they all go to sleep until 6.
+
+I made Pixel Pets on my own. It's a free extension for Google Chrome™ on desktop.
+
+What it does
+- 14 kinds of pet and 35 pet-and-color combinations (the horse alone comes in 11 colors). Keep up to 7; a new home opens every 3 days.
+- Hover to say hi, click to feed (10 treats; one more every 10 minutes), double-click the page to throw a ball.
+- Pets say hi to each other when they meet.
+- They sleep from 10 pm to 6 am, your local time.
+- In the popup: adopt pets at the shelter (pick a name, a kind and a color), drag to reorder, hide one or all of them (handy before you share your screen), switch to dark mode, and remove one with 5 seconds to undo.
+- It collects no data.
+
+About this video
+- The pets were recorded from the real extension running in a browser. The inbox, code review, spreadsheet and article are made-up pages built for the video.
+- The adoption is the real popup, shown through close crops, so only some of the shelter's pets are in view.
+- For filming I used a copy of the extension with its clock and random choices pinned, so takes could be repeated. The 10 pm switch is the real behaviour; the clock counting down to it was added in the edit.
+- Music and sound effects were added in editing. The extension itself is silent.
+
+{{CREDITS}}
+{{MUSIC_CREDIT}}
+Sound effects: Kenney "Interface Sounds" and "Impact Sounds" (kenney.nl), CC0. Extra 8-bit blips made for this video with ffmpeg.
+Fonts: Press Start 2P, VT323, Inter, Source Serif 4 and JetBrains Mono, all under the SIL Open Font License 1.1.
+
+Google Chrome and Chrome Web Store are trademarks of Google LLC. Use of these trademarks is subject to Google Permissions.
+
+#chromeextension #pixelart #indiedev
